@@ -52,17 +52,25 @@ func _run() -> void:
 			_save(name_ + "_" + s)
 			main.world.sim_event.disconnect(cb)
 			continue
+		var view_name := "gameplay"
+		if "@" in s:
+			view_name = s.get_slice("@", 1)
+			s = s.get_slice("@", 0)
 		var target := float(s)
 		Engine.time_scale = speed
 		while main.world and main.world.sim.t < target - 1.0 and main.world.sim.result == SimWorld.Result.RUNNING:
 			await _frames(1)
 		Engine.time_scale = 1.0
+		if main.world:
+			main.world.set_view(view_name)
 		var fps := []
 		for i in 60:
 			await _frames(1)
 			fps.append(Engine.get_frames_per_second())
 		print("PERF t=%s fps=%s" % [s, fps[-1]])
-		_save("%s_t%03d" % [name_, int(target)])
+		_save("%s_t%03d%s" % [name_, int(target), "" if view_name == "gameplay" else "_" + view_name])
+		if main.world:
+			main.world.set_view("gameplay")
 	print("CAPTURE_RESULT ", JSON.stringify({"files": results}))
 	get_tree().quit(0)
 

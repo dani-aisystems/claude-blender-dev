@@ -28,6 +28,25 @@ var _shake := 0.0
 var _cam_base := Transform3D()
 var _ended := false
 var _model_cache := {}
+var view := "gameplay"            # capture/debug views: gameplay, lighthouse, ocean, ship
+
+
+func set_view(v: String) -> void:
+	view = v
+	match v:
+		"lighthouse":
+			camera.fov = 40.0
+			camera.position = Vector3(16, 14, 30)
+			camera.look_at(Vector3(0, 13, 0), Vector3.UP)
+		"ocean":
+			camera.fov = 50.0
+			camera.position = Vector3(-30, 9, 40)
+			camera.look_at(Vector3(10, 0, -70), Vector3.UP)
+		_:
+			camera.fov = 44.0
+			camera.position = Vector3(0, 92, 96)
+			camera.look_at(Vector3(0, 0, -52), Vector3.UP)
+	_cam_base = camera.transform
 
 
 func start(seed_value: int, bot_mode: String = "") -> void:
@@ -307,9 +326,27 @@ func _process(delta: float) -> void:
 	var sway := Vector3(sin(_t * 0.23) * 0.8, sin(_t * 0.31) * 0.5, 0.0)
 	var shake := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * _shake * 0.6
 	var lean := clampf(Geo.angle_diff(0.0, sim.beam.bearing), -1.5, 1.5) * deg_to_rad(2.0)
+	if view == "ship":
+		var target: ShipModel = null
+		for sh in sim.active_ships():
+			target = sh
+			break
+		if target:
+			var p := Geo.to_v3(target.pos)
+			var side := Geo.to_v3(Geo.dir(target.heading + PI * 0.6)) * 26.0
+			camera.fov = 45.0
+			camera.position = p + side + Vector3(0, 8, 0)
+			camera.look_at(p + Vector3(0, 2, 0), Vector3.UP)
+		return_ships(delta, storm)
+		return
 	camera.transform = _cam_base
-	camera.position += sway + shake
-	camera.rotate(Vector3.UP, -lean)
+	if view == "gameplay":
+		camera.position += sway + shake
+		camera.rotate(Vector3.UP, -lean)
+	return_ships(delta, storm)
+
+
+func return_ships(delta: float, storm: float) -> void:
 	for id in ship_views.keys():
 		var v = ship_views[id]
 		if v.ship.is_active() or sim.t - v.ship.resolve_time < 12.0:
