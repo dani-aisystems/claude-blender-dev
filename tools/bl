@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Headless Blender wrapper (Workflow B).
+#   tools/bl [file.blend] -P script.py [-P script2.py] -- [script args]
+# Uses factory settings (no user add-ons) for reproducible runs. Set BL_USER_PREFS=1 to keep user prefs.
+set -euo pipefail
+BLENDER="${BLENDER_PATH:-/Applications/Blender.app/Contents/MacOS/Blender}"
+if [[ ! -x "$BLENDER" ]]; then
+  echo "Blender not found at $BLENDER (brew install --cask blender, or set BLENDER_PATH)" >&2
+  exit 127
+fi
+FLAGS=(-b --python-exit-code 1)
+[[ "${BL_USER_PREFS:-0}" == "1" ]] || FLAGS+=(--factory-startup)
+exec "$BLENDER" "${FLAGS[@]}" "$@"

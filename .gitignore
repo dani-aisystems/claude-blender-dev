@@ -1,0 +1,22 @@
+# Generated outputs (reproducible from scripts)
+/renders/
+/exports/
+# Blender backups / temp
+*.blend1
+*.blend2
+*.blend@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# Secrets / local
+.env
+.env.*
+*.key
+.claude/settings.local.json
+# OS
+.DS_Store
+# Private / third-party (never publish)
+*.pdf
+docs/handoff/

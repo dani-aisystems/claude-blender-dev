@@ -1,0 +1,20 @@
+[project]
+name = "blender-dev"
+version = "0.1.0"
+description = "Host-side tooling for the Blender Dev workspace (review, validation, tests). Blender scripts use Blender's bundled Python."
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.1",
+    "pillow>=11.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = ["blender: runs headless Blender (slower)"]

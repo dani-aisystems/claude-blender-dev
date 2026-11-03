@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "ask": [
+      "Bash(rm *)",
+      "Bash(rmdir *)",
+      "Bash(mv * /*)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(brew install *)",
+      "Bash(brew uninstall *)",
+      "Bash(brew upgrade *)",
+      "Bash(npm install *)",
+      "Bash(npm i *)",
+      "Bash(npx *)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(uv add *)",
+      "Bash(uv pip install *)",
+      "Bash(tools/py tools/fetch_cc0.py * --confirm*)",
+      "Bash(claude mcp add *)",
+      "Bash(claude mcp remove *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git reset *)",
+      "Bash(git clean *)",
+      "Bash(* extension install*)",
+      "Edit(~/Documents/Projects OS/Tools : Software/Roblox Builder/**)",
+      "Write(~/Documents/Projects OS/Tools : Software/Roblox Builder/**)",
+      "Edit(~/.claude/**)",
+      "Write(~/.claude/**)",
+      "Edit(~/blender_mcp/**)",
+      "Write(~/blender_mcp/**)"
+    ]
+  }
+}

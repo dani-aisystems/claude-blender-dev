@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Host-side Python for this workspace (numpy, Pillow, pytest).
+# `uv run` cannot be used here: the workspace path contains ':' which breaks PATH handling.
+#   tools/py scripts/render/contact_sheet.py ...      tools/py -m pytest
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ ! -x "$ROOT/.venv/bin/python" ]]; then
+  (cd "$ROOT" && uv sync >/dev/null)
+fi
+exec "$ROOT/.venv/bin/python" "$@"
