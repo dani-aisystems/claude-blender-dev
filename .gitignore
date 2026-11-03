@@ -20,3 +20,6 @@ __pycache__/
 # Private / third-party (never publish)
 *.pdf
 docs/handoff/
+# Godot (THE LAST LIGHT)
+projects/games/*/godot/.godot/
+projects/games/*/build/

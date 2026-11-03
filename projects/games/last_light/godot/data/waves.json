@@ -1,0 +1,43 @@
+{
+ "_doc": "THE LAST LIGHT night schedule. t = seconds into the shift, bearing in degrees (0 = north, + = east). speed_mul optional. Seeded jitter is applied by wave_schedule.gd (except entries with fixed:true).",
+ "ships": [
+  {"t": 3,   "kind": "fishing",  "bearing": 12,  "speed_mul": 0.7, "fixed": true, "phase": "intro"},
+  {"t": 24,  "kind": "fishing",  "bearing": -36, "speed_mul": 0.85, "phase": "intro"},
+
+  {"t": 46,  "kind": "schooner", "bearing": 32,  "phase": "learn"},
+  {"t": 61,  "kind": "fishing",  "bearing": -58, "phase": "learn"},
+  {"t": 74,  "kind": "fishing",  "bearing": 56,  "phase": "learn"},
+  {"t": 88,  "kind": "schooner", "bearing": -14, "phase": "learn"},
+
+  {"t": 106, "kind": "schooner", "bearing": 64,  "phase": "rising"},
+  {"t": 109, "kind": "fishing",  "bearing": -50, "phase": "rising"},
+  {"t": 127, "kind": "schooner", "bearing": 6,   "phase": "rising"},
+  {"t": 141, "kind": "steamer",  "bearing": -30, "phase": "rising"},
+  {"t": 151, "kind": "fishing",  "bearing": 70,  "phase": "rising"},
+  {"t": 164, "kind": "schooner", "bearing": -70, "phase": "rising"},
+  {"t": 168, "kind": "fishing",  "bearing": 26,  "phase": "rising"},
+
+  {"t": 184, "kind": "steamer",  "bearing": 42,  "phase": "storm"},
+  {"t": 195, "kind": "schooner", "bearing": -44, "phase": "storm"},
+  {"t": 206, "kind": "fishing",  "bearing": -2,  "phase": "storm"},
+  {"t": 217, "kind": "steamer",  "bearing": -64, "phase": "storm"},
+  {"t": 221, "kind": "fishing",  "bearing": 60,  "phase": "storm"},
+  {"t": 236, "kind": "schooner", "bearing": 20,  "phase": "storm"},
+  {"t": 241, "kind": "schooner", "bearing": -24, "phase": "storm"},
+  {"t": 253, "kind": "fishing",  "bearing": -76, "phase": "storm"},
+  {"t": 256, "kind": "steamer",  "bearing": 72,  "phase": "storm"},
+
+  {"t": 272, "kind": "schooner", "bearing": -54, "phase": "convoy"},
+  {"t": 275, "kind": "fishing",  "bearing": 10,  "phase": "convoy"},
+  {"t": 279, "kind": "steamer",  "bearing": 50,  "phase": "convoy"},
+  {"t": 285, "kind": "fishing",  "bearing": -20, "phase": "convoy"},
+  {"t": 291, "kind": "schooner", "bearing": 76,  "phase": "convoy"},
+  {"t": 297, "kind": "fishing",  "bearing": -40, "phase": "convoy"}
+ ],
+ "gusts": [
+  {"t": 160, "dir": 1},
+  {"t": 211, "dir": -1},
+  {"t": 248, "dir": 1},
+  {"t": 283, "dir": -1}
+ ]
+}

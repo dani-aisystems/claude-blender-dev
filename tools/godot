@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Godot 4 wrapper (like tools/bl). Installed via `brew install --cask godot` (4.7.2, DECISIONS Q9).
+#   tools/godot --headless --path projects/games/last_light/godot -s res://tests/run_tests.gd
+set -euo pipefail
+GODOT="${GODOT_PATH:-/Applications/Godot.app/Contents/MacOS/Godot}"
+if [[ ! -x "$GODOT" ]]; then
+  echo "Godot not found at $GODOT (brew install --cask godot, or set GODOT_PATH)" >&2
+  exit 127
+fi
+exec "$GODOT" "$@"

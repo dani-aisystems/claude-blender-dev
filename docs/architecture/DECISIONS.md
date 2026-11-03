@@ -12,3 +12,5 @@ These came from the requirements grilling on 2026-11-03. They are binding until 
 | Q6 | **CC0 assets only** (Poly Haven, ambientCG), fetched after an explicit OK, with the licence logged. No paid or AI-generation APIs. |
 | Q7 | Default style: **stylized realism**. |
 | Q8 | **EEVEE** for iteration previews. **Cycles (Metal)** for hero stills and finals, rendered in chunks. |
+| Q9 | 2026-11-03 (THE LAST LIGHT): **Godot 4.7.2 installed** (`brew reinstall --cask godot`) with the official 4.7.2 macOS export template (SHA-512 verified), amending Q2's "no engine installs" for Godot only. Wrapper: `tools/godot`. |
+| Q10 | 2026-11-03: standing OK to **overwrite generated build outputs** in `projects/games/last_light/godot/assets/` (GLB, audio, layout JSON); they are reproducible from `spec.py`/`build.py`/`synth.py`. `.blend` files stay versioned; everything else still asks. Local git commits at verified milestones, no pushes. |
