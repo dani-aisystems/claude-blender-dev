@@ -25,7 +25,11 @@ from lib.bl_args import parse  # noqa: E402
 from lib.safe_paths import ensure_allowed  # noqa: E402
 
 EPS = 1e-4
-MESH_PREFIXES = ("SM_", "SK_", "UCX_", "UBX_", "UCP_", "USP_")
+MESH_PREFIXES = ("SM_", "SK_", "UCX_", "UBX_", "UCP_", "USP_",
+                 # game-rig hooks (THE LAST LIGHT): moving parts, needles, lamps, screens, glass, collision
+                 "PT_", "NDL_", "LMP_", "SCR_", "GLS_", "COL_")
+# Articulated parts keep a pivot rotation (local Z = hinge axis) by design; scale must still be 1.
+ARTICULATED_PREFIXES = ("PT_", "NDL_")
 
 
 def _rule(results, obj, rule, status, detail):
@@ -97,9 +101,14 @@ def validate(collection_name: str, target: str) -> dict:
         _rule(results, o.name, "materials_per_mesh",
               "PASS" if 1 <= n_mats <= budget["max_materials_per_mesh"] else "FAIL",
               f"{n_mats} material(s) (allowed 1..{budget['max_materials_per_mesh']})")
-        applied = all(abs(v - 1) < EPS for v in o.scale) and all(abs(v) < EPS for v in o.rotation_euler)
-        _rule(results, o.name, "transforms_applied", "PASS" if applied else "FAIL",
-              f"scale={s['scale']} rot={s['rotation']}")
+        scale_ok = all(abs(v - 1) < EPS for v in o.scale)
+        if o.name.startswith(ARTICULATED_PREFIXES):
+            _rule(results, o.name, "transforms_applied", "PASS" if scale_ok else "FAIL",
+                  f"articulated part: pivot rotation allowed, scale={s['scale']}")
+        else:
+            applied = scale_ok and all(abs(v) < EPS for v in o.rotation_euler)
+            _rule(results, o.name, "transforms_applied", "PASS" if applied else "FAIL",
+                  f"scale={s['scale']} rot={s['rotation']}")
         if s["uv_layers"] == 0:
             _rule(results, o.name, "uv_present", "FAIL", "no UV map")
         else:

@@ -1,88 +1,119 @@
-# THE LAST LIGHT: game design document
+# THE LAST LIGHT: game design (v2, first-person keeper)
 
-The player is a lighthouse keeper. One night of storm, one lamp, ships sailing blind toward a reef. The player turns the beam to give each captain their bearings before they strike.
+v1 (a top-down beam-steering game) is preserved in git at `56e6231`. v2 keeps its world, its storm and its fairness tooling. The player now runs the station by hand, from inside it.
 
-## 1. Player experience
-- **Sees:** an elevated three-quarter view of a small rocky island and its lighthouse. A warm amber beam sweeps through fog and rain. Ships' lamps appear out of the dark, and lightning briefly reveals the reef ring.
-- **Hears:** wind, rain, the sea, the hum of the lamp's machinery, distant thunder, ship horns, a warning bell, and a soft chime for every ship guided home.
-- **Controls:** one beam (turn it, boost it).
-- **Goal:** keep the light until dawn without losing five ships.
-- **Emotional arc:**
+## Premise
+It's 02:17. You are the sole keeper of North Point Light. Storm rising, batteries low, an old generator in the engine house below. Vessels are calling for help on the radio. Keep the light burning and bring them in through the reef until dawn (about 06:30 in game, about 11 minutes of play).
 
-| When | Feeling | What happens |
-|---|---|---|
-| 0:00–0:45 | Curiosity | One slow fishing boat, gentle prompts |
-| 0:45–1:45 | Understanding | Pairs of ships; the boost is introduced |
-| 1:45–3:00 | Rising tension | The storm builds; ships arrive from opposite sides |
-| 3:00–4:30 | A difficult stretch | Steamers, squalls, thick fog, three ships at once |
-| 4:30–5:00 | Climax | A convoy of six in quick succession, heavy lightning |
-| End | Release | Dawn breaks, or the night is lost |
+## The room (watch room, directly under the lantern)
+- **Shape:** octagonal, 6.2 m across inside, 2.9 m ceiling.
+- **Position:** about 20 m above the sea, on top of a 4.2 → 3.4 m radius tapered tower. The lantern room and optic sit above it.
+- **Central column:** a brass drive column runs through the room's centre up to the optic.
 
-## 2. Core loop
-1. A ship appears on the storm horizon (170 m out), sailing a blind course toward a specific reef.
-2. The player turns the beam onto it.
-3. While lit, the ship slows to 70% speed and steers for the nearest safe channel, and its **bearings ring** fills.
-4. When the ring is full, the ship has found its bearings: its lamp turns green and its horn sounds. It sails through the channel and out of the lagoon, and is **guaranteed safe**.
-5. An unlit ship's ring drains, at 12% per second, and the ship drifts back onto its blind course.
-6. If a ship strikes rock before its ring is full, it is lost.
-7. Several ships overlap, so the player must choose who to save first.
+| Wall (bearing) | What's there |
+|---|---|
+| N 0° (window) | **Light console:** mode switch (OFF / AUTO / MANUAL), manual handwheel, intensity selector (LOW / NORMAL / HIGH), motor-load ammeter, bearing repeater |
+| NE 45°, E 90° (windows) | **Chart table:** coastal chart with reefs and the three channels, logbook |
+| NW −45°, W −90° (windows) | **Radio desk:** VHF transceiver, handset, radar scope (PPI), desk lamp |
+| SW −135° | **Generator remote panel:** fuel gauge, fuel valve, starter, temperature gauge, run lamp, CHARGE switch |
+| SE 135° | **Power cabinet:** battery meter, charge ammeter, breakers (MAIN, ROOM LIGHTS, RADAR) |
+| S 180° | Stair door, wall clock, photographs, safety notice |
 
-The rule players learn: **fill the ring before impact and the ship is saved.** It's deterministic, readable and skill-based.
-
-## 3. Controls
+## Controls
 | Input | Action |
 |---|---|
-| A / D, ← / → (gamepad left stick or d-pad) | Turn the beam. Eased acceleration, 70°/s top speed |
-| Space (gamepad A), hold | Boost: ring fills twice as fast, cone widens from 6° to 10°, range grows from 185 to 215 m. Burns oil at 22/s |
-| Esc / P (gamepad Start) | Pause |
-| F11 | Fullscreen |
-| Mouse | Menus |
+| WASD | Walk |
+| Mouse | Look |
+| E or left mouse button | Use the focused control |
+| Shift | Walk faster (it's a small room, so modest) |
+| Esc | Leave a device view, or pause |
+| L | Logbook |
 
-## 4. Systems and numbers (`godot/scripts/core/game_config.gd`)
-- **Oil (energy):**
-  - 100 maximum;
-  - regenerates at 7/s, starting 0.6 s after the boost is released;
-  - empty means a lockout until oil is back at 30;
-  - below 25, a low-oil warning plays.
-- **Ships:**
+The radio desk and light console open a **device view**: the camera eases onto the device, the mouse cursor appears, and controls are clicked directly. Q/E or the arrow keys turn the handwheel. Esc or right-click exits.
 
-  | Type | Speed | Turn rate | Light needed | Value | Hull radius |
-  |---|---|---|---|---|---|
-  | Fishing | 7.0 m/s | 28°/s | 2.0 s | 100 | 2.5 m |
-  | Schooner | 5.5 m/s | 18°/s | 3.0 s | 150 | 3.5 m |
-  | Steamer | 4.0 m/s | 11°/s | 4.5 s | 250 | 5.0 m |
+## Systems (`godot/scripts/core/keeper_sim.gd`, node-free and tested)
+### Power
+- **Battery:** 0–100%. Loads drain it every second.
 
-- **Danger:**
-  - a red lamp, a "!" marker and the warning bell trigger when impact is under 6 s away;
-  - storm speed rises up to ×1.12;
-  - squalls (telegraphed 2.5 s ahead) push ships that haven't found their bearings sideways at up to 2 m/s.
-- **Score:**
-  - each ship's value × a streak bonus (+10% per consecutive rescue, capped at +50%);
-  - +50 for a close call (bearings found with impact under 3 s away);
-  - the personal best is kept for the current session.
-- **Win and loss:**
-  - five ships lost means defeat;
-  - surviving the 330 s night (shown as 22:00 → 05:00) with every ship resolved means victory;
-  - victory earns a 1–3 star rating: ★★★ for at least 95% rescued, ★★ for at least 80%, ★ otherwise.
-- **Restart** builds a fresh `SimWorld`; nothing carries over except the session best.
+  | Load | Drain |
+  |---|---|
+  | Lamp, by intensity | LOW 0.20 / NORMAL 0.35 / HIGH 0.60 %/s |
+  | Rotation motor (running) | 0.08 %/s |
+  | Radio | 0.03 %/s, plus 0.10 %/s while transmitting |
+  | Radar | 0.06 %/s |
+  | Room lights | 0.05 %/s |
 
-## 5. World (`blender/spec.py` → `layout.json`)
-- **Island:** radius 21 m at the origin, with a 15 m tower.
-- **Reef ring:**
-  - radius 62 m, spanning bearings −78° to +78°;
-  - three 19 m channels, at −46°, 0° and +46°;
-  - a back row of rocks and four isolated outer reefs.
-- **Safe routes:** channel approach → channel → lagoon → side exit, east or west. They are checked by `layout.py`: no route comes within ship radius plus 1 m of rock.
-- **Camera:** elevated three-quarter view from the south (about 44° down, 44° FOV), with gentle sway and a ±2° lean toward the beam.
+- **Generator:** in the engine house, started remotely.
+  1. Open the fuel valve.
+  2. Hold START for about 1.5 s; it cranks, then catches.
+  3. Switch CHARGE on: +1.1 %/s.
+  - Fuel burns while running, at 0.12 L/s from a 50 L tank.
+  - Temperature rises while charging and falls when idle or stopped.
+- **Battery at 0:** everything goes dark except the red emergency lamp. Restart the generator to recover.
+### Malfunctions
+Each has a cause, a warning, and a fix.
 
-## 6. Replayability
-Each night is seeded with jitter (±2.5 s timing, ±7° bearing, ±6% speed) and a randomly chosen blind-course reef per ship. Scores and streaks reward clean play, and the session best gives a reason to try again. There are no accounts and no unlocks.
+| Malfunction | Cause | Warning | Fix | If ignored |
+|---|---|---|---|---|
+| Overheat | Charging for a long stretch in the late storm | Temp needle in amber, warning lamp | Switch CHARGE off for a while | The generator shuts down at 100% and won't restart until it cools to 60% |
+| Motor jam | Storm-driven (salt and ice in the gear race) | Grinding, ammeter in red, console lamp | Set mode to OFF, then back on | Main breaker trips after 8 s |
+| Breaker trip | Overload from a jammed motor, or HIGH lamp + radar + transmitting with the generator off | Lights out, MAIN breaker handle down | Push MAIN back up at the power cabinet | — |
+### The light
+- **AUTO:** the optic turns at 12 rpm. Every ship within visual range has a reference.
+- **MANUAL:** the handwheel slews the beam (max 40°/s) and holds it steady. A ship in the focused beam sees the light at 1.6× range and confirms visually.
+- **Visual range:** LOW 90 m, NORMAL 140 m, HIGH 190 m, reduced by up to 45% as the storm thickens the fog.
+### Ships and radio
+- **Calling in:** ships call by name, for example "North Point Light, this is fishing vessel *Kittiwake*…". Transmissions are subtitled, with synthesized radio static and chirps.
+- **Commands** (radio desk; each costs one transmission):
 
-## 7. Fairness gates (`godot/tests/sim.gd`, seeds 1–10)
-| Bot | Gate |
+  | Command | Effect |
+  |---|---|
+  | Confirm Position | The ship reports bearing and range, and its radar blip is labelled |
+  | Turn Port / Turn Starboard | Ordered heading −30° / +30° |
+  | Reduce Speed | Toggles slow (55%) |
+  | Hold Position | Heaves to and drifts |
+  | Maintain Course | Resumes |
+
+- **Ships that can't see the light** (out of visual range, or the lamp is dark) execute turns badly: ±25° error, and a 2 m/s storm set pushes them toward the reef.
+- **Entering a channel:** a ship that can see the light, inside a channel's approach cone (within 28° of the channel axis, 60–140 m out), reports "We have the channel, proceeding in" and pilots itself to the harbour. That ship is saved.
+- **Collision:** a ship that hits a reef is lost.
+- **Radio static:** rises with the storm. Words in incoming text are masked, but Confirm Position always answers clearly.
+
+## The night
+| Stage | Time | What happens |
+|---|---|---|
+| 1 | 02:17 | Calm-ish, battery at 62%. *Kittiwake* (fishing) calls in; the logbook walks through Confirm Position and turns |
+| 2 | ~2 min | A battery warning; the logbook explains the generator. *Gannet* (schooner) calls |
+| 3 | ~4.5 min | Storm builds, fog closes in, first motor jam. *Corrie May* and *Lowestoft Star* overlap |
+| 4 | ~8 min | *Meridian* (cargo steamer) drifting onto the eastern rocks, plus an overheat or breaker trip |
+| 5 | ~10.5 min | The storm eases and dawn greys the windows. The coastguard radio calls the end of the shift; results show ships saved and lost, score and time |
+
+- **Defeat:** three ships lost.
+- **Score:** 1000 per ship saved, +250 when saved with the lamp never dark, minus 50 per 10 s of darkness.
+
+## Migration plan
+- **Reused:**
+  - `layout.json` (reefs and channels), `Geo`, `LayoutData`;
+  - the ship type data, storm curve and seeded jitter;
+  - the bot simulation and capture harness;
+  - the Blender pipeline;
+  - the CC0 materials.
+- **Rebuilt:**
+  - the camera (first-person);
+  - the direct beam control (now a physical console);
+  - the ship rule (bearings meter → radio vectoring plus light visibility);
+  - the HUD (now an in-world interface, prompts and subtitles only).
+- **New:** watch-room GLB with named hooks; first-person controller; interaction framework; power, malfunction and radio systems; radar screen; rain-on-glass.
+
+## Blender → Godot hooks (`watch_room.glb`)
+| Name | Meaning |
 |---|---|
-| Idle | Loses every seed |
-| Expert | Wins every seed. Proves every spawn is saveable |
-| Average (0.6 s reaction, 3° aim noise, naive priorities) | Wins at least half the seeds, losing 1–4 ships |
-
-Additionally, no ship ever wrecks after finding its bearings.
+| `IA_<id>` | Interaction volume (empty; its scale is the box size) |
+| `PT_<id>` | Moving part. Pivot at origin; rotates about Blender local Z (= Godot local Y) |
+| `NDL_<id>` | Gauge needle (same axis rule as `PT_`) |
+| `LMP_<id>` | Indicator lamp |
+| `SCR_radar` | Radar screen quad |
+| `GLS_*` | Window glass |
+| `*-convcolonly` | Collision proxy |
+| `FOCUS_<id>` + `FOCUS_<id>_at` | Device-view camera eye and look-at point |
+| `SPAWN_player` | Player start |
