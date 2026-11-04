@@ -15,8 +15,8 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | | |
 |---|---|
 | **Stage** | 1, cabin lighting, materials and architecture |
-| **Iteration** | 1.0, the period-accuracy and story-readiness review (started 2026-11-04) |
-| **Next actionable task** | Write the 1.0 review into `REFERENCE_SPEC.md`, then iteration 1a, lighting and import correctness, measured against the `s0` captures and the `s02` bench |
+| **Iteration** | 1b, material richness (started 2026-11-04). 1.0 and 1a are done and reviewed |
+| **Next actionable task** | After Daniel's 1a feedback: iteration 1b, material richness (palette, bevels, smooth shading, metric UVs, wear mask, `room_pbr`, 2k sets, rain-glass rewrite) |
 
 ## Stages
 | # | Stage | Status |
@@ -125,6 +125,22 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 - `horn_fishing.wav` is mastered hot (RMS −9.3 dBFS, though it plays at −14 dB). `click_button.wav` has a tiny DC offset → Stage 5.
 - At 1.0× the tallest radio line exactly fills its 222 px slot; at 1.5× the panel grows to 349 px → Stage 3 (consider a shorter line length).
 - 2026-11-04: **Daniel approved Stage 0** (iteration 0.2) and kept **High as the default preset** until Stage 1a reworks shadows and GI.
+
+## Stage 1 log
+- **1.0 (2026-11-04):** period-accuracy and story-readiness review added to `REFERENCE_SPEC.md`. It covers the finish, the power chain, the generator as an auxiliary set, the optic as motor plus clockwork, story anchors (the 046 worn tooth, the Grant's bottle behind the Tide Tables, the door gap for the slid photograph), the P0–P3 tiers and the props table.
+- **1a (2026-11-04):**
+  - Exterior lights (lantern glow, lightning, moon, beam) no longer light the room (`EXTERIOR_ONLY` cull mask, interior on render layer 2).
+  - Three cold window lights carry the night spill, the dawn, and lightning weighted by the strike direction.
+  - Wall-lamp light moved inside the glass; cage and glass shadows off; soft shadows (`light_size`).
+  - Instrument lights on the console, charger, generator and breaker panel; a real light for the generator cage bulb.
+  - ReflectionProbe (box-projected, interior, warm ambient that follows the room lights). A/B tested: mode B (re-capture on lighting state changes) is the default.
+  - SSAO and SSIL from Medium, half size; ≤ 8 shadowed interior lights on High.
+  - The I-beams are now one manifold profile (no z-fight) in their own `SM_CeilBeams` bucket.
+  - Textures import VRAM-compressed with mipmaps (`sync_assets.import_params`).
+  - Build: `last_light_v007.blend`, GLB v005.
+  - Evidence: `renders/last_light/s1a_vs_s0_desk.png`, `s1a_vs_s0_b.png`, `s1a2_sheet.png`, `s1a_probe_ab.png`, `s1a_ext.png`.
+  - Performance at High (Auto resolution) regressed from about 19 to about 29 ms at the desk in noisy runs. SSAO and SSIL were moved to half size; the remaining cause is unresolved because the machine was throttling.
+  - **Daniel's 1a decisions (2026-11-04):** continue to 1b; the light level is about right; faint indoor haze only (a negative-density `FogVolume` removes 75 % of the storm fog inside, with ambient raised to keep the approved level: desk mean 0.144 vs 0.134); all step 1.0 proposals approved.
 
 ## Stage 1: cabin (planned; starts after Stage 0 approval)
 1. **1.0 Review:** infrastructure logic, story anchors and the tier table, written into `REFERENCE_SPEC.md`.

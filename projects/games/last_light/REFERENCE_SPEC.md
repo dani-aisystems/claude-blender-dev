@@ -61,6 +61,75 @@ Columns: Asset · Ref · Geometry and dimensions · Material · Interactive · C
 - **Lantern room:** glazed, with the rotating Fresnel optic (`PT_optic`) and a copper dome. This follows real practice, since R4 is missing.
 - **Already in the game:** ocean, rocks and ships from `layout.json`, plus storm, fog and rain (M3 work).
 
+## Stage 1 review (step 1.0, 2026-11-04): period accuracy and story readiness
+This section **overrides** the material and finish columns above wherever they conflict (Daniel's Stage 1 decisions in `docs/ROADMAP.md`). The layout, bearings and every hook name stay as above.
+
+### Finish and condition: "maintained but aged" (a 1971 Northern Lighthouse Board station)
+- **Look:** a proud, clean station, not a derelict one.
+  - Gloss **cream** walls (#D6C9A6) above a **dark-green dado** (#2E4537) to 1.05 m, with a half-round oak dado rail and dark skirting.
+  - **Grey-green machinery** (#66796B), polished **brass** (#B58A3C), varnished **oak** (#7A4E2A / dark #4A2E1A), bakelite controls (#1A1412).
+  - **Dark-green window frames.**
+  - **Dark polished concrete** floor (#4A4743) with the brass compass rose and the rug.
+- **Wear** shows 20+ years of careful use, not neglect:
+  - paint chipped at hand height and on edges;
+  - dull, worn traffic paths between spawn, desk, console, power wall and generator;
+  - brass rubbed bright where it's handled;
+  - touched-up paint in a slightly different cream;
+  - riveted patch plates.
+
+  No rust streaks, peeling paint or grime build-up indoors. Weathering belongs outside.
+- **Superseded entries above:** "Weathered concrete (inner face)", "Dark aged oak" (now varnished oak), "rusted steel" beams (now grey-green riveted steel), and "Dark painted steel" frames (now dark green).
+
+### Infrastructure logic: the room is one working system
+Any reference-image detail that conflicts with this logic is **dropped**, not blended in.
+
+| System | How it works in 1971 | What the player sees |
+|---|---|---|
+| Power chain | Auxiliary generator → charger → battery bank → distribution cabinet → lamp, room-lights and radar circuits | Visible surface conduits link the units in exactly that order, along the dado and ceiling. Each cabinet's cables enter where the previous one leaves |
+| Generator | A small **auxiliary standby diesel set** in the watch room. The main engines are in the engine room below and **out of action tonight** | Fuel day-tank on a bracket with sight glass and valve (`PT_fuel_valve`); lagged exhaust through the wall at −150° (it meets the exterior stack); extractor fan grille; drip tray; an "AUX. SET" maker plate; a capped pipe run marked "MAIN ENGINES" going down through the floor |
+| Optic rotation | An **electric rotation motor and reduction gearbox** drive the optic through a vertical shaft to the lantern. The original **weight-driven clockwork** is kept as standby on the same gear race | The glazed column at 45° shows the motor and gearbox, the clockwork train with its winding crank, the weight-tube entry through the floor, a **fly-ball governor** (new `PT_optic_governor`), a revolution counter, and the **gear race** (`PT_optic_drive`). No lens parts: the Fresnel optic is in the lantern |
+| Manual fallback | The console handwheel (`PT_handwheel`) turns the optic by hand through the ceiling lineshaft when the motor jams | The lineshaft runs visibly from the console's position, across the ceiling to the column's hub, with bevel boxes at the turns |
+| The lamp | Electric. It sits in the lantern above; the console's intensity switch sets it | Nothing lamp-like in the room. The storage shelf holds a spare bulb box and, as a story prop, the **old vapour-burner kit** from before electrification (1953's lamp was a vapour lamp) |
+
+### Story anchors (place now; most interactions come in later stages)
+Reserve these with non-interactive `ANCHOR_*` empties (Godot ignores them) and clear wall or shelf space:
+
+| Anchor | Where | Story use | Stage | Exists? |
+|---|---|---|---|---|
+| Gear race worn tooth at **046°** | Optic column, visible through the glazing at eye height | The 1953 stall and the 1971 jam happen on the same tooth (ch2, ch6). It could become an examinable detail | 1 (geometry); 2/3 (examine) | ⬜ |
+| Admiralty Tide Tables plus a **half bottle of Grant's behind them** | Desk or storage shelf | The Visitor knows it's there (ch4), proving he knew the room | 1 (prop); 3 (examine) | ⬜ |
+| Door gap and **floor anchor for the slid photograph** | Inside the stair door at 180°; a visible 20 mm light gap under the door | ch4 "keep it shut" branch: a photograph slides under the door. `photo_1953.png` exists but nothing opens it yet | 1 (gap and anchor); 3/4 (interaction) | ⬜ |
+| Door audio emitter | Stair-door centre, 1.6 m | Knocks, voice and footsteps (`audio_director` currently uses a fallback position) | 1 (anchor); 5 (audio) | partial |
+| Heavy bulkhead door | 180° | It must *look* like it holds back the night: dogs, rattling bolt, door coaming | 1 (iteration 2) | basic |
+| Wall calendar, November 1971 | Near the desk | Anchors the date. The 14th could be ringed | 1 (iteration 4) | ⬜ |
+| Wiring and maintenance diagram | Power wall | Explains the power chain; could carry a hint later | 1 (iteration 4) | ⬜ |
+| Logbook shelf | Desk or archive | The 1971 and 1953 logs belong to one series of station logs | 1 (iteration 4) | partial (archive) |
+| Telephone | Reserved space by the desk only | **Candidate.** The story's only link is the radio, and a telephone would weaken the isolation. Decide in Stage 3 | 3 | ⬜ |
+| Existing story props | Photo `IA_photo`, drawer letter `IA_drawer`, 046 note `IA_note`, clock, chart | Already wired. Keep positions and hooks | (kept) | ✅ |
+
+### Asset priority tiers (detail follows what the player sees and uses)
+| Tier | Assets | Treatment |
+|---|---|---|
+| **P0** | Radio, generator controls, power panel (charger, batteries, distribution), light console, stair door | Highest detail. Must pass the full 8-item interaction checklist (`godot/tests/interaction_test.gd`) |
+| **P1** | Windows, desk and chart, optic drive (gear race), stair, wall lamps | High-quality geometry and materials |
+| **P2** | Storage, conduits, chair and stool, archive, secondary instruments, story props | Reusable modular pieces |
+| **P3** | Rivets, bolts, distant machinery, clutter | Cheap: decals and texture detail; shadows off |
+
+**Rule for new objects:** each one gets a row in the props table, stating what it adds (gameplay, realism, story or composition). An object with no answer isn't built.
+
+| Planned object | Tier | Adds | Iteration |
+|---|---|---|---|
+| Fuel day-tank, extractor grille, "AUX. SET" plate, "MAIN ENGINES" capped pipe | P0/P2 | Realism: explains why a generator is in the watch room | 3 |
+| Power-chain conduits | P2 | Realism and gameplay: shows the power flow | 2 |
+| Optic motor, gearbox, standby clockwork, governor, revolution counter, gear race with a worn tooth | P1 | Realism; story (046°); gameplay (the governor spins with the beam) | 3 |
+| Vapour-burner kit and spare bulb box on the storage shelf | P2 | Story: 1953 versus 1971 | 4 |
+| Tide Tables plus the half bottle of Grant's | P2 | Story (ch4) | 4 |
+| Door gap plus floor anchor | P1 | Story (ch4 branch) | 2 |
+| Calendar, wiring diagram, logbook shelf | P2 | Story and composition | 4 |
+| Oilskins and sou'wester on a hook by the stair | P2 | Composition: a lived-in room that mirrors the Visitor's look | 4 |
+| Kettle on an electric ring, mug rings | P3 | Composition: the keeper's night | 4 |
+| Barometer | P2 | Realism: the storm builds | 4 |
+
 ## Comparison views kept for every iteration
 | View | Matches |
 |---|---|
@@ -70,5 +139,6 @@ Columns: Asset · Ref · Geometry and dimensions · Material · Interactive · C
 | `fp_power` | First person at the electrical panels |
 | `fp_console` | First person at the light console |
 | `ext` | Exterior inspection |
+| `fp_ceiling`, `cu_lamp`, `cu_optic`, `cu_console`, `cu_power`, `cu_window`, `cu_door` | Stage 0 close-ups. Forced states: `!dark`, `!flash`, `!gen_off`, `!dawn` (see `godot/scripts/capture_fp.gd`) |
 
 Blender renders and Godot captures use the same viewpoints, so geometry, scale, composition, lighting and materials are judged separately.

@@ -37,6 +37,7 @@ func _ready() -> void:
 	if args.has("render_res"):
 		Settings.v["render_res"] = clampi(int(args["render_res"]), 0, 1)
 	Settings.apply_render_scale()
+	Settings.apply_quality_globals()
 	_run.call_deferred()
 
 

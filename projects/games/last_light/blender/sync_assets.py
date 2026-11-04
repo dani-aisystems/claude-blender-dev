@@ -45,7 +45,51 @@ def main(names):
                 dst = TEX_OUT / f"{t}_{key}{hits[0].suffix}"
                 if not dst.exists() or dst.stat().st_mtime < hits[0].stat().st_mtime:
                     shutil.copy2(hits[0], dst)
-    print("SYNC textures ->", sorted(p.name for p in TEX_OUT.iterdir())[:3], "...", len(list(TEX_OUT.iterdir())))
+    n_set = 0
+    for f in sorted(TEX_OUT.glob("*.png")) + sorted(TEX_OUT.glob("*.jpg")):
+        n_set += import_params(f)
+    print("SYNC textures ->", sorted(p.name for p in TEX_OUT.iterdir())[:3], "...", len(list(TEX_OUT.iterdir())),
+          f"(import settings written for {n_set})")
+
+
+# Godot import settings for 3D material textures. Materials are built in code (materials.gd), so
+# Godot never auto-detects them as 3D textures; left alone they import lossless WITHOUT mipmaps,
+# which shimmers and aliases at distance (Stage 0 audit). Normal maps get the normal-map flag
+# (RGTC; every sampler uses hint_normal, which reconstructs Z).
+IMPORT_PARAMS = {"compress/mode": "2", "mipmaps/generate": "true", "detect_3d/compress_to": "0"}
+
+
+def import_params(tex: Path) -> int:
+    """Write/patch <tex>.import so Godot re-imports it VRAM-compressed with mipmaps. Keeps uid/remap."""
+    imp = tex.with_name(tex.name + ".import")
+    want = dict(IMPORT_PARAMS)
+    want["compress/normal_map"] = "1" if "_nor" in tex.stem else "2"
+    if not imp.exists():
+        imp.write_text('[remap]\n\nimporter="texture"\ntype="CompressedTexture2D"\n\n[params]\n\n'
+                       + "".join(f"{k}={v}\n" for k, v in want.items()))
+        return 1
+    lines = imp.read_text().splitlines()
+    seen = set()
+    out = []
+    in_params = False
+    for ln in lines:
+        if ln.startswith("["):
+            in_params = ln.strip() == "[params]"
+        key = ln.split("=", 1)[0] if in_params and "=" in ln else None
+        if key in want:
+            ln = f"{key}={want[key]}"
+            seen.add(key)
+        out.append(ln)
+    missing = [k for k in want if k not in seen]
+    if missing:
+        if "[params]" not in out:
+            out += ["", "[params]", ""]
+        out += [f"{k}={want[k]}" for k in missing]
+    text = "\n".join(out) + "\n"
+    if text != imp.read_text():
+        imp.write_text(text)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

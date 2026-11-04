@@ -58,6 +58,7 @@ func start(seed_value: int, mode := "", attract_mode := false, story := false, s
 	station.radar_tex = radar_vp.get_texture()
 	add_child(station)
 	station.setup(sim)
+	station.outside = outside          # window lights follow the storm, dawn and lightning
 	audio = preload("res://scripts/audio_director.gd").new()
 	add_child(audio)
 	audio.setup(sim, station)
@@ -169,6 +170,8 @@ func _spawn_visitor() -> void:
 		return
 	visitor_fig = preload("res://scripts/fp/visitor_figure.gd").new()
 	add_child(visitor_fig)
+	for vi in visitor_fig.find_children("*", "VisualInstance3D", true, false):
+		(vi as VisualInstance3D).layers = station.LAYER_INTERIOR   # lit by the room, not the lantern
 	var dp: Vector3 = station.door_position()
 	var to_center := Vector3(-dp.x, 0, -dp.z).normalized()
 	visitor_fig.global_position = Vector3(dp.x, 20.0, dp.z) + to_center * 0.55 + to_center.cross(Vector3.UP) * -0.45

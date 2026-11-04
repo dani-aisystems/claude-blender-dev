@@ -143,7 +143,10 @@ func _options() -> void:
 	_opt("max_fps", 0)
 	for q in [0, 1, 2]:
 		_opt("quality", q)
-		_check(Settings.q_ssao() == (q >= 2) and Settings.q_volumetric() == (q >= 1), "quality %d presets" % q)
+		# Stage 1a presets: SSAO + SSIL from Medium, <= 8 shadowed interior lights on High
+		var ids: Array = Settings.q_shadow_ids()
+		_check(Settings.q_ssao() == (q >= 1) and Settings.q_ssil() == (q >= 1) and Settings.q_volumetric() == (q >= 1)
+			and ids.size() <= 8 and not ("*" in ids), "quality %d presets (shadowed lights %d)" % [q, ids.size()])
 	if headless:
 		skips.append("render_res / vsync (headless display)")
 	else:

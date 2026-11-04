@@ -186,6 +186,27 @@ def hexa(bm, pts):
     return v
 
 
+def ibeam(bm, loc, length, b3, h=0.24, w=0.14, tw=0.02, tf=0.02):
+    """Closed, manifold I-beam along the frame's local Y (profile in local X/Z). Replaces three
+    overlapping boxes whose coplanar web/flange faces z-fought (Stage 0 audit, I-beams read as black)."""
+    hx, hz, t = w / 2, h / 2, tw / 2
+    prof = [(-hx, -hz), (hx, -hz), (hx, -hz + tf), (t, -hz + tf), (t, hz - tf), (hx, hz - tf),
+            (hx, hz), (-hx, hz), (-hx, hz - tf), (-t, hz - tf), (-t, -hz + tf), (-hx, -hz + tf)]
+    ends = []
+    for y in (-length / 2, length / 2):
+        ends.append([bm.verts.new(Vector(loc) + b3 @ Vector((x, y, z))) for x, z in prof])
+    a, b = ends
+    faces = []
+    for i in range(12):
+        j = (i + 1) % 12
+        faces.append(bm.faces.new((a[i], a[j], b[j], b[i])))
+    for e in (a, b):
+        for cap in ((0, 1, 2, 3, 10, 11), (10, 3, 4, 9), (9, 4, 5, 6, 7, 8)):
+            faces.append(bm.faces.new([e[k] for k in cap]))
+    bmesh.ops.recalc_face_normals(bm, faces=faces)
+    return a + b
+
+
 def seg_cyl(bm, p0, p1, r, segs=8):
     d = Vector(p1) - Vector(p0)
     cyl(bm, (Vector(p0) + Vector(p1)) / 2, r, r, d.length, segs, basis_z(d))
@@ -463,7 +484,7 @@ def build_shell(B):
     # ceiling + steel I-beams (R2/R3)
     cyl(B.bm("M_LL_Concrete", "SM_RoomCeiling"), (0, 0, CEIL + 0.1), R_OUT, R_OUT, 0.2, 64)
     B.collider("ceiling", (0, 0, CEIL + 0.25), (8, 8, 0.5))
-    rust = B.bm("M_LL_SteelRust")
+    rust = B.bm("M_LL_SteelRust", "SM_CeilBeams")   # own bucket: the plan/iso cutaway hides it alone
     for i in range(8):
         a = math.radians(i * 45 + 22.5)
         d = Vector((math.sin(a), math.cos(a), 0))
@@ -471,9 +492,7 @@ def build_shell(B):
         b3 = basis(side, d, Vector((0, 0, 1)))
         L = R_IN - 0.45
         c = d * (0.45 + L / 2) + Vector((0, 0, CEIL - 0.12))
-        box(rust, c, (0.02, L, 0.24), b3)
-        box(rust, c + Vector((0, 0, -0.11)), (0.14, L, 0.02), b3)
-        box(rust, c + Vector((0, 0, 0.11)), (0.14, L, 0.02), b3)
+        ibeam(rust, c, L, b3)
         rivets(B, c - d * (L / 2 - 0.1) + side * 0.012 + Vector((0, 0, -0.05)),
                c + d * (L / 2 - 0.1) + side * 0.012 + Vector((0, 0, -0.05)), 10, basis(d, Vector((0, 0, 1)), side))
     torus(rust, (0, 0, CEIL - 0.12), 0.45, 0.13, 24, 6)
@@ -1029,7 +1048,9 @@ def build_wall_lamps(B):
         bm.loops.layers.uv.new("UVMap")
         sphere(bm, g, 0.04)
         B.mesh_obj(f"LMP_wall_{i}", bm, "M_LL_Lamp")
-        B.empty(f"LIGHT_wall_{i}", g - o * 0.1, (0.05, 0.05, 0.05), kind="SPHERE")
+        # the light sits at the bulb INSIDE the glass: 0.1 m in front of it, the six cage bars threw
+        # 1.2 m radial "fan" shadows across the wall (Stage 0 cu_lamp capture)
+        B.empty(f"LIGHT_wall_{i}", g, (0.05, 0.05, 0.05), kind="SPHERE")
 
 
 def build_room(B):

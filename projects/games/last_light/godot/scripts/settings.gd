@@ -83,6 +83,7 @@ func apply() -> void:
 		if i >= 0:
 			AudioServer.set_bus_volume_db(i, linear_to_db(maxf(v["vol_" + b.to_lower()], 0.0001)))
 	apply_render_scale()
+	apply_quality_globals()
 	changed.emit()
 
 
@@ -111,17 +112,50 @@ func apply_render_scale() -> void:
 	vp.fsr_sharpness = 0.2
 
 
-## Quality presets consumed by outside.gd / station.gd.
+## Quality presets consumed by outside.gd / station.gd (Stage 1a: interior lighting per preset).
+##   Low:    probe ambient only, no SSAO/SSIL, shadows on the desk lamp only, hard-ish shadows
+##   Medium: SSAO + SSIL at half size, shadows on desk + two wall lamps + the centre window
+##   High:   SSAO + SSIL (half size, higher quality), 8 interior lights cast soft shadows
 func q_volumetric() -> bool:
 	return int(v["quality"]) >= 1
 
 
 func q_ssao() -> bool:
-	return int(v["quality"]) >= 2
-
-
-func q_shadows() -> bool:
 	return int(v["quality"]) >= 1
+
+
+func q_ssil() -> bool:
+	return int(v["quality"]) >= 1
+
+
+## Half-resolution SSAO/SSIL on every preset: full-size AO cost ~4-15 ms more per frame at High on
+## the M3 in the Stage 1a bench, for no visible gain in a dim room. High uses a higher quality level.
+func q_half_size() -> bool:
+	return true
+
+
+## Which interior lights cast shadows ("*" = all).
+func q_shadow_ids() -> Array:
+	return [["desk"], ["desk", "wall_0", "wall_1", "win_0"],
+		["desk", "wall_0", "wall_1", "wall_2", "wall_3", "win_0", "win_1", "win_2"]][int(v["quality"])]   # budget: <= 8 on High
+
+
+func q_soft_shadows() -> int:
+	return [RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW, RenderingServer.SHADOW_QUALITY_SOFT_LOW,
+		RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM][int(v["quality"])]
+
+
+func q_shadow_atlas() -> int:
+	return [2048, 4096, 4096][int(v["quality"])]
+
+
+## Global (not per-scene) render settings for the current preset.
+func apply_quality_globals() -> void:
+	if not is_inside_tree():
+		return
+	RenderingServer.positional_soft_shadow_filter_set_quality(q_soft_shadows())
+	RenderingServer.directional_soft_shadow_filter_set_quality(q_soft_shadows())
+	get_tree().root.positional_shadow_atlas_size = q_shadow_atlas()
 
 
 func q_rain_amount() -> int:

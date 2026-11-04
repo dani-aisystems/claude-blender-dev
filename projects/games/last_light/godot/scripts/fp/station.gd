@@ -10,12 +10,19 @@ signal sim_events(events: Array)
 
 const INTERACT_LAYER := 2
 const GAUGE_SWEEP := deg_to_rad(270.0)
+## Render layer for everything in the watch room. Exterior lights (outside.gd EXTERIOR_ONLY) skip it;
+## the window lights below are the only way the night, the dawn and the lightning get in.
+const LAYER_INTERIOR := 2
+const F := 20.0                         # floor height (Blender z = Godot y)
+const WARM := Color(1.0, 0.72, 0.45)
+const GLASS_MATS := ["M_LL_Glass", "M_LL_Lens"]
 
 var sim: KeeperSim
 var room: Node3D
 var parts := {}            # name -> {node, rest: Transform3D, angle, target}
 var lamps := {}            # id -> StandardMaterial3D
 var lights := {}           # id -> Light3D
+var lamp_nodes := {}       # id -> the LMP_ mesh node (positions for lights that belong to a lamp)
 var focus := {}            # id -> {eye: Vector3, at: Vector3}
 var spawn := Transform3D()
 var radar_tex: Texture2D
@@ -26,6 +33,13 @@ var _flicker := 0.0
 var _hold_id := ""
 var door_open := false
 var door_prompt := "Stair door. Bolted for the night."
+var outside: Node3D                     # set by game_fp: storm, dawn and lightning for the window lights
+var windows: Array = []                 # [{light: SpotLight3D, out: Vector3}] one per window bay
+var probe: ReflectionProbe
+var fog_cut: FogMaterial                # negative-density fog volume: only a faint haze indoors
+var probe_mode := "b"                   # a: capture once + scale; b: re-capture on lighting state changes
+var _probe_key := ""
+var _probe_recapture := 0
 
 ## id -> descriptor. kind: toggle | hold | cycle | focus | wheel. "focus_only" ids only respond in a device view.
 var DEVICES := {
@@ -67,6 +81,11 @@ func setup(k: KeeperSim) -> void:
 	room = load("res://assets/models/watch_room.glb").instantiate()
 	add_child(room)
 	_bind(room)
+	_make_window_lights()
+	_make_instrument_lights()
+	_make_probe()
+	_make_fog_cut()
+	apply_shadow_preset()
 
 
 func _bind(root: Node) -> void:
@@ -78,6 +97,8 @@ func _bind(root: Node) -> void:
 		if not (n is Node3D):
 			continue
 		var nm := String(n.name)
+		if n is VisualInstance3D:
+			(n as VisualInstance3D).layers = LAYER_INTERIOR
 		if n is MeshInstance3D:
 			_swap_materials(n)
 		if nm.begins_with("PT_") or nm.begins_with("NDL_"):
@@ -127,6 +148,14 @@ func _swap_materials(mi: MeshInstance3D) -> void:
 			bm.metallic = 0.0
 			bm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 			mi.set_surface_override_material(i, bm)
+	# glass never casts shadows (lamp glass, gauge glass, the optic housing's glazing)
+	var all_glass := mesh.get_surface_count() > 0
+	for i in mesh.get_surface_count():
+		var sm := mesh.surface_get_material(i)
+		if sm == null or not (sm.resource_name in GLASS_MATS):
+			all_glass = false
+	if all_glass or String(mi.name).begins_with("SM_WallLamps"):
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 func _bind_lamp(n: Node, id: String) -> void:
@@ -145,6 +174,7 @@ func _bind_lamp(n: Node, id: String) -> void:
 	n.material_override = m
 	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	lamps[id] = m
+	lamp_nodes[id] = n
 
 
 func _make_interactable(n: Node3D, id: String) -> void:
@@ -163,6 +193,19 @@ func _make_interactable(n: Node3D, id: String) -> void:
 	body.global_transform = Transform3D(gt.basis.orthonormalized(), gt.origin)
 
 
+## Base energy of each interior light at full power (the breaker / brownout logic scales these).
+func _base_energy(id: String) -> float:
+	if id == "desk":
+		return 2.6
+	if id.begins_with("wall"):
+		return 1.35
+	if id.begins_with("inst"):
+		return 0.8
+	if id == "cage":
+		return 0.55
+	return 0.6
+
+
 func _make_light(n: Node3D, id: String) -> void:
 	if id == "lamp":
 		return    # the lantern light lives outside (outside.gd)
@@ -173,19 +216,17 @@ func _make_light(n: Node3D, id: String) -> void:
 		s.spot_range = 3.5
 		s.spot_attenuation = 1.2
 		l = s
-		l.light_energy = 2.6
-		l.shadow_enabled = true
+		l.light_size = 0.03
 	else:
 		var o := OmniLight3D.new()
-		o.omni_range = 4.5 if id.begins_with("wall") else 2.4
-		o.omni_attenuation = 1.4
+		# low-key pools: wall lamps light their part of the wall, not the whole room
+		o.omni_range = 4.0 if id.begins_with("wall") else 2.4
+		o.omni_attenuation = 1.6
 		l = o
-		l.light_energy = 0.9 if id.begins_with("wall") else 0.6
-		l.shadow_enabled = id in ["wall_0", "wall_1"]
-	l.light_color = Color(1.0, 0.72, 0.45)
+		l.light_size = 0.06 if id.begins_with("wall") else 0.03
+	l.light_energy = _base_energy(id)
+	l.light_color = WARM
 	l.light_volumetric_fog_energy = 0.0
-	if GameState.user_args.has("noshadows"):
-		l.shadow_enabled = false
 	add_child(l)
 	l.global_transform = n.global_transform.orthonormalized()
 	if id == "desk":
@@ -194,6 +235,156 @@ func _make_light(n: Node3D, id: String) -> void:
 		var inward := Vector3(-p.x, 0, -p.z).normalized()
 		l.look_at(p + Vector3(0, -0.8, 0) + inward * 0.35 + Vector3(0.2, 0, 0), Vector3.FORWARD)
 	lights[id] = l
+
+
+## One cold spot per window bay, outside the glass, aimed down into the room: the night-sky spill,
+## the dawn, and the lightning (direction-weighted by the strike bearing). Not on the breaker.
+func _make_window_lights() -> void:
+	var found: Array = []
+	for mi in room.find_children("GLS_window*", "MeshInstance3D", true, false):
+		var c: Vector3 = (mi.global_transform * (mi as MeshInstance3D).get_aabb()).get_center()
+		found.append({"c": c, "out": Vector3(c.x, 0, c.z).normalized()})
+	# centre bay first (bearing 0 = north = -Z): it is the one that keeps shadows on Medium
+	found.sort_custom(func(a, b): return a["out"].dot(Vector3.FORWARD) > b["out"].dot(Vector3.FORWARD))
+	for i in found.size():
+		var c: Vector3 = found[i]["c"]
+		var out: Vector3 = found[i]["out"]
+		var sp := SpotLight3D.new()
+		sp.light_color = Color(0.68, 0.76, 0.92)
+		sp.spot_angle = 42.0
+		sp.spot_range = 7.5
+		sp.spot_attenuation = 0.8
+		sp.light_size = 0.25
+		sp.light_cull_mask = LAYER_INTERIOR
+		sp.light_volumetric_fog_energy = 0.0
+		sp.light_energy = 0.0
+		sp.visible = false
+		add_child(sp)
+		sp.global_position = c + out * 1.4 + Vector3.UP * 0.6
+		sp.look_at(c - out * 1.6 + Vector3.DOWN * 1.2, Vector3.UP)
+		windows.append({"light": sp, "out": out, "id": "win_%d" % i})
+
+
+## Small warm spots on the instrument faces so gauges stay readable in a low-key room. They are on
+## the room-lights breaker like the lamps. (Their fixtures are modelled in Stage 1 iteration 3.)
+func _make_instrument_lights() -> void:
+	for pair in [["inst_console", "NDL_bearing"], ["inst_charger", "NDL_battery"], ["inst_gen", "NDL_temp"],
+			["inst_power", "PT_brk_lights"]]:
+		if not parts.has(pair[1]):
+			continue
+		var p: Vector3 = parts[pair[1]]["node"].global_position
+		var inward := Vector3(-p.x, 0, -p.z).normalized()
+		var sp := SpotLight3D.new()
+		sp.spot_angle = 50.0
+		sp.spot_range = 1.2
+		sp.spot_attenuation = 1.0
+		sp.light_color = WARM
+		sp.light_energy = _base_energy(pair[0])
+		sp.light_volumetric_fog_energy = 0.0
+		sp.light_cull_mask = LAYER_INTERIOR
+		add_child(sp)
+		sp.global_position = p + inward * 0.45 + Vector3.UP * 0.35
+		sp.look_at(p, Vector3.UP)
+		lights[pair[0]] = sp
+	# the generator cage's bulb was emissive only: give it a real light over the engine
+	if lamp_nodes.has("cage"):
+		var o := OmniLight3D.new()
+		o.omni_range = 2.2
+		o.omni_attenuation = 1.6
+		o.light_size = 0.03
+		o.light_color = WARM
+		o.light_energy = _base_energy("cage")
+		o.light_volumetric_fog_energy = 0.0
+		add_child(o)
+		o.global_position = (lamp_nodes["cage"] as Node3D).global_position + Vector3.DOWN * 0.06
+		lights["cage"] = o
+
+
+## Interior reflections and ambient: without it every metal and the floor reflected the outdoor
+## storm sky. Box-projected over the room; ambient is a dark neutral colour scaled by the room lights.
+func _make_probe() -> void:
+	probe_mode = String(GameState.user_args.get("probe", "b"))
+	probe = ReflectionProbe.new()
+	probe.size = Vector3(7.0, 3.3, 7.0)
+	probe.box_projection = true
+	probe.interior = true
+	probe.enable_shadows = true
+	probe.cull_mask = LAYER_INTERIOR
+	probe.ambient_mode = ReflectionProbe.AMBIENT_COLOR
+	probe.ambient_color = Color(0.15, 0.13, 0.11)      # warm: the room's own tungsten bounce
+	probe.ambient_color_energy = 0.8
+	probe.update_mode = ReflectionProbe.UPDATE_ONCE
+	add_child(probe)
+	probe.global_position = Vector3(0, F + 1.55, 0)
+
+
+## The storm's volumetric fog also filled the room (milky at dawn). A negative-density volume over
+## the room removes ~75 % of it: a faint haze keeps the lamp and window light shafts (Daniel, 1a).
+func _make_fog_cut() -> void:
+	var fv := FogVolume.new()
+	fv.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	fv.size = Vector3(7.0, 3.4, 7.0)
+	fog_cut = FogMaterial.new()
+	fog_cut.density = 0.0
+	fog_cut.albedo = Color(1, 1, 1)
+	fog_cut.edge_fade = 0.05
+	fv.material = fog_cut
+	add_child(fv)
+	fv.global_position = Vector3(0, F + 1.6, 0)
+
+
+## Which lights cast shadows follows the quality preset (Settings.q_shadow_ids).
+func apply_shadow_preset() -> void:
+	var ids: Array = Settings.q_shadow_ids()
+	var off := GameState.user_args.has("noshadows")
+	for id in lights:
+		lights[id].shadow_enabled = not off and not String(id).begins_with("inst") and id != "cage" and ("*" in ids or id in ids)
+	for w in windows:
+		w["light"].shadow_enabled = not off and ("*" in ids or w["id"] in ids)
+	if not Settings.changed.is_connected(apply_shadow_preset):
+		Settings.changed.connect(apply_shadow_preset)
+
+
+func _update_windows() -> void:
+	var storm: float = sim.storm
+	var dawn := 0.0
+	var fl := 0.0
+	var fdir := Vector3.ZERO
+	if outside:
+		dawn = outside.dawn
+		fl = outside.flash_now
+		var d2: Vector2 = outside._flash_dir
+		fdir = Vector3(d2.x, 0, d2.y)
+	if fog_cut and outside and outside.env:
+		fog_cut.density = -0.75 * outside.env.volumetric_fog_density
+	var spill := 0.12 + 0.06 * (1.0 - storm) + 1.6 * dawn
+	for w in windows:
+		var face := pow(0.5 + 0.5 * (w["out"] as Vector3).dot(fdir), 2.0)
+		var e := spill + fl * 5.0 * (0.35 + 0.65 * face)
+		var l: SpotLight3D = w["light"]
+		l.light_energy = e
+		l.light_color = Color(0.68, 0.76, 0.92).lerp(Color(0.95, 0.88, 0.8), dawn)
+		l.visible = e > 0.02
+
+
+## Probe: ambient always follows the room-light level. Mode "a" also scales the (stale) captured
+## reflections; mode "b" re-captures whenever the lighting state changes (power, dawn).
+func _update_probe(level: float, room_on: bool) -> void:
+	if probe == null:
+		return
+	probe.ambient_color_energy = lerpf(0.2, 0.8, level)   # also replaces the fog in-scatter the haze cut removed
+	if probe_mode == "a":
+		probe.intensity = lerpf(0.25, 1.0, level)
+		return
+	var key := "%s|%d" % [room_on, int(round((outside.dawn if outside else 0.0) * 4.0))]
+	if key != _probe_key:
+		_probe_key = key
+		_probe_recapture = 8
+		probe.update_mode = ReflectionProbe.UPDATE_ALWAYS
+	elif _probe_recapture > 0:
+		_probe_recapture -= 1
+		if _probe_recapture == 0:
+			probe.update_mode = ReflectionProbe.UPDATE_ONCE
 
 
 func _bind_radar(n: MeshInstance3D) -> void:
@@ -349,12 +540,14 @@ func _process_body(delta: float) -> void:
 	for id in lights:
 		var l: Light3D = lights[id]
 		var on := room_on
-		var base := 2.6 if id == "desk" else (0.9 if id.begins_with("wall") else 0.6)
+		var base := _base_energy(id)
 		if id == "stair":
 			l.light_color = Color(1.0, 0.72, 0.45) if room_on else Color(1.0, 0.15, 0.08)
 			on = true
 			base = 0.6 if room_on else 0.5
 		l.light_energy = base * f if on else 0.0
+	_update_windows()
+	_update_probe(f if room_on else 0.0, room_on)
 	for id in lamps:
 		if id == "desk" or id.begins_with("wall") or id == "cage":
 			_lamp(id, 4.0 * f if room_on else 0.0)

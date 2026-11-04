@@ -4,6 +4,9 @@ extends Node3D
 
 const SHIP_VIEW := preload("res://scripts/fp/ship_view2.gd")
 const LANTERN_Y := 24.8
+## Render layer 2 = the watch-room interior (station.gd LAYER_INTERIOR). Exterior lights skip it:
+## the room is lit only by its own lamps and by what comes in through the windows.
+const EXTERIOR_ONLY := 0xFFFFF & ~2
 
 var sim: KeeperSim
 var env: Environment
@@ -35,6 +38,7 @@ func set_sky(kind: String) -> void:
 		_:
 			dusk = 0.0
 var flash := 0.0
+var flash_now := 0.0      # the flicker-shaped flash actually shown this frame (station window lights read it)
 var _t := 0.0
 var _flash_dir := Vector2(0, -1)
 var _noise_tex: NoiseTexture2D
@@ -109,10 +113,16 @@ func _environment() -> void:
 	env.volumetric_fog_sky_affect = 0.4
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 0.88
-	# perf bisect flags: --novolfog --nossao --norain --noglow --noshadows
+	# perf bisect flags: --novolfog --nossao --nossil --halfao --norain --noglow --noshadows
 	var a: Dictionary = GameState.user_args
 	env.volumetric_fog_enabled = not a.has("novolfog") and Settings.q_volumetric()
 	env.ssao_enabled = not a.has("nossao") and Settings.q_ssao()
+	env.ssil_enabled = not a.has("nossil") and Settings.q_ssil()
+	env.ssil_radius = 2.0                      # the room is 6.5 m across: short-range bounce only
+	env.ssil_intensity = 1.5
+	var half: bool = Settings.q_half_size() or a.has("halfao")   # --halfao: perf bisect
+	RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_LOW if half else RenderingServer.ENV_SSAO_QUALITY_MEDIUM, half, 0.5, 2, 50.0, 300.0)
+	RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_LOW if half else RenderingServer.ENV_SSIL_QUALITY_MEDIUM, half, 0.5, 4, 50.0, 300.0)
 	env.glow_enabled = not a.has("noglow")
 	we.environment = env
 	add_child(we)
@@ -123,12 +133,14 @@ func _environment() -> void:
 	moon.shadow_enabled = true
 	moon.directional_shadow_max_distance = 140.0
 	moon.light_volumetric_fog_energy = 0.3
+	moon.light_cull_mask = EXTERIOR_ONLY
 	add_child(moon)
 	bolt_light = DirectionalLight3D.new()
 	bolt_light.light_color = Color(0.78, 0.84, 1.0)
 	bolt_light.light_energy = 0.0
 	bolt_light.rotation_degrees = Vector3(-50, 0, 0)
 	bolt_light.light_volumetric_fog_energy = 1.2
+	bolt_light.light_cull_mask = EXTERIOR_ONLY   # lightning reaches the room through the windows (station.gd)
 	add_child(bolt_light)
 
 
@@ -337,6 +349,7 @@ func _lighthouse() -> void:
 	lamp_glow.light_energy = 2.5
 	lamp_glow.light_volumetric_fog_energy = 2.0
 	lamp_glow.shadow_enabled = false
+	lamp_glow.light_cull_mask = EXTERIOR_ONLY    # unshadowed, 4.8 m above the floor: it lit the room through the roof
 	add_child(lamp_glow)
 
 
@@ -352,6 +365,7 @@ func _beam() -> void:
 	beam_light.spot_attenuation = 0.5
 	beam_light.light_volumetric_fog_energy = 5.0
 	beam_light.shadow_enabled = false
+	beam_light.light_cull_mask = EXTERIOR_ONLY
 	beam_light.rotation_degrees.x = -3.0
 	beam_pivot.add_child(beam_light)
 	var tilt := Node3D.new()
@@ -462,6 +476,7 @@ func _process_body(delta: float) -> void:
 	var f := flash * (0.55 + 0.45 * sin(_t * 47.0)) if flash > 0.05 else 0.0
 	if Settings.v["reduce_flashing"]:
 		f *= 0.3
+	flash_now = f
 	bolt_light.light_energy = f * 2.6
 	sky_mat.set_shader_parameter("storm", storm)
 	sky_mat.set_shader_parameter("flash", f)
