@@ -54,14 +54,15 @@ VIEWS = {
     "fp_power": (*eye(80, 0.6, -75, 3.0, 1.65, 1.2), 20, False),
     "fp_console": (*eye(-110, 0.5, 78, 3.0, 1.65, 0.95), 20, False),
     "fp_gen": (*eye(30, 0.8, -140, 3.0, 1.65, 0.9), 20, False),
-    "fp_stair": (*eye(0, 1.0, 180, 3.0, 1.65, 1.0), 20, False),
+    "fp_stair": (*eye(-10, 1.0, 170, 3.0, 1.65, 1.0), 20, False),
     "fp_ceiling": (*eye(200, 0.7, 30, 1.9, 1.6, 3.05), lens_for_vfov(80), False),
     "cu_lamp": (*eye(62, 2.0, 62, 3.25, 1.85, 2.05), lens_for_vfov(55), False),
     "cu_optic": (*eye(20, 1.3, 45, 2.78, 1.5, 1.25), lens_for_vfov(55), False),
     "cu_console": (*eye(78, 1.75, 78, 2.9, 1.6, 0.95), lens_for_vfov(50), False),
     "cu_power": (*eye(-80, 1.4, -80, 3.0, 1.6, 1.2), lens_for_vfov(62), False),
     "cu_window": (*eye(0, 1.4, 0, 3.42, 1.65, 1.75), lens_for_vfov(55), False),
-    "cu_door": (*eye(180, 0.2, 180, 2.0, 1.65, 1.1), lens_for_vfov(55), False),
+    "cu_door": (*eye(170, 0.2, 170, 2.0, 1.65, 1.1), lens_for_vfov(55), False),
+    "cu_shelf": (*eye(128, 1.55, 128, 3.0, 1.6, 1.15), lens_for_vfov(55), False),
     "ext": ((24, -38, 12), (0, 0, 17), 40, False),
 }
 

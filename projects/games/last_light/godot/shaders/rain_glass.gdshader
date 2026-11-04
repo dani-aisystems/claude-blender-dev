@@ -83,7 +83,7 @@ void fragment() {
 	EMISSION = bg * a_drop * (1.0 - 0.15 * drop) + vec3(0.04, 0.05, 0.06) * drop * flash;
 	ALBEDO = haze_color * a_cond * (1.0 - a_drop);   // premultiplied; the haze takes the room's light
 	ALPHA = a;
-	ROUGHNESS = mix(0.04, 0.45, cond);              // clear glass mirror-sharp; fogged patches blur reflections
+	ROUGHNESS = mix(0.04, 0.2, cond);               // fogged patches soften reflections (0.45 smeared a lamp into a ghost disc)
 	METALLIC = 0.0;
 	SPECULAR = 0.5;
 }

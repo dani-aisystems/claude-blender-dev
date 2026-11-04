@@ -13,6 +13,7 @@ const GAUGE_SWEEP := deg_to_rad(270.0)
 ## Render layer for everything in the watch room. Exterior lights (outside.gd EXTERIOR_ONLY) skip it;
 ## the window lights below are the only way the night, the dawn and the lightning get in.
 const LAYER_INTERIOR := 2
+const LAMP_LAYER := 4                   # render layer 3 (bit value 4): emissive bulbs
 const F := 20.0                         # floor height (Blender z = Godot y)
 const WARM := Color(1.0, 0.72, 0.45)
 const GLASS_MATS := ["M_LL_Glass", "M_LL_Lens"]
@@ -28,6 +29,8 @@ var spawn := Transform3D()
 var radar_tex: Texture2D
 var _t := 0.0
 var _wheel_angle := 0.0
+var _gov_angle := 0.0
+var _gov_speed := 0.0
 var _rx_flash := 0.0
 var _flicker := 0.0
 var _hold_id := ""
@@ -66,7 +69,7 @@ var DEVICES := {
 	"logbook": {"kind": "doc", "prompt": "Write up the station log"},
 	"gen_panel": {"kind": "info", "prompt": "Generator"},
 	"battery": {"kind": "info", "prompt": "Battery"},
-	"archive": {"kind": "doc", "prompt": "Search the archive cabinet"},
+	"archive": {"kind": "doc", "prompt": "Search the old station logs"},
 	"drawer": {"kind": "doc", "prompt": "Open the desk drawer"},
 	"photo": {"kind": "doc", "prompt": "Look at the photograph"},
 	"note": {"kind": "doc", "prompt": "Read the note on the console"},
@@ -176,6 +179,9 @@ func _bind_lamp(n: Node, id: String) -> void:
 	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	lamps[id] = m
 	lamp_nodes[id] = n
+	# bulbs on render layer 3: seen by cameras, NOT by the reflection probe (cull mask = layer 2), whose
+	# low-res capture smeared each glowing globe into a large soft disc on the window glass
+	(n as VisualInstance3D).layers = LAMP_LAYER
 
 
 func _make_interactable(n: Node3D, id: String) -> void:
@@ -507,6 +513,12 @@ func _process_body(delta: float) -> void:
 	_set_angle("NDL_clock_h", -fmod(minutes / 60.0, 12.0) / 12.0 * TAU, delta, 50.0)
 	_set_angle("PT_optic_drive", -k.bearing * 3.0, delta, 60.0)
 	_set_angle("PT_optic_gear", -k.bearing * 2.0, delta, 60.0)
+	# fly-ball governor: spins while the rotation motor runs, winds down when it stops or jams
+	_gov_speed = move_toward(_gov_speed, 9.0 if (k.motor_on() and not k.jammed) else 0.0, delta * 4.0)
+	_gov_angle = wrapf(_gov_angle + _gov_speed * delta, -PI, PI)
+	if parts.has("PT_optic_governor"):
+		var gp: Dictionary = parts["PT_optic_governor"]
+		gp["node"].transform = gp["rest"] * Transform3D(Basis(Vector3.UP, _gov_angle), Vector3.ZERO)
 	_set_angle("PT_fuel_valve", deg_to_rad(-90.0) if k.fuel_valve else 0.0, delta)
 	_set_angle("PT_charge", deg_to_rad(-32.0) if k.charge_on else deg_to_rad(32.0), delta, 18.0)
 	_set_angle("PT_brk_main", deg_to_rad(-32.0) if k.main_breaker else deg_to_rad(32.0), delta, 18.0)
@@ -529,6 +541,7 @@ func _process_body(delta: float) -> void:
 	_lamp("main", 3.0 if not k.main_breaker else 0.0)
 	_lamp("motor_fault", 3.5 if k.jammed and blink else 0.0)
 	_lamp("console_power", 2.0 if k.powered() else 0.0)
+	_lamp("optic_motor", 2.0 if (k.motor_on() and not k.jammed) else (2.0 if blink else 0.0) if k.jammed else 0.0)
 	_lamp("radio_tx", 3.0 if k.tx_t > 0.0 else 0.0)
 	_rx_flash = maxf(0.0, _rx_flash - delta * 0.7)
 	_lamp("radio_rx", 3.0 * _rx_flash if k.radio_on() else 0.0)
@@ -547,7 +560,7 @@ func _process_body(delta: float) -> void:
 		if id == "stair":
 			l.light_color = Color(1.0, 0.72, 0.45) if room_on else Color(1.0, 0.15, 0.08)
 			on = true
-			base = 0.6 if room_on else 0.5
+			base = 0.3 if room_on else 0.5      # 0.6 turned the 20 mm door gap into a glowing white slot
 		l.light_energy = base * f if on else 0.0
 	_update_windows()
 	_update_probe(f if room_on else 0.0, room_on)

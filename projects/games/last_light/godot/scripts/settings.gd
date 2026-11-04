@@ -136,8 +136,10 @@ func q_half_size() -> bool:
 
 ## Which interior lights cast shadows ("*" = all).
 func q_shadow_ids() -> Array:
-	return [["desk"], ["desk", "wall_0", "wall_1", "win_0"],
-		["desk", "wall_0", "wall_1", "wall_2", "wall_3", "win_0", "win_1", "win_2"]][int(v["quality"])]   # budget: <= 8 on High
+	# the stair light must cast shadows from Medium up: unshadowed, its red emergency glow leaked through
+	# the housing walls and tinted the whole room in a power cut (iteration 3 check)
+	return [["desk"], ["desk", "wall_0", "wall_1", "stair"],
+		["desk", "wall_0", "wall_1", "wall_2", "wall_3", "win_0", "win_1", "stair"]][int(v["quality"])]   # budget: <= 8 on High
 
 
 func q_soft_shadows() -> int:

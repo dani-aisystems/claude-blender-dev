@@ -65,8 +65,10 @@ SPEC = {
         "eye_height": 1.65,
         # device bearings (deg) from R1
         "desk": 0.0, "charger": -55.0, "distribution": -80.0, "batteries": -105.0, "generator": -140.0,
-        "stair": 180.0, "storage": 140.0, "extinguisher": 118.0, "console": 78.0, "optic_drive": 45.0,
-        "wall_lamps": [-48.0, 62.0, 160.0, -160.0],
+        # Daniel 2026-11-04 (Stage 1 iteration 3): stair door moved 10 deg left of R1's 180 so the housing
+        # clears the generator cage (was 4 cm) and the archive (3 cm); storage, extinguisher and one lamp follow
+        "stair": 170.0, "storage": 128.0, "extinguisher": 106.0, "console": 78.0, "optic_drive": 45.0,
+        "wall_lamps": [-48.0, 62.0, 148.0, -160.0],
     },
     "lantern": {
         "base_z": 23.3, "glass_z": [23.95, 25.85], "radius": 2.05, "sides": 12,
@@ -86,7 +88,7 @@ SPEC = {
         "labels": [
             "LIGHT CONTROL", "BEARING", "MOTOR LOAD", "HANDWHEEL",
             "GENERATOR", "START", "FUEL VALVE", "CHARGE",
-            "MAIN", "ROOM LIGHTS", "RADAR", "ENGINE HOUSE",
+            "MAIN", "ROOM LIGHTS", "RADAR", "AUX. SET  No.2",
             "VHF  CH 16", "VOLUME", "CHANNEL", "DANGER  415 V",
         ],
     },

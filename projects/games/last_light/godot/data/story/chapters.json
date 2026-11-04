@@ -37,8 +37,8 @@
     {"id": "gannet_in", "objective": "Bring Gannet in through the West Gut (314°).", "when": "saved(\"Gannet\") or lost(\"Gannet\")",
      "hint": [120, "Confirm Gannet's position, then turn her until she points down the West Gut line on the radar."], "do": [["talk", "ch2_gannet_after"], ["autosave"]]},
     {"id": "second_call", "when": "true", "do": [["wait", 8], ["sfx", "static_burst"], ["talk", "ch2_mary_ellen"]]},
-    {"id": "archive", "objective": "Find the 1953 station log in the archive cabinet (beside the door).", "when": "has_flag(\"read_log_1953\")",
-     "hint": [60, "The tall wooden archive cabinet stands left of the stair door."], "do": [["wait", 1], ["talk", "ch2_same_hand"], ["clue", "same_hand"]]},
+    {"id": "archive", "objective": "Find the 1953 station log in the old-log box (storage shelf, left of the stair door).", "when": "has_flag(\"read_log_1953\")",
+     "hint": [60, "The old station logs are in the oak box on the top storage shelf, left of the stair door."], "do": [["wait", 1], ["talk", "ch2_same_hand"], ["clue", "same_hand"]]},
     {"id": "jam", "when": "true", "do": [["wait", 6], ["fault", "jam"], ["talk", "ch2_jam"]]},
     {"id": "clear", "objective": "Clear the motor jam: MODE to OFF, then back to AUTO.", "when": "flag(\"jam_cleared\") >= 1 and sim.mode == 1",
      "hint": [30, "MODE knob on the console: right click turns it back. OFF, wait a second, then AUTO."], "do": [["talk", "ch2_046"], ["autosave"]]}

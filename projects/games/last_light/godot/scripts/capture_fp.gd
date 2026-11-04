@@ -54,7 +54,7 @@ func view(name_: String) -> Array:
 		"fp_power": return eye(80, 0.6, -75, 3.0, 1.65, 1.2) + [72.0, false, 0.03]
 		"fp_console": return eye(-110, 0.5, 78, 3.0, 1.65, 0.95) + [72.0, false, 0.03]
 		"fp_gen": return eye(30, 0.8, -140, 3.0, 1.65, 0.9) + [72.0, false, 0.03]
-		"fp_stair": return eye(0, 1.0, 180, 3.0, 1.65, 1.0) + [72.0, false, 0.03]
+		"fp_stair": return eye(-10, 1.0, 170, 3.0, 1.65, 1.0) + [72.0, false, 0.03]
 		"fp_window": return eye(180, 0.8, 0, 12.0, 1.65, 0.0) + [60.0, false, 0.03]
 		# --- Stage 0 additions: ceiling + close-ups of the hero pieces ---
 		"fp_ceiling": return eye(200, 0.7, 30, 1.9, 1.6, 3.05) + [80.0, false, 0.03]     # beams, lamps, lineshaft
@@ -63,7 +63,8 @@ func view(name_: String) -> Array:
 		"cu_console": return eye(78, 1.75, 78, 2.9, 1.6, 0.95) + [50.0, false, 0.03]     # light console
 		"cu_power": return eye(-80, 1.4, -80, 3.0, 1.6, 1.2) + [62.0, false, 0.03]       # charger / distribution / cells
 		"cu_window": return eye(0, 1.4, 0, 3.42, 1.65, 1.75) + [55.0, false, 0.03]       # bay 0 glass
-		"cu_door": return eye(180, 0.2, 180, 2.0, 1.65, 1.1) + [55.0, false, 0.03]      # stair door (knock scene)
+		"cu_door": return eye(170, 0.2, 170, 2.0, 1.65, 1.1) + [55.0, false, 0.03]
+		"cu_shelf": return eye(128, 1.55, 128, 3.0, 1.6, 1.15) + [55.0, false, 0.03]   # storage shelf, old-log box      # stair door (knock scene)
 		# --- Cabin repair (Iteration A): one matched close-up per defect in Daniel's screenshot brief ---
 		"cu_gauges": return eye(80, 2.15, 82, 2.85, 1.42, 1.17) + [34.0, false, 0.02]    # console hood dials (IMG_3117)
 		"cu_selectors": return eye(84, 1.95, 86, 2.6, 1.42, 0.9) + [36.0, false, 0.02]   # mode / intensity knobs

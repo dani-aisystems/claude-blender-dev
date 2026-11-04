@@ -195,7 +195,7 @@ func footsteps(stage: String, door: Vector3) -> void:
 			for i in 18:
 				var delay := i * 0.62 + (2.5 if i > 9 else 0.0)
 				var y := lerpf(6.0, 19.6, i / 17.0)
-				_later(delay, func(): sfx_at("step_metal_%d" % (i % 4), Vector3(door.x, y, door.z) + Vector3(0, 0, 0.6), lerpf(-14.0, -2.0, i / 17.0), 4.0))
+				_later(delay, func(): sfx_at("step_metal_%d" % (i % 4), Vector3(door.x, y, door.z) + Vector3(door.x, 0, door.z).normalized() * 0.6, lerpf(-14.0, -2.0, i / 17.0), 4.0))
 
 
 func _process(delta: float) -> void:

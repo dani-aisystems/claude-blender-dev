@@ -169,8 +169,8 @@ static func glass() -> StandardMaterial3D:
 	var s := StandardMaterial3D.new()
 	s.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	s.albedo_color = Color(0.62, 0.7, 0.74, 0.12)
-	s.roughness = 0.03
-	s.metallic_specular = 0.9
+	s.roughness = 0.07               # 0.03 / specular 0.9 flared the optic cabinet's flat panes white
+	s.metallic_specular = 0.5
 	s.cull_mode = BaseMaterial3D.CULL_DISABLED
 	return s
 

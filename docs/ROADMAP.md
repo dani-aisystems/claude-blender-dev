@@ -44,7 +44,7 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | | |
 |---|---|
 | **Stage** | 1, cabin lighting, materials and architecture |
-| **Iteration** | 3, devices (starting 2026-11-04). Iteration 2 is approved and committed (`5f22e63`) |
+| **Iteration** | 3b, device detail pass (console, radio, power chain), then 4. Iteration 3 is approved |
 | **Next actionable task** | Iteration 3, devices in priority order:<br>• P0: stair door and housing (reads as a black slab), generator auxiliary set (day-tank, extractor, exhaust, AUX plate, capped MAIN ENGINES pipe), power chain, console, radio. Each must pass the 8-item checklist.<br>• P1: optic drive (motor, gearbox, standby clockwork, governor, revolution counter, the 046 worn tooth), desk, stair |
 
 ## Stages
@@ -223,6 +223,42 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
   - **Tests:** hooks, budgets, interaction (134) and story all pass.
   - **Evidence:** `renders/last_light/s12_vs_s1b_a.png`, `s12_rest.png`, `s12b_lamps.png`.
   - **Not yet done:** splayed window reveals. The stair door and housing still read as a near-black slab; that's P0 iteration-3 work.
+- **Iteration 3 (2026-11-04), devices, plus Daniel's layout changes:**
+  - **Stair door (P0):**
+    - panelled leaf with raised flange and mid rail, hinge knuckles, a brass handwheel (`made()` + `tag()`: a second material inside a part), lever dogs, a 20 mm light gap;
+    - its own well-glass lamp over the door (`LIGHT_wall_4`), since the wall lamps sat behind the housing face;
+    - grey-green housing with dark-green trim.
+  - **Daniel's layout changes:**
+    - the door moved **180° → 170°** (it was 4 cm from the generator cage and 3 cm from the archive). Storage moved to 128°, the extinguisher to 106°, the wall lamp to 148°;
+    - **shallow bulkhead** (`STAIR_DEPTH` 0.62 m; it stuck out 1.2 m) with a **steep ship's stair** dropping along the wall (it was a spiral);
+    - **oak archive cabinet removed.** The 1953 logs are now in an oak log box on the storage shelf (`IA_archive` name kept; the prompt, the ch2 line, the objective and the hint updated).
+  - **Generator (P0):**
+    - open guard cage (was a dense wire grid);
+    - spoked flywheel and drip tray;
+    - wall-mounted fuel day-tank with sight glass, fed by the fuel line;
+    - extractor grille;
+    - an **"AUX. SET No.2"** brass plate (the label slot that said "ENGINE HOUSE");
+    - a capped, red-flanged pipe for the main engines, with a tag.
+  - **Optic drive (P1):**
+    - grey-green cast pedestal and top (the black-brass issue);
+    - an octagonal glazed cabinet with flat panes;
+    - motor with cooling fins, gearbox and lit indicator;
+    - brass crown wheel with the **red-marked worn tooth (046)**;
+    - standby clockwork wheels and winding crank, the weight tube through the floor;
+    - a **fly-ball governor** (`PT_optic_governor`, spun by station.gd while the motor runs);
+    - a revolution counter.
+  - **Fixes found by looking:**
+    - the stair light now casts shadows on Medium and High (its red glow leaked through the housing and tinted the room pink);
+    - the door coaming hid the gap (removed);
+    - the floor-hatch cells stuck out into the room (hatch now cut inside the bulkhead only);
+    - the door gap was too bright (stair light 0.6 → 0.3);
+    - the bulbs are kept out of the reflection probe (`LAMP_LAYER`; it smeared globes into discs);
+    - glass specular 0.9 → 0.5 and condensation blur 0.45 → 0.2.
+  - **Audio:** stair footsteps now follow the door's bearing, not a hard-coded "+0.6 m south".
+  - **Build:** v015 `.blend`, 78.8k tris, 0 validation FAIL; interaction 134/134, all suites pass.
+  - **Evidence:** `renders/last_light/s13_checkpoint_a.png`, `s13_checkpoint_b.png`, `s13d_check.png`.
+  - **Daniel (2026-11-04):** iteration 3 approved; next, finish the device detail pass (3b), then iteration 4.
+  - **Not yet done in iteration 3:** a detail pass on the console, radio and power chain. They already have the other session's gauges and selectors (Iteration A).
 
 ## Stage 1: cabin (planned; starts after Stage 0 approval)
 1. **1.0 Review:** infrastructure logic, story anchors and the tier table, written into `REFERENCE_SPEC.md`.
