@@ -24,6 +24,8 @@ var _wheel_angle := 0.0
 var _rx_flash := 0.0
 var _flicker := 0.0
 var _hold_id := ""
+var door_open := false
+var door_prompt := "Stair door. Bolted for the night."
 
 ## id -> descriptor. kind: toggle | hold | cycle | focus | wheel. "focus_only" ids only respond in a device view.
 var DEVICES := {
@@ -47,8 +49,15 @@ var DEVICES := {
 	"radio": {"kind": "focus", "prompt": "Use radio"},
 	"radar": {"kind": "focus", "prompt": "Use radio", "focus_id": "radio"},
 	"chart": {"kind": "focus", "prompt": "Study chart"},
-	"logbook": {"kind": "logbook", "prompt": "Read logbook"},
+	"logbook": {"kind": "doc", "prompt": "Write up the station log"},
 	"gen_panel": {"kind": "info", "prompt": "Generator"},
+	"battery": {"kind": "info", "prompt": "Battery"},
+	"archive": {"kind": "doc", "prompt": "Search the archive cabinet"},
+	"drawer": {"kind": "doc", "prompt": "Open the desk drawer"},
+	"photo": {"kind": "doc", "prompt": "Look at the photograph"},
+	"note": {"kind": "doc", "prompt": "Read the note on the console"},
+	"forecast": {"kind": "doc", "prompt": "Read the teleprinter forecast"},
+	"door": {"kind": "door", "prompt": "The stair door"},
 	"power_panel": {"kind": "info", "prompt": "Distribution"},
 }
 
@@ -209,6 +218,8 @@ func describe(id: String) -> String:
 			return "%s: %s  →  %s" % [d["prompt"], names[d["get"].call(sim)], names[(d["get"].call(sim) + 1) % names.size()]]
 		"info":
 			return info_text(id)
+		"door":
+			return door_prompt
 		_:
 			return d["prompt"]
 
@@ -220,6 +231,8 @@ func info_text(id: String) -> String:
 			return "Generator %s · fuel %d L · temp %d%%" % [st, int(sim.fuel), int(sim.gen_temp)]
 		"power_panel":
 			return "Battery %d%% · draw %.2f %%/s%s" % [int(sim.battery), sim.demand, "" if sim.main_breaker else " · MAIN TRIPPED"]
+		"battery":
+			return "Battery %d%%%s" % [int(sim.battery), "  ·  charging" if sim.charge_flow > 0.0 else ""]
 	return ""
 
 
@@ -239,7 +252,15 @@ func use(id: String, action: String) -> Array:
 				ev = d["set"].call(sim, (d["get"].call(sim) + 1) % n)
 			elif action == "prev":
 				ev = d["set"].call(sim, (d["get"].call(sim) + n - 1) % n)
+		"info":
+			if action == "press":
+				ev = [{"type": "inspect", "device": id}]
 		"hold":
+			if not Settings.v["hold_to_crank"]:
+				# toggle mode: press once to crank until the engine catches (or press again to stop)
+				if action == "press":
+					ev = sim.set_start(not sim.start_held)
+				return ev + [{"type": "click", "device": id}] if not ev.is_empty() else ev
 			if action == "press":
 				ev = sim.set_start(true)
 				_hold_id = id
@@ -249,6 +270,10 @@ func use(id: String, action: String) -> Array:
 	if not ev.is_empty():
 		ev.append({"type": "click", "device": id})
 	return ev
+
+
+func door_position() -> Vector3:
+	return parts["PT_stair_door"]["node"].global_position if parts.has("PT_stair_door") else Vector3(0, 20, 2)
 
 
 func release_all() -> Array:
@@ -297,7 +322,10 @@ func _process_body(delta: float) -> void:
 	_set_angle("PT_intensity", deg_to_rad([60.0, 0.0, -60.0][k.intensity]), delta, 16.0)
 	_wheel_angle += k._manual_vel * delta * 6.0
 	_set_angle("PT_handwheel", -_wheel_angle, delta, 40.0)
+	if not Settings.v["hold_to_crank"] and k.start_held and k.gen == KeeperSim.Gen.RUNNING:
+		k.set_start(false)
 	_set_press("PT_start", 0.012 if k.start_held else 0.0, delta)
+	_set_angle("PT_stair_door", deg_to_rad(-105.0) if door_open else 0.0, delta, 1.2)
 	_set_press("PT_handset", -0.03 if k.tx_t > 0.0 else 0.0, delta)
 	# lamps
 	var blink := fmod(_t, 0.6) < 0.3

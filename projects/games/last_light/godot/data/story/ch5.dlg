@@ -1,0 +1,91 @@
+# THE LAST LIGHT · Chapter 5 · The Truth
+# ROSS speaks in person if the door was opened, otherwise through the door (VISITOR). Both use ROSS once his name is known.
+
+== ch5_ross mode=person
+[if has_flag("door_open")] ~ He stands just inside the door and lets the water run off him onto Father's floor. He won't take the chair.
+[if has_flag("door_shut")] ~ I sit with my back against the door. I can hear him breathing on the other side of two inches of oak.
+ROSS: We struck at two minutes to two. I know because I was looking at the clock in the wheelhouse when the light didn't come round.
+ROSS: Eight of us. The sea took the wheelhouse roof off with me holding it. I woke on the shingle on Pabbay with my hip broken and a seal looking at me.
+* How did you live? -> how
+* Why didn't you come back? -> why
+= how
+ROSS: Shellfish and rainwater, nine days. A crofter found me. I told him my name was Sandy. That's who I've been since.
+-> why
+= why
+ROSS: Because I thought I'd killed them.
+ROSS: Your father told the Inquiry the light was burning. The Board's own keeper. Who'd believe a drowned drunk over that? I didn't believe me.
+ROSS: So I let Alasdair Ross stay dead. My wife was told I'd taken seven good men onto the rocks with drink. My girl grew up hearing it in the schoolyard.
+ROSS: Then two years ago I'm in the Mitchell Library in Glasgow, reading the Inquiry report for the hundredth time, and I see it. Mayday logged at Stornoway at oh-one-fifty-two. "No light."
+ROSS: And your father's book says the light failed at oh-two-ten.
+ROSS: I wrote to the Board. Twice. They wrote back to thank me for my interest.
+* My father wrote that entry. -> blame_father
+* [if clue("same_hand")] I wrote that entry. -> confess
+* What do you want from me? -> want
+= blame_father
+! set blamed_father=1
+ROSS: Did he.
+ROSS: Then he wrote it with your hand, Callum. I've seen your log. I watched you write it tonight through those windows with the glass full of light.
+-> drawer
+= confess
+! set confessed_to_ross=1
+! add rel.ross 2
+ROSS: ...
+ROSS: Aye. I know. I've known for two years.
+ROSS: You were twenty-three. You did what your father told you. God help me, so did I at that age.
+-> drawer
+= want
+ROSS: The truth in the light's own book. In your hand, since it was your hand. And I want to see my girl's ship past the Gut tonight. She's coming by at five.
+-> drawer
+= drawer
+ROSS: Your father wrote to me once. Or to someone. Fifty-seven, it would have been, when he was dying. A man told me in Govan he'd heard of a letter that never got posted.
+ROSS: Iain was a tidy man. Look in the bottom drawer of that desk.
+
+== ch5_letter mode=thought
+~ Under the old tide tables, an envelope. My name on the front, in Father's careful copperplate. Never sealed.
+~ "Callum. I made you write it. I made a boy of twenty-three put his name to my lie, because I was asleep in this chair with the bottle and the light was out and I could not face it."
+~ "Ross was a better man than me. If you ever have the courage I did not, put it right. Your father, Iain Mackay. Christmas 1957."
+~ He died in the March.
+* (Hand the letter to Ross.) -> hand
+* (Fold it into your pocket.) -> keep
+= hand
+! set gave_letter=1
+! add rel.ross 1
+ROSS: ...
+ROSS: He used to sing that song as well, you know. When he thought nobody could hear. Badly.
+-> END
+= keep
+! set kept_letter=1
+~ Ross watches me fold it away. He doesn't ask.
+
+== ch5_morag mode=radio
+! static
+MORAG: North Point, Stornoway. Callum, talk to me. Are you safe? Over.
+[if has_flag("door_open")] * He's inside. He's an old man and he's wet through. I'm safe. -> safe
+[if has_flag("door_shut")] * He's still at the door. I'm safe. -> safe_door
+* Morag. It's Alasdair Ross. -> ross
+= safe
+MORAG: Who is he, Callum?
+-> ross
+= safe_door
+MORAG: Who is he, Callum?
+= ross
+MORAG: ...
+MORAG: That's not possible.
+[if has_flag("door_open")] ROSS: It's possible, lass. You wrote me down at eight minutes to two. I heard you say "Roger, Mary Ellen" and then nothing. You were the last voice I heard before the sea.
+[if has_flag("door_shut")] CALLUM: He says you wrote him down at eight minutes to two. He says yours was the last voice he heard before the sea.
+MORAG: ...I'm going to need to sit down.
+
+== ch5_mayday mode=radio
+! static heavy
+ELSPETH: Mayday, Mayday, Mayday. This is Iona Star, Iona Star, Iona Star.
+ELSPETH: Steering gear failed. We've rigged hand steering aft, slow to answer. Wind's setting us west onto North Point. Twelve souls aboard. Position one point two miles north-east of North Point Light. Over.
+MORAG: Iona Star, Stornoway. Mayday received. Lifeboat is engaged at the Shiants, two hours. North Point Light is your nearest station. Over.
+[if has_flag("door_open")] ~ Ross has his hand on the back of the chair. All the colour has gone out of his face.
+[if has_flag("door_shut")] ~ Behind the door, something heavy slides down to the floor.
+ROSS: That's Elspeth. That's my girl.
+
+== ch5_dark mode=thought
+! static fade
+~ The engine coughs and dies. It ran too hot for too long.
+~ A second later the main breaker goes with a crack like a pistol, and the room is black.
+~ And overhead the light goes out.

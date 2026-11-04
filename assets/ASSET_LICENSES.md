@@ -8,3 +8,12 @@
 | 2026-11-03 | painted_concrete (texture, 1k) | https://polyhaven.com/a/painted_concrete | CC0 1.0 | assets/textures/painted_concrete |
 | 2026-11-03 | rusty_painted_metal (texture, 1k) | https://polyhaven.com/a/rusty_painted_metal | CC0 1.0 | assets/textures/rusty_painted_metal |
 | 2026-11-03 | distressed_painted_planks (texture, 1k) | https://polyhaven.com/a/distressed_painted_planks | CC0 1.0 | assets/textures/distressed_painted_planks |
+| 2026-11-04 | oak_veneer_01 (texture, 2k) | https://polyhaven.com/a/oak_veneer_01 | CC0 1.0 | assets/textures/oak_veneer_01 |
+| 2026-11-04 | Human Base Meshes v1.4.1 (Blender Studio) | https://www.blender.org/download/demo/ (asset bundles) | CC0 1.0 | assets/models/human_base_meshes |
+| 2026-11-04 | dark_wooden_planks (texture, 2k) | https://polyhaven.com/a/dark_wooden_planks | CC0 1.0 | assets/textures/dark_wooden_planks |
+| 2026-11-04 | old_wood_floor (texture, 2k) | https://polyhaven.com/a/old_wood_floor | CC0 1.0 | assets/textures/old_wood_floor |
+| 2026-11-04 | green_metal_rust (texture, 2k) | https://polyhaven.com/a/green_metal_rust | CC0 1.0 | assets/textures/green_metal_rust |
+| 2026-11-04 | rusty_metal_02 (texture, 2k) | https://polyhaven.com/a/rusty_metal_02 | CC0 1.0 | assets/textures/rusty_metal_02 |
+| 2026-11-04 | metal_plate_02 (texture, 2k) | https://polyhaven.com/a/metal_plate_02 | CC0 1.0 | assets/textures/metal_plate_02 |
+| 2026-11-04 | plastered_wall_02 (texture, 2k) | https://polyhaven.com/a/plastered_wall_02 | CC0 1.0 | assets/textures/plastered_wall_02 |
+| 2026-11-04 | concrete_floor_worn_001 (texture, 2k) | https://polyhaven.com/a/concrete_floor_worn_001 | CC0 1.0 | assets/textures/concrete_floor_worn_001 |

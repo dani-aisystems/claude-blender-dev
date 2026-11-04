@@ -1,0 +1,103 @@
+# THE LAST LIGHT · Chapter 3 · The Storm
+
+== ch3_forecast mode=radio
+! static
+MORAG: All stations, all stations, this is Stornoway Coastguard. Gale warning. Hebrides, Minches: south-westerly severe gale nine, increasing storm ten, imminent. Visibility very poor. Stornoway out.
+~ Ten. The windows are already shivering in their frames.
+
+== ch3_corrie mode=radio
+! static
+CORRIE: North Point, Corrie May. Coming in from the east, and the sea's gone mad. I've lost the shore lights altogether. Over.
+CALLUM: Corrie May, North Point. I'll put you in the East Gut. Confirm your position when I call. Over.
+
+== ch3_lowestoft mode=radio
+! static
+LOWESTOFT: North Point Light, Lowestoft Star, Lowestoft Star. Running before it from the north. Can't hold her head up. Advise, over.
+CALLUM: Lowestoft Star, North Point. Stand by. I've another boat on the East Gut. You're next. Over.
+LOWESTOFT: Don't be long, North Point.
+
+== ch3_after_two mode=thought
+[if saved("Corrie May") and saved("Lowestoft Star")] ~ Both in. Both in. The engine's knocking like a fist on a table.
+[if lost("Corrie May") or lost("Lowestoft Star")] ~ The radio fills up with Morag's voice and the lifeboat's, and then with nothing at all.
+~ Two o'clock coming. The worst of it still to come.
+
+== ch3_elspeth mode=radio
+! static
+ELSPETH: North Point Light, this is motor vessel Iona Star, Iona Star. Passage report, over.
+CALLUM: Iona Star, North Point. Go ahead, over.
+ELSPETH: Glasgow for Stornoway, twelve souls aboard. We expect to pass abeam of your light at oh-five-hundred. Request local conditions, over.
+CALLUM: Severe gale nine, storm ten imminent. Seas very high off the Gut. Keep well out to the east until you're past. Over.
+ELSPETH: Understood. Keep well east. Who am I speaking to, North Point? Over.
+* Callum Mackay, principal keeper. Over. -> name
+* North Point Light. That's all you need. Over. -> curt
+= name
+ELSPETH: Mackay.
+! wait 1.2
+ELSPETH: My father's boat was lost under your light, Mr Mackay. Eighteen years ago tonight.
+ELSPETH: This is Elspeth Ross. First mate. I wanted you to know who was out here.
+* I'm sorry, Miss Ross. I was there that night. -> sorry_there
+* I know who your father was. -> know
+* (Say nothing.) -> silence
+= sorry_there
+! add rel.elspeth 1
+! set told_elspeth_there=1
+ELSPETH: ...Were you. Then you'll keep your light burning tonight. Iona Star out.
+-> END
+= know
+ELSPETH: Everyone knows who my father was. That was rather the point of the Inquiry. Iona Star out.
+-> END
+= silence
+! add rel.elspeth -1
+ELSPETH: ...Iona Star out.
+-> END
+= curt
+! add rel.elspeth -1
+ELSPETH: Thank you, North Point. That is all I need. Iona Star out.
+
+== ch3_notes_a mode=radio
+! static
+MORAG: North Point, Stornoway. Callum, are you there? Over.
+CALLUM: I'm here.
+MORAG: I've something I should have said a long time ago. I've got it in front of me. My notebook from that night. Pencil. I kept it in my handbag for eighteen years like a fool.
+MORAG: Mayday from Mary Ellen received at oh-one-fifty-two. And what he said was:
+MORAG: "No light at North Point. Repeat. No light"
+
+== ch3_dark mode=thought
+! static fade
+~ Bang. The room goes black.
+~ Lamps out. Radio dead. Above my head the clockwork slows and stops.
+~ Only the red lamp on the distribution cabinet, glowing like a coal. The main breaker.
+
+== ch3_notes_b mode=radio
+! static
+MORAG: ...North Point! Callum! Answer me!
+CALLUM: Lost the main breaker. I'm back. Light's back. Over.
+MORAG: Thank God. Callum, did you hear what I said? Oh-one-fifty-two. No light. Your father's log says the light failed at oh-two-ten. After she struck.
+MORAG: Eighteen minutes, Callum. They hanged Alasdair Ross's name on eighteen minutes.
+* The log says oh-two-ten. The log is right. -> lie
+* Morag, it was eighteen years ago. What does it matter now? -> deflect
+* I was there. The light was out before she struck. -> admit
+= lie
+! set lied_to_morag=1
+! add rel.morag -2
+MORAG: ...Right.
+MORAG: Right. I'll write that in my log, then. "North Point confirms the log." Stornoway out.
+-> END
+= deflect
+! set deflected_morag=1
+! add rel.morag -1
+MORAG: It matters to the seven men's widows. It matters to his girl. It matters to me, Callum. Stornoway out.
+-> END
+= admit
+! set admitted_to_morag=1
+! add rel.morag 2
+MORAG: ...Oh, Callum.
+MORAG: Not on the air. Not now. When this blows through, you and I are going to sit at my kitchen table. Stornoway listening.
+
+== ch3_rory_dark mode=radio
+! static
+RORY: North Point, Kittiwake. Callum, you'll think I'm daft. Over.
+CALLUM: Go ahead, Rory.
+RORY: I'm tied up in the Sound, and I've been watching. There's a boat came out from the lee of Pabbay. Old wooden boat, a wee motor-fisher. No lights. Not a single light, Callum.
+RORY: She's heading your way. Not for the Sound. For your landing, under the light. Over.
+~ On the radar a small hard echo is moving in from the north, steady as a clock.

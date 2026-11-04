@@ -1,0 +1,167 @@
+# THE LAST LIGHT · Chapter 1 · The Watch
+# Speakers: CALLUM (player), MORAG (Stornoway Coastguard), RORY (Kittiwake), MARY ELLEN (unknown caller). "~" = Callum's thoughts.
+
+== ch1_dusk mode=thought
+~ Sixteen-twenty. The sun's gone behind Pabbay and taken the colour with it.
+~ Twenty-one winters on the lights, and the wind still sounds like someone trying the door.
+~ Lighting-up time. Then the batteries. Then the long quiet.
+
+== ch1_lit mode=thought
+~ The clockwork takes up the weight overhead. Twelve turns a minute, same as the day it was built.
+~ Through the floor of the lantern the light starts its walk around the sea.
+
+== ch1_normal mode=thought
+~ Normal power. Forty miles on a clear night. Tonight won't be clear.
+
+== ch1_battery mode=thought
+~ Forty-one percent. The engineer's been saying since Easter these cells are tired.
+~ The engine, then, before the weather turns. The cage, south-west corner.
+
+== ch1_gen mode=thought
+~ She catches on the second turn and settles into that low knock you feel through your boots.
+~ Now the charge.
+
+== ch1_charging mode=thought
+~ Fourteen amps and climbing. She'll come up.
+~ Mind the temperature. That engine was old when Father was keeper.
+
+== ch1_radio_check mode=radio
+! static
+MORAG: North Point, North Point, this is Stornoway Coastguard, Stornoway Coastguard. Evening radio check, over.
+* Stornoway, North Point. Reading you loud and clear, over. -> proper
+* Evening, Morag. You're early tonight. -> early
+= early
+! add rel.morag 1
+MORAG: I'm always early. You're always surprised. Anything to report, keeper? Over.
+-> report
+= proper
+MORAG: North Point, Stornoway. Loud and clear also. Anything to report? Over.
+= report
+CALLUM: Light exhibited at sixteen-twenty-two. Engine running, batteries on charge. Nothing on the radar. Over.
+MORAG: Roger. Gale warning for Hebrides and Minches. South-westerly seven, rising severe gale nine before dawn. Visibility poor in rain. Over.
+CALLUM: Received. Gale nine before dawn. Over.
+MORAG: And Callum. It's the fourteenth.
+* I know what night it is, Morag. -> knows
+* Is it? I'd lost track. -> deflect
+* It's a Saturday. That's all it is. -> flat
+= knows
+! add rel.morag 1
+MORAG: Aye. I thought you might. I'll be on till six. Shout if you want company on the set. Stornoway out.
+-> END
+= deflect
+MORAG: You never lose track, Callum Mackay. Not of anything. I'll be on till six. Stornoway out.
+-> END
+= flat
+! add rel.morag -1
+MORAG: ...Right you are. Stornoway, out.
+
+== ch1_rory_call mode=radio
+! static
+RORY: North Point Light, North Point Light, this is the Kittiwake, Kittiwake, eh, Sierra Yankee three-seven. Over.
+CALLUM: Kittiwake, North Point. Go ahead, over.
+RORY: Callum, is that you? Thank God. Sorry, eh, North Point. I'm coming in from the Flannans, and the rain's that thick I can't see my own bow. I was meant to pick up the Sound an hour ago. Over.
+RORY: I've stopped her. I'm just sitting here like a gull on a fence post. Can you put me in? Over.
+* Stay where you are, Rory. I'll find you. Over. -> calm
+* You're not the first tonight and you'll not be the last. Hold on. Over. -> calm
+= calm
+RORY: Holding. Holding. Right. I'm holding. Over.
+~ First I need to know where he is. The radio at the desk. Ask him to confirm his position.
+
+== ch1_bearings mode=thought
+~ Bearing and range from the light. On the radar he's that echo north of the reef, a little east of the dashed line.
+~ The North Sound runs straight in on oh-oh-oh. Bring his head round thirty degrees at a time until he's pointing down the line.
+~ Once he can see the light and he's on the line, he'll find the channel buoys himself.
+
+== ch1_rory_in mode=radio
+! static
+RORY: North Point, Kittiwake! I've got the green on the Sound. I've got it! Over.
+CALLUM: Keep it fine on your starboard bow and come in slow. North Point. Over.
+RORY: Aye. Aye, I see it. Here, Callum, you'll laugh, but my grandfather used to say there's a boat out in the East Gut on nights like this. No lights. Just waiting. Over.
+* Your grandfather said a lot of things, Rory. -> joke
+* Which boat? -> which
+= joke
+RORY: He did. He did. Half of them were true, mind. Over.
+-> out
+= which
+RORY: The Mary Ellen. Ross's boat. My grandfather was on her the season before she went down. He always said Ross was a better seaman sober than most men are... eh. Sorry. You'd know all that. Over.
+! clue rory_grandfather
+= out
+RORY: I'm in the Sound now. Thanks, North Point. I'll stand you a dram at Christmas. Kittiwake out.
+
+== ch1_morag_late mode=radio
+! static
+MORAG: North Point, Stornoway. Are you awake over there? Over.
+CALLUM: Stornoway, North Point. Wide awake. Over.
+MORAG: Good. The set's quiet and the kettle's broken. Talk to me. Off the log, Callum.
+* What's on your mind, Morag? -> mind
+* We're not supposed to chat on sixteen. -> rules
+= rules
+MORAG: Then don't tell the Board. Nobody's listening tonight but the fishing fleet, and they're all in bed.
+= mind
+MORAG: Donald's birthday would have been Thursday. Nine years. You'd think it would get easier, wouldn't you.
+* It doesn't get easier. You just get stronger arms. -> true
+* He'd be proud of you. Running that set like a ship. -> warm
+* (Say nothing.) -> quiet
+= true
+! add rel.morag 1
+MORAG: Aye. That's about it. Your father used to say that. About the lamp-room weights.
+-> father
+= warm
+! add rel.morag 1
+MORAG: He'd be telling me I'm too hard on the young ones. He'd be right.
+-> father
+= quiet
+MORAG: ...You've a gift for silence, keeper. I'll give you that.
+= father
+MORAG: Is it true what they say in Tarbert? Twenty-one years and you've never once missed lighting-up?
+* Never once. -> never
+* Once. A long time ago. -> once
+= never
+MORAG: Like father, like son. He kept that station like a kirk, so they say.
+-> close
+= once
+! set admitted_once=1
+MORAG: Once? When was that?
+CALLUM: Long time ago. Write your log, Morag.
+MORAG: ...Aye. Right.
+= close
+MORAG: Stornoway listening on sixteen. Out.
+
+== ch1_log_after mode=thought
+~ Eighteen-thirty, Kittiwake brought in through the North Sound. Twenty-three-twenty-five, radio check, all well.
+~ The same small square letters I learned at the school in Tarbert. Father always said I wrote like a clerk.
+
+== ch1_mary_ellen mode=radio
+! static heavy
+MARY ELLEN: ...North Point... North Point... this is... Mary Ellen... Mary Ellen...
+! wait 1.5
+MARY ELLEN: ...we cannot see your light... repeat... we cannot see your light...
+* Vessel calling North Point, say again your name. Over. -> again
+* Mary Ellen, North Point. My light is burning. What is your position? Over. -> burning
+* (Don't answer.) -> silent
+= again
+! set answered_me=1
+MARY ELLEN: ...Mary... Ellen...
+-> tail
+= burning
+! set answered_me=1
+MARY ELLEN: ...the East... Gut...
+-> tail
+= silent
+! set ignored_me=1
+= tail
+! static fade
+~ Static. Then nothing. Not even the carrier.
+~ The light is burning. I can hear the clockwork through the ceiling.
+
+== ch1_morag_heard mode=radio
+MORAG: North Point, Stornoway. Callum. Did you hear that? Over.
+* I heard it. -> heard
+* Heard what? -> lie
+= heard
+MORAG: Mary Ellen. Somebody's idea of a joke. On this night. I'll find out who. Stornoway out.
+-> END
+= lie
+! set lied_heard=1
+! add rel.morag -1
+MORAG: Don't. I know your voice when you've heard something. I'll find out who it was. Stornoway out.

@@ -246,10 +246,20 @@ func _process_body(delta: float) -> void:
 
 # ------------------------------------------------------------------ pause / end
 
-func show_pause(on: bool) -> void:
+signal save_requested(slot: String)
+
+
+func show_pause(on: bool, story := false) -> void:
 	if on and pause_panel == null:
-		pause_panel = _modal("Paused", "", [["Resume", func(): resume_requested.emit()], ["Keeper's log", func(): toggle_logbook()],
-			["Restart the night", func(): restart_requested.emit()], ["Main menu", func(): menu_requested.emit()]])
+		var buttons: Array = [["Resume", func(): resume_requested.emit()]]
+		if story:
+			for slot in ["1", "2", "3"]:
+				buttons.append(["Save to slot %s   ·   %s" % [slot, SaveSystem.summary(slot)], func(): save_requested.emit(slot)])
+		else:
+			buttons.append(["Keeper's log", func(): toggle_logbook()])
+			buttons.append(["Restart the night", func(): restart_requested.emit()])
+		buttons.append(["Main menu", func(): menu_requested.emit()])
+		pause_panel = _modal("Paused", "", buttons)
 	elif not on and pause_panel:
 		pause_panel.queue_free()
 		pause_panel = null

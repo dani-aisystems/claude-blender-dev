@@ -1,0 +1,89 @@
+{
+ "_doc": "THE LAST LIGHT campaign. Beats run in order; 'when' is a StoryState expression (flag(), has_flag(), clue(), saved(), lost(), piloting(), lit_by_hand(), relation(), sim.*). Actions: talk, wait, objective, set/add/clue, ship, storm, clock, fault, battery, autosave, end_campaign; anything else is a presentation event (title, thought, timeskip, sky, phantom_echo, footsteps, knock, visitor_enter, document, music, sfx, hint_device, credits).",
+ "chapters": [
+  {"n": 1, "title": "The Watch", "subtitle": "North Point Light · Saturday 14 November 1971 · 16:20",
+   "start": {"clock": 980, "clock_rate": 0.0, "storm": 0.12, "battery": 41, "fuel": 46},
+   "beats": [
+    {"id": "dusk", "do": [["sky", "dusk"], ["mode", 0], ["intensity", 0], ["wait", 3], ["talk", "ch1_dusk"]]},
+    {"id": "look", "objective": "Get your bearings. (WASD to walk · mouse to look)", "when": "has_flag(\"moved\") and has_flag(\"looked\")",
+     "hint": [25, "Move with W A S D. Look around with the mouse."], "do": [["wait", 1]]},
+    {"id": "light_on", "objective": "Lighting-up time. Turn the MODE selector to AUTO at the light console (east wall).", "when": "sim.mode == 1",
+     "hint": [45, "The light console stands under the east window. Look at the MODE knob and press E."], "do": [["hint_device", ""], ["talk", "ch1_lit"]]},
+    {"id": "lamp_normal", "objective": "Turn the LAMP selector up to NORMAL.", "when": "sim.intensity >= 1", "do": [["talk", "ch1_normal"]]},
+    {"id": "battery", "objective": "Check the battery meter on the charger (west wall).", "when": "has_flag(\"used_battery\") or has_flag(\"used_power_panel\")",
+     "hint": [40, "The charger is the grey cabinet on the west wall, left of the windows. Look at the BATTERY meter and press E."], "do": [["talk", "ch1_battery"]]},
+    {"id": "gen", "objective": "Start the generator: open the FUEL VALVE, then hold START (the cage, south-west).", "when": "sim.gen == 2",
+     "hint": [60, "In the cage: the red FUEL VALVE handle first, then hold E on the black START button until the engine catches."], "do": [["talk", "ch1_gen"]]},
+    {"id": "charge", "objective": "Switch CHARGE on at the charger.", "when": "sim.charge_flow > 0.0",
+     "hint": [40, "The CHARGE lever is on the charger cabinet, below the small meter."], "do": [["talk", "ch1_charging"], ["autosave"]]},
+    {"id": "radio_check", "when": "true", "do": [["timeskip", 1110, "18:30"], ["clock", 1110, 0.12], ["wait", 2], ["talk", "ch1_radio_check"]]},
+    {"id": "kittiwake_call", "when": "true", "do": [["wait", 6], ["ship", {"name": "Kittiwake", "kind": "fishing", "bearing": 14, "aim": 24, "speed_mul": 0.85, "hold": true, "protected": true}], ["talk", "ch1_rory_call"]]},
+    {"id": "confirm", "objective": "Use the radio (desk) and ask Kittiwake to CONFIRM POSITION.", "when": "flag(\"tx_confirm\") >= 1",
+     "hint": [45, "Sit at the radio on the desk (look at it, press E), select Kittiwake and choose 1 · Confirm position."], "do": [["wait", 5], ["talk", "ch1_bearings"]]},
+    {"id": "vector", "objective": "Turn Kittiwake onto the North Sound leading line (000°) until she reports the channel.", "when": "piloting(\"Kittiwake\")",
+     "hint": [90, "On the radar she sits to the right of the dashed 000° line. Order TURN PORT once or twice, then MAINTAIN when she points down the line."], "do": [["wait", 4], ["talk", "ch1_rory_in"]]},
+    {"id": "kittiwake_home", "objective": "Watch Kittiwake into the Sound.", "when": "saved(\"Kittiwake\")", "do": [["autosave"]]},
+    {"id": "late", "when": "true", "do": [["timeskip", 1405, "23:25"], ["clock", 1405, 0.15], ["storm", 0.25], ["wait", 2], ["talk", "ch1_morag_late"]]},
+    {"id": "log", "objective": "Write up the evening in the station log (desk).", "when": "has_flag(\"read_log_1971\")",
+     "hint": [45, "The logbook lies open on the desk, left of the chart."], "do": [["wait", 2], ["talk", "ch1_log_after"]]},
+    {"id": "mary_ellen", "when": "true", "do": [["clock", 1437, 0.0], ["wait", 4], ["sfx", "static_burst"], ["talk", "ch1_mary_ellen"], ["wait", 1.5], ["talk", "ch1_morag_heard"]]}
+   ]},
+  {"n": 2, "title": "Strange Signals", "subtitle": "Sunday 15 November · 00:02",
+   "start": {"fuel": 44, "clock": 1442, "clock_rate": 0.12, "storm": 0.3},
+   "beats": [
+    {"id": "trace", "do": [["wait", 2], ["talk", "ch2_trace"]]},
+    {"id": "radar", "objective": "Watch the radar for the caller.", "when": "true", "do": [["phantom_echo", 46, 95, 40], ["wait", 18], ["talk", "ch2_phantom"]]},
+    {"id": "gannet", "when": "true", "do": [["wait", 4], ["ship", {"name": "Gannet", "kind": "schooner", "bearing": -40, "aim": "reef", "speed_mul": 0.85}], ["talk", "ch2_gannet"]]},
+    {"id": "gannet_in", "objective": "Bring Gannet in through the West Gut (314°).", "when": "saved(\"Gannet\") or lost(\"Gannet\")",
+     "hint": [120, "Confirm Gannet's position, then turn her until she points down the West Gut line on the radar."], "do": [["talk", "ch2_gannet_after"], ["autosave"]]},
+    {"id": "second_call", "when": "true", "do": [["wait", 8], ["sfx", "static_burst"], ["talk", "ch2_mary_ellen"]]},
+    {"id": "archive", "objective": "Find the 1953 station log in the archive cabinet (beside the door).", "when": "has_flag(\"read_log_1953\")",
+     "hint": [60, "The tall wooden archive cabinet stands left of the stair door."], "do": [["wait", 1], ["talk", "ch2_same_hand"], ["clue", "same_hand"]]},
+    {"id": "jam", "when": "true", "do": [["wait", 6], ["fault", "jam"], ["talk", "ch2_jam"]]},
+    {"id": "clear", "objective": "Clear the motor jam: MODE to OFF, then back to AUTO.", "when": "flag(\"jam_cleared\") >= 1 and sim.mode == 1",
+     "hint": [30, "MODE knob on the console: right click turns it back. OFF, wait a second, then AUTO."], "do": [["talk", "ch2_046"], ["autosave"]]}
+   ]},
+  {"n": 3, "title": "The Storm", "subtitle": "Sunday 15 November · 01:05",
+   "start": {"fuel": 46, "clock": 1505, "clock_rate": 0.1, "storm": 0.55},
+   "beats": [
+    {"id": "forecast", "do": [["wait", 2], ["talk", "ch3_forecast"], ["storm", 0.7]]},
+    {"id": "two_ships", "when": "true", "do": [["ship", {"name": "Corrie May", "kind": "fishing", "bearing": 62, "aim": "reef", "speed_mul": 0.8}], ["talk", "ch3_corrie"], ["wait", 10], ["ship", {"name": "Lowestoft Star", "kind": "schooner", "bearing": -22, "aim": -10, "speed_mul": 0.8}], ["talk", "ch3_lowestoft"]]},
+    {"id": "both", "objective": "Bring Corrie May and Lowestoft Star in. Mind the battery.", "when": "(saved(\"Corrie May\") or lost(\"Corrie May\")) and (saved(\"Lowestoft Star\") or lost(\"Lowestoft Star\"))",
+     "hint": [150, "Corrie May belongs in the East Gut (046°), Lowestoft Star in the North Sound (000°). Confirm each, then turn them onto the lines."], "do": [["talk", "ch3_after_two"], ["autosave"]]},
+    {"id": "elspeth", "when": "true", "do": [["wait", 6], ["talk", "ch3_elspeth"]]},
+    {"id": "notes", "when": "true", "do": [["wait", 8], ["talk", "ch3_notes_a"], ["fault", "trip"], ["set", "blackout=1"], ["talk", "ch3_dark"]]},
+    {"id": "restore", "objective": "Restore power: reset the MAIN breaker (distribution cabinet, west wall).", "when": "sim.main_breaker",
+     "hint": [30, "In the dark: the red MAIN lamp on the tall cabinet. Push the MAIN lever up (E)."], "do": [["unset", "blackout"], ["wait", 2], ["talk", "ch3_notes_b"]]},
+    {"id": "dark_boat", "when": "true", "do": [["wait", 6], ["talk", "ch3_rory_dark"], ["autosave"]]}
+   ]},
+  {"n": 4, "title": "The Visitor", "subtitle": "Sunday 15 November · 02:21",
+   "start": {"fuel": 44, "clock": 1581, "clock_rate": 0.08, "storm": 0.75},
+   "beats": [
+    {"id": "approach", "do": [["ship", {"name": "Visitor", "kind": "launch", "bearing": 12, "aim": 0, "unlit": true, "speed_mul": 1.0,
+      "route": [[47.8, -224.9], [0.0, -132.0], [0.0, -88.0], [0.0, -46.0], [7.5, -33.0], [11.3, -21.2]]}], ["music", "tension"], ["talk", "ch4_watch"]]},
+    {"id": "identify", "objective": "Identify the dark boat: switch to MANUAL and hold the beam on her with the handwheel.", "when": "lit_by_hand(\"Visitor\") or has_flag(\"docked_Visitor\")",
+     "hint": [60, "MODE to MANUAL, then at the console hold A / D on the handwheel until the beam sits on her (the radar shows the beam line)."], "do": [["talk", "ch4_bow"], ["clue", "sy214"]]},
+    {"id": "hail", "objective": "She will not answer. Watch her come in.", "when": "has_flag(\"docked_Visitor\")", "do": [["wait", 2], ["talk", "ch4_docked"]]},
+    {"id": "steps", "when": "true", "do": [["wait", 4], ["footsteps", "jetty"], ["wait", 9], ["footsteps", "base_door"], ["wait", 5], ["footsteps", "stair"], ["wait", 14], ["sfx", "silence"], ["wait", 4], ["knock"], ["wait", 2]]},
+    {"id": "door", "objective": "Someone is at the door.", "when": "has_flag(\"at_door\")", "hint": [25, "The stair door is on the south wall."], "do": [["talk", "ch4_door"], ["autosave"]]}
+   ]},
+  {"n": 5, "title": "The Truth", "subtitle": "Sunday 15 November · 03:04",
+   "start": {"fuel": 46, "clock": 1624, "clock_rate": 0.08, "storm": 0.8},
+   "beats": [
+    {"id": "story", "do": [["talk", "ch5_ross"]]},
+    {"id": "drawer", "objective": "Search the desk drawers.", "when": "has_flag(\"read_letter\")", "hint": [60, "The bottom-left drawer of the desk."], "do": [["wait", 2], ["talk", "ch5_letter"], ["clue", "letter"]]},
+    {"id": "morag", "when": "true", "do": [["wait", 4], ["talk", "ch5_morag"]]},
+    {"id": "mayday", "when": "true", "do": [["wait", 6], ["sfx", "static_burst"], ["talk", "ch5_mayday"], ["fault", "overheat"], ["fault", "trip"], ["talk", "ch5_dark"]]},
+    {"id": "power", "objective": "Get the light back: reset MAIN and keep the generator alive.", "when": "sim.main_breaker and sim.gen == 2",
+     "hint": [40, "MAIN breaker on the west wall. If the generator has cut out hot, let it cool, then restart it."], "do": [["autosave"]]}
+   ]},
+  {"n": 6, "title": "The Last Light", "subtitle": "Sunday 15 November · 04:12",
+   "start": {"fuel": 48, "clock": 1692, "clock_rate": 0.06, "storm": 1.0},
+   "beats": [
+    {"id": "iona", "do": [["ship", {"name": "Iona Star", "kind": "steamer", "bearing": 58, "aim": "reef", "speed_mul": 0.75}], ["talk", "ch6_iona"], ["fault", "jam"], ["wait", 3], ["talk", "ch6_jam"]]},
+    {"id": "rescue", "objective": "Hold the light on Iona Star and talk her into the East Gut (046°).", "when": "saved(\"Iona Star\") or lost(\"Iona Star\")",
+     "hint": [150, "MANUAL mode puts a long beam on her so she can see. Confirm her position, then turn her onto the 046° line."], "do": [["wait", 3], ["talk", "ch6_outcome"]]},
+    {"id": "dawn", "when": "true", "do": [["timeskip", 1830, "06:30"], ["clock", 1830, 0.0], ["storm", 0.25], ["sky", "dawn"], ["wait", 3], ["talk", "ch6_morag_dawn"], ["talk", "ch6_final_log"], ["wait", 2], ["talk", "ch6_epilogue"], ["end_campaign"]]}
+   ]}
+ ]
+}

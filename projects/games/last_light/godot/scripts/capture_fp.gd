@@ -56,12 +56,12 @@ func _run() -> void:
 			_save(name_ + "_menu")
 			continue
 		if main.game == null:
-			main.start_game(args.get("bot", "expert"))
+			main.start_game(args.get("bot", "expert"), args.get("mode", "story") == "story")
 			await _frames(10)
 		var g = main.game
 		if s == "end":
 			Engine.time_scale = speed * 2.0
-			while g.sim.result == KeeperSim.Result.RUNNING:
+			while (g.sim.result == KeeperSim.Result.RUNNING and not g.story_mode) or (g.story_mode and not g.director.finished):
 				await _frames(10)
 			Engine.time_scale = 1.0
 			await _frames(400)
@@ -73,7 +73,7 @@ func _run() -> void:
 			s = s.get_slice("@", 0)
 		var target := float(s)
 		Engine.time_scale = speed
-		while g.sim.t < target - 1.0 and g.sim.result == KeeperSim.Result.RUNNING:
+		while g.sim.t < target - 1.0 and g.sim.result == KeeperSim.Result.RUNNING and not (g.story_mode and g.director.finished):
 			await _frames(1)
 		Engine.time_scale = 1.0
 		_place(g, vname)

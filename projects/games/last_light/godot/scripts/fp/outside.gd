@@ -20,6 +20,20 @@ var optic: Node3D
 var rain: GPUParticles3D
 var ship_views := {}
 var dawn := 0.0
+var dusk := 0.0          # story: lighting-up time at 16:20 fades to night
+var _sky_mode := "night"
+var attract := false     # title shot from the sea: thinner fog so the night and the beam read
+
+
+func set_sky(kind: String) -> void:
+	_sky_mode = kind
+	match kind:
+		"dusk":
+			dusk = 1.0
+		"dawn":
+			dusk = 0.0
+		_:
+			dusk = 0.0
 var flash := 0.0
 var _t := 0.0
 var _flash_dir := Vector2(0, -1)
@@ -33,6 +47,7 @@ func setup(k: KeeperSim) -> void:
 	_ocean()
 	_island()
 	_reefs()
+	_jetty()
 	_lighthouse()
 	_beam()
 	_rain()
@@ -96,8 +111,8 @@ func _environment() -> void:
 	env.adjustment_saturation = 0.88
 	# perf bisect flags: --novolfog --nossao --norain --noglow --noshadows
 	var a: Dictionary = GameState.user_args
-	env.volumetric_fog_enabled = not a.has("novolfog")
-	env.ssao_enabled = not a.has("nossao")
+	env.volumetric_fog_enabled = not a.has("novolfog") and Settings.q_volumetric()
+	env.ssao_enabled = not a.has("nossao") and Settings.q_ssao()
 	env.glow_enabled = not a.has("noglow")
 	we.environment = env
 	add_child(we)
@@ -228,6 +243,44 @@ func _reefs() -> void:
 		add_child(mi)
 
 
+## The landing below the light (bearing 028): concrete pier, timber fenders, bollards, steps up the rock.
+func _jetty() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var b := deg_to_rad(28.0)
+	var outward := Vector3(sin(b), 0, -cos(b))
+	root.position = Geo.to_v3(Geo.polar(b, 18.5), 0.0)
+	root.look_at(root.position + outward, Vector3.UP)
+	var conc := LLMaterials.get_mat("M_LL_ConcreteExt")
+	var wood := LLMaterials.get_mat("M_LL_WoodDark")
+	var iron := LLMaterials.get_mat("M_LL_Iron")
+	_box(root, Vector3(3.2, 1.6, 9.0), Vector3(0, 0.4, -4.5), conc)                  # pier deck (top at 1.2 m)
+	for k in 6:
+		_box(root, Vector3(0.25, 2.2, 0.25), Vector3(1.72, 0.0, -1.0 - k * 1.5), wood)  # fenders
+	for z in [-2.0, -7.5]:
+		var bol := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.16
+		cm.bottom_radius = 0.2
+		cm.height = 0.45
+		bol.mesh = cm
+		bol.material_override = iron
+		bol.position = Vector3(1.2, 1.42, z)
+		root.add_child(bol)
+	for k in 8:                                                                         # steps up to the island
+		_box(root, Vector3(1.4, 0.32, 0.5), Vector3(-0.6, 1.25 + k * 0.3, 0.3 + k * 0.45), conc)
+
+
+func _box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material) -> void:
+	var m := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	m.mesh = bm
+	m.material_override = mat
+	m.position = pos
+	parent.add_child(m)
+
+
 func _rock_mesh(variant: int) -> ArrayMesh:
 	var sm := SphereMesh.new()
 	sm.radius = 1.0
@@ -328,13 +381,20 @@ func _beam() -> void:
 
 func _rain() -> void:
 	rain = GPUParticles3D.new()
-	rain.amount = 9000
+	rain.amount = Settings.q_rain_amount()
 	rain.lifetime = 1.4
 	rain.visibility_aabb = AABB(Vector3(-40, -25, -40), Vector3(80, 50, 80))
 	rain.position = Vector3(0, 30, 0)
 	var pm := ParticleProcessMaterial.new()
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = Vector3(30, 2, 30)
+	# Rain fix: emit only from a ring OUTSIDE the tower (never above the roof), and kill every drop that
+	# reaches solid geometry (roof, gallery, walls, island, sea) via the heightfield collider below.
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_RING
+	pm.emission_ring_axis = Vector3.UP
+	pm.emission_ring_radius = 34.0
+	pm.emission_ring_inner_radius = 6.5
+	pm.emission_ring_height = 3.0
+	pm.collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
+	pm.collision_use_scale = false
 	pm.direction = Vector3(0.35, -1, 0.15)
 	pm.spread = 4.0
 	pm.initial_velocity_min = 22.0
@@ -351,7 +411,14 @@ func _rain() -> void:
 	quad.material = rm
 	rain.draw_pass_1 = quad
 	rain.emitting = not GameState.user_args.has("norain")
+	rain.collision_base_size = 0.02
 	add_child(rain)
+	var hf := GPUParticlesCollisionHeightField3D.new()
+	hf.size = Vector3(76, 44, 76)
+	hf.position = Vector3(0, 12, 0)
+	hf.resolution = GPUParticlesCollisionHeightField3D.RESOLUTION_512
+	hf.update_mode = GPUParticlesCollisionHeightField3D.UPDATE_MODE_WHEN_MOVED
+	add_child(hf)
 
 
 # ------------------------------------------------------------------ per-frame
@@ -385,21 +452,28 @@ func _process_body(delta: float) -> void:
 		return
 	_t += delta
 	var storm := sim.storm
-	if sim.result != KeeperSim.Result.RUNNING or sim.t > sim.cfg.night_length - 40.0:
+	if sim.story_mode:
+		if _sky_mode == "dawn":
+			dawn = minf(1.0, dawn + delta / 25.0)
+		dusk = maxf(0.0, dusk - delta / 240.0)     # dusk drains to night over four minutes
+	elif sim.result != KeeperSim.Result.RUNNING or sim.t > sim.cfg.night_length - 40.0:
 		dawn = minf(1.0, dawn + delta / 25.0)
 	flash = maxf(0.0, flash - delta * 2.2)
 	var f := flash * (0.55 + 0.45 * sin(_t * 47.0)) if flash > 0.05 else 0.0
+	if Settings.v["reduce_flashing"]:
+		f *= 0.3
 	bolt_light.light_energy = f * 2.6
 	sky_mat.set_shader_parameter("storm", storm)
 	sky_mat.set_shader_parameter("flash", f)
-	sky_mat.set_shader_parameter("dawn", dawn)
+	sky_mat.set_shader_parameter("dawn", maxf(dawn, dusk * 0.55))
 	sky_mat.set_shader_parameter("time_s", _t)
 	sky_mat.set_shader_parameter("flash_dir", _flash_dir)
 	ocean_mat.set_shader_parameter("storm", storm)
 	ocean_mat.set_shader_parameter("time_s", _t)
 	ocean_mat.set_shader_parameter("flash", f)
 	beam_mat.set_shader_parameter("time_s", _t)
-	env.volumetric_fog_density = lerpf(0.006, 0.016, storm) * (1.0 - 0.7 * dawn)
+	env.tonemap_exposure = 1.35 * float(Settings.v["brightness"])
+	env.volumetric_fog_density = lerpf(0.006, 0.016, storm) * (1.0 - 0.7 * dawn) * (0.3 if attract else 1.0)
 	env.fog_density = lerpf(0.0025, 0.0065, storm) * (1.0 - 0.6 * dawn)
 	env.fog_light_color = Color(0.05, 0.065, 0.085).lerp(Color(0.45, 0.42, 0.42), dawn)
 	env.ambient_light_energy = 0.9 + 1.6 * dawn + 2.0 * f
@@ -419,6 +493,7 @@ func _process_body(delta: float) -> void:
 	beam_light.visible = lit
 	beam_cone.visible = lit
 	beam_light.light_energy = 40.0 * level * (1.3 if focused else 1.0)
+	beam_light.light_volumetric_fog_energy = 1.2 if attract else 5.0
 	beam_light.spot_range = sim.vis_range() * (sim.cfg.focus_mul if focused else 1.0) + 40.0
 	beam_mat.set_shader_parameter("intensity", (0.9 if focused else 0.6) * level * (1.0 - 0.6 * dawn))
 	lamp_glow.light_energy = 2.5 * level if lit else 0.0

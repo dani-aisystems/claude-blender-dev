@@ -32,6 +32,10 @@ var route := PackedVector2Array()
 var seg := 0
 var seg_t := 0.0
 var channel_name := ""
+var unlit := false            # story: the visitor's boat runs dark
+var docked := false
+var story_route := false      # follows a fixed route from spawn (no orders needed)
+var protected := false        # tutorial ships heave to instead of striking
 
 
 func is_active() -> bool:
@@ -101,3 +105,31 @@ func report() -> Dictionary:
 	if b < 0:
 		b += 360
 	return {"bearing": b, "range": int(round(pos.length() / 10.0)) * 10, "heading": posmod(int(round(rad_to_deg(heading))), 360)}
+
+
+func to_dict() -> Dictionary:
+	var r: Array = []
+	for p in route:
+		r.append([p.x, p.y])
+	return {"id": id, "name": name, "kind": kind, "call_text": call_text, "pos": [pos.x, pos.y], "heading": heading,
+		"ordered": ordered, "speed": speed, "cruise": cruise, "turn_rate": turn_rate, "radius": radius, "slow": slow,
+		"hold": hold, "state": state, "labelled": labelled, "answered": answered, "spawn_time": spawn_time,
+		"resolve_time": resolve_time, "last_call": last_call, "dark_time": dark_time, "route": r, "seg": seg,
+		"channel_name": channel_name, "unlit": unlit, "docked": docked, "story_route": story_route, "protected": protected}
+
+
+static func from_dict(d: Dictionary) -> FleetShip:
+	var s := FleetShip.new()
+	for k in ["id", "name", "kind", "call_text", "heading", "ordered", "speed", "cruise", "turn_rate", "radius", "slow",
+			"hold", "state", "labelled", "answered", "spawn_time", "resolve_time", "last_call", "dark_time", "seg",
+			"channel_name", "unlit", "docked", "story_route", "protected"]:
+		if d.has(k):
+			s.set(k, d[k])
+	s.id = int(s.id)
+	s.state = int(s.state)
+	s.seg = int(s.seg)
+	s.pos = Vector2(d["pos"][0], d["pos"][1])
+	s.route = PackedVector2Array()
+	for p in d.get("route", []):
+		s.route.append(Vector2(p[0], p[1]))
+	return s

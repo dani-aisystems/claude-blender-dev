@@ -10,6 +10,7 @@ var sim: KeeperSim
 var _sweep := 0.0
 var _echoes := {}          # ship id -> {pos, age, label}
 var _font: Font
+var phantom := {}        # story: {bearing, range, until} a hard echo that should not be there
 
 
 func _ready() -> void:
@@ -89,4 +90,8 @@ func _draw() -> void:
 		if s and e["label"] != "":
 			draw_line(_p(e["pos"]), _p(e["pos"] + Geo.dir(s.heading) * 22.0), Color(col, fade * 0.8), 2.0)
 			draw_string(_font, _p(e["pos"]) + Vector2(10, -8), e["label"], HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.8, 1.0, 0.85, fade))
+	if not phantom.is_empty() and sim.t < phantom["until"]:
+		var pp := Geo.polar(phantom["bearing"], phantom["range"])
+		var age := fmod(_sweep - fposmod(phantom["bearing"], TAU) + TAU, TAU) / TAU
+		draw_circle(_p(pp), 5.0, Color(0.6, 1.0, 0.7, clampf(1.0 - age * 1.4, 0.15, 1.0)))
 	draw_string(_font, Vector2(14, 28), "RANGE 250 m", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(g, 0.6))

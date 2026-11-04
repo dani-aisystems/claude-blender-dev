@@ -57,9 +57,11 @@ func act(k: KeeperSim, dt: float) -> Array:
 		if not novice and k.battery >= 96.0 and k.fuel_valve:
 			ev += k.set_fuel_valve(false)
 	# ---- lamp ----
+	if k.intensity == 0:
+		ev += k.set_intensity(1)
 	if not novice:
 		var want_high := k.storm > 0.55 and k.battery > 30.0
-		if (k.intensity == 2) != want_high:
+		if (k.intensity == 2) != want_high and k.intensity > 0:
 			ev += k.set_intensity(2 if want_high else 1)
 		if want_high and k.brk_lights:
 			ev += k.set_breaker("lights", false)
@@ -74,8 +76,8 @@ func act(k: KeeperSim, dt: float) -> Array:
 			var cmd := _order_for(k, s)
 			if cmd == "":
 				continue
-			var u := s.tti
-			if u < best_u:
+			var u := minf(s.tti, 9999.0)
+			if best == null or u < best_u:
 				best_u = u
 				best = s
 				best_cmd = cmd
@@ -90,6 +92,8 @@ func act(k: KeeperSim, dt: float) -> Array:
 
 
 func _order_for(k: KeeperSim, s: FleetShip) -> String:
+	if not s.labelled:
+		return "confirm"
 	var desired := desired_heading(k, s)
 	var diff := Geo.angle_diff(s.ordered, desired)
 	if absf(diff) > deg_to_rad(17.0):

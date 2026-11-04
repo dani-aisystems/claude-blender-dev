@@ -3,7 +3,8 @@ extends Node3D
 ## proper navigation lights (white masthead, red port, green starboard, white stern), warm deck
 ## lights, and motion that rides OceanWaves (heave, pitch, roll) with banking into turns.
 
-const DIMS := {"fishing": Vector3(4.2, 2.4, 13.0), "schooner": Vector3(5.0, 2.6, 19.0), "steamer": Vector3(7.5, 4.2, 30.0)}
+const DIMS := {"fishing": Vector3(4.2, 2.4, 13.0), "schooner": Vector3(5.0, 2.6, 19.0), "steamer": Vector3(7.5, 4.2, 30.0),
+	"launch": Vector3(3.4, 1.9, 10.0)}
 
 var ship: FleetShip
 var done := false
@@ -27,6 +28,8 @@ func setup(s: FleetShip) -> void:
 	else:
 		_stand_in(s.kind)
 	var d: Vector3 = DIMS[s.kind]
+	if s.unlit:
+		return      # the visitor's boat runs dark
 	_nav(Color(1.0, 0.95, 0.85), Vector3(0, d.y + d.z * 0.35, -d.z * 0.15), 1.6, 26.0)     # masthead
 	_nav(Color(1.0, 0.12, 0.08), Vector3(-d.x * 0.5, d.y * 1.15, -d.z * 0.1), 1.2, 9.0)      # port
 	_nav(Color(0.2, 1.0, 0.35), Vector3(d.x * 0.5, d.y * 1.15, -d.z * 0.1), 1.2, 9.0)        # starboard
@@ -48,13 +51,13 @@ func _stand_in(kind: String) -> void:
 	var d: Vector3 = DIMS[kind]
 	var hull := MeshInstance3D.new()
 	hull.mesh = _hull_mesh(d)
-	hull.material_override = LLMaterials.get_mat("M_LL_SteelPaint" if kind == "steamer" else "M_LL_WoodDark")
+	hull.material_override = LLMaterials.get_mat("M_LL_SteelPaint" if kind == "steamer" else ("M_LL_Iron" if kind == "launch" else "M_LL_WoodDark"))
 	add_child(hull)
 	var house := MeshInstance3D.new()
 	var bm := BoxMesh.new()
 	bm.size = Vector3(d.x * 0.62, d.y * 0.9, d.z * (0.22 if kind != "steamer" else 0.18))
 	house.mesh = bm
-	house.position = Vector3(0, d.y + bm.size.y * 0.5, d.z * (0.18 if kind == "fishing" else 0.25))
+	house.position = Vector3(0, d.y + bm.size.y * 0.5, d.z * (0.18 if kind in ["fishing", "launch"] else 0.25))
 	house.material_override = LLMaterials.get_mat("M_LL_Concrete" if kind == "steamer" else "M_LL_SteelPaint")
 	add_child(house)
 	var win := MeshInstance3D.new()
@@ -66,10 +69,10 @@ func _stand_in(kind: String) -> void:
 	wm.albedo_color = Color(0.1, 0.08, 0.05)
 	wm.emission_enabled = true
 	wm.emission = Color(1.0, 0.7, 0.38)
-	wm.emission_energy_multiplier = 1.6
+	wm.emission_energy_multiplier = 0.0 if kind == "launch" else 1.6
 	win.material_override = wm
 	add_child(win)
-	var masts := {"fishing": [-0.1], "schooner": [-0.25, 0.1], "steamer": [-0.3]}
+	var masts := {"fishing": [-0.1], "schooner": [-0.25, 0.1], "steamer": [-0.3], "launch": [-0.2]}
 	for z in masts[kind]:
 		var m := MeshInstance3D.new()
 		var cm := CylinderMesh.new()

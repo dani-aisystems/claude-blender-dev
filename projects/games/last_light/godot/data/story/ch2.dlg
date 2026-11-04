@@ -1,0 +1,97 @@
+# THE LAST LIGHT · Chapter 2 · Strange Signals
+
+== ch2_trace mode=radio
+! static
+MORAG: North Point, Stornoway. Over.
+CALLUM: Go ahead, Morag.
+MORAG: I've rung round. Nobody's reporting a Mary Ellen. The register's had nothing by that name since nineteen fifty-three. Over.
+MORAG: Lloyd's has her as lost, with seven of her eight crew. Skipper presumed lost. You know all this.
+* I know it. -> know
+* Then it's a prank. Some boy with a set and a bottle. -> prank
+= prank
+MORAG: That's what I told myself. Except boys with a bottle don't know the old procedure. "North Point, North Point" twice, then the name twice, the way they did it before the war.
+-> next
+= know
+! add rel.morag 1
+MORAG: Aye. You would.
+= next
+MORAG: Callum. You were on the light that night. With your father.
+* I was there. I was twenty-three. -> there
+* I was asleep. It was his watch. -> asleep
+* Let's not, Morag. Not tonight. -> notnow
+= there
+! set admitted_there=1
+MORAG: I know. I took the call. I was twenty-six and it was my first winter on the set.
+-> end
+= asleep
+! set said_asleep=1
+MORAG: Asleep. Right.
+MORAG: I took that call, Callum. My first winter on the set. I've never forgotten a word of it.
+-> end
+= notnow
+! add rel.morag -1
+MORAG: Not tonight. It's always "not tonight" with the Mackays.
+= end
+MORAG: Watch your radar. If somebody's out there playing silly beggars, they're close. That signal was strong. Stornoway out.
+
+== ch2_phantom mode=thought
+~ There. An echo. Bearing oh-four-six, a hundred yards off the East Gut rocks.
+~ Not moving. Not fading with the sweep the way sea clutter does.
+~ ...And now it's gone. Sea clutter. It has to be sea clutter.
+
+== ch2_gannet mode=radio
+! static
+HECTOR: North Point, this is the schooner Gannet. Hector Macleod. Over.
+CALLUM: Gannet, North Point. Go ahead, Hector.
+HECTOR: I've two passengers sick as dogs and no stars to steer by. I'm somewhere west of you, I think. I'd take a bearing kindly. Over.
+* Confirm your position and I'll talk you through the West Gut. Over. -> help
+* Hold your course a moment. I'm looking for you on the radar. Over. -> help
+= help
+HECTOR: Right you are. I'm in your hands, North Point. Over.
+~ West Gut, three-one-four. Line her up on the dashed line and she'll do the rest.
+
+== ch2_gannet_after mode=radio
+[if saved("Gannet")] HECTOR: Gannet's in the Gut and the passengers have stopped praying. Grand job, North Point. Over.
+[if saved("Gannet")] HECTOR: Here. Tell your father I was asking for him. Oh. Och, I'm sorry, Callum. Fifteen years and I still forget. Gannet out.
+[if lost("Gannet")] ~ The Gannet's echo breaks up on the rocks of the West Gut, and the speaker is full of men shouting.
+[if lost("Gannet")] ~ Morag's voice, calling the lifeboat. Then the lifeboat's, answering.
+
+== ch2_mary_ellen mode=radio
+! static heavy
+MARY ELLEN: ...Lighthouse... lighthouse... is Iain Mackay on watch?
+! wait 1.2
+MARY ELLEN: ...tell Iain... we cannot... see the light...
+* Who is this? Identify yourself. Over. -> who
+* Iain Mackay died in nineteen fifty-eight. Who is this? Over. -> dead
+* (Turn the volume down.) -> off
+= who
+MARY ELLEN: ...he knows who...
+-> tail
+= dead
+! set told_dead=1
+MARY ELLEN: ...then ask his son...
+-> tail
+= off
+! set ignored_me=1
+~ Even turned down, the carrier hisses through the speaker like a kettle.
+= tail
+! static fade
+~ Nothing. Carrier gone.
+~ "Tell Iain." Nobody's called him Iain in this room since the funeral.
+~ The old logs are in the archive cabinet by the door. Nineteen fifty-three. Fifteenth of November.
+
+== ch2_same_hand mode=thought
+~ Fifteenth November, nineteen fifty-three. Oh-two-ten. "Light extinguished approx. two minutes, mantle failure. Relit oh-two-twelve."
+~ "Trawler observed standing in too close at oh-one-thirty. No response to light."
+~ Small square letters. A clerk's hand.
+~ Tonight's page is lying open on the desk. The same hand. Eighteen years between them.
+
+== ch2_jam mode=thought
+~ A grinding shudder through the ceiling, and the clockwork stops.
+~ The motor's labouring. Amber lamp on the console. The beam's stuck.
+
+== ch2_046 mode=thought
+~ Free again, with a clunk you can feel in your teeth.
+~ The bearing repeater says oh-four-six. The East Gut.
+~ There's a note taped to the console in Father's hand, and under it, mine: "Gear race, worn tooth at 046. Reported 1949. 1953. 1961."
+~ It always sticks at forty-six.

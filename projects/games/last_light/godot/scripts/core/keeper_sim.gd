@@ -68,6 +68,12 @@ var logbook_unlocked: Array = []
 var _logbook: Array = []
 var _next_lightning := 20.0
 
+# ---- story mode (the narrative campaign drives ships, storm, clock and faults) ----
+var story_mode := false
+var storm_override := -1.0
+var clock_min := 0.0               # story clock in minutes after midnight (may exceed 1440)
+var clock_rate := 0.0              # story minutes per real second
+
 
 func setup(config: KeeperConfig, layout_data: LayoutData, night: Dictionary, seed_value: int) -> void:
 	cfg = config
@@ -126,6 +132,8 @@ func vis_range() -> float:
 
 
 func clock_minutes() -> float:
+	if story_mode:
+		return fmod(clock_min, 1440.0)
 	return lerpf(cfg.clock_start_min, cfg.clock_end_min, clampf(t / cfg.night_length, 0.0, 1.0))
 
 
@@ -252,21 +260,107 @@ func step(dt: float) -> Array:
 	if result != Result.RUNNING:
 		return ev
 	t += dt
-	storm = cfg.storm_at(t)
+	if story_mode:
+		storm = storm_override if storm_override >= 0.0 else storm
+		clock_min += clock_rate * dt
+	else:
+		storm = cfg.storm_at(t)
 	tx_t = maxf(0.0, tx_t - dt)
-	_logbook_step(ev)
+	if not story_mode:
+		_logbook_step(ev)
 	_faults_step(dt, ev)
 	_generator_step(dt, ev)
 	_power_step(dt, ev)
 	_light_step(dt, ev)
 	_weather_step(ev)
-	_spawn_step(ev)
+	if not story_mode:
+		_spawn_step(ev)
 	_replies_step(ev)
 	for s in ships:
 		if s.is_active():
 			_ship_step(s, dt, ev)
-	_end_step(ev)
+	if not story_mode:
+		_end_step(ev)
 	return ev
+
+
+# ================================================================== story hooks
+
+## Spawn a story ship. e: {name, kind, bearing, aim, call, route?: [[x,z],...], unlit?, speed_mul?}
+func spawn_story_ship(e: Dictionary) -> Array:
+	var s := spawn_ship(e)
+	if e.has("speed_mul"):
+		s.cruise *= float(e["speed_mul"])
+		s.speed = s.cruise
+	if e.has("route"):
+		s.route = PackedVector2Array()
+		for p in e["route"]:
+			s.route.append(Vector2(p[0], p[1]))
+		s.story_route = true
+		s.state = FleetShip.State.PILOTING
+		s.seg = 0
+	s.unlit = bool(e.get("unlit", false))
+	s.hold = bool(e.get("hold", false))
+	s.protected = bool(e.get("protected", false))
+	if s.hold:
+		s.speed = 0.0
+	var ev: Array = [{"type": "ship_spawned", "ship": s.id, "name": s.name}]
+	if s.call_text != "":
+		ev.append(_incoming(s, s.call_text, "call"))
+	return ev
+
+
+func find_ship_named(n: String) -> FleetShip:
+	for s in ships:
+		if s.name == n:
+			return s
+	return null
+
+
+func trigger_fault(kind: String) -> Array:
+	match kind:
+		"jam":
+			faults.append({"t": t, "type": "jam", "done": false})
+		"overheat":
+			gen_temp = maxf(gen_temp, cfg.temp_trip - 4.0)
+		"trip":
+			if main_breaker:
+				main_breaker = false
+				return [{"type": "breaker_trip", "cause": "story"}]
+	return []
+
+
+func to_dict() -> Dictionary:
+	var sh: Array = []
+	for s in ships:
+		sh.append(s.to_dict())
+	return {"t": t, "storm": storm, "battery": battery, "main_breaker": main_breaker, "brk_lights": brk_lights,
+		"brk_radar": brk_radar, "fuel": fuel, "fuel_valve": fuel_valve, "charge_on": charge_on, "gen": gen,
+		"gen_temp": gen_temp, "gen_overheated": gen_overheated, "mode": mode, "intensity": intensity, "bearing": bearing,
+		"jammed": jammed, "faults": faults, "ships": sh, "next_id": _next_id, "saved": saved, "lost": lost,
+		"dark_seconds": dark_seconds, "score": score, "story_mode": story_mode, "storm_override": storm_override,
+		"clock_min": clock_min, "clock_rate": clock_rate, "seed": seed_used}
+
+
+func from_dict(d: Dictionary) -> void:
+	for k in ["t", "storm", "battery", "main_breaker", "brk_lights", "brk_radar", "fuel", "fuel_valve", "charge_on",
+			"gen_temp", "gen_overheated", "bearing", "jammed", "dark_seconds", "story_mode", "storm_override",
+			"clock_min", "clock_rate"]:
+		if d.has(k):
+			set(k, d[k])
+	gen = int(d.get("gen", 0))
+	if gen == Gen.CRANKING or gen == Gen.STOPPING:
+		gen = Gen.OFF if gen == Gen.CRANKING else Gen.RUNNING
+	mode = int(d.get("mode", 1))
+	intensity = int(d.get("intensity", 1))
+	saved = int(d.get("saved", 0))
+	lost = int(d.get("lost", 0))
+	score = int(d.get("score", 0))
+	_next_id = int(d.get("next_id", 1))
+	faults = d.get("faults", [])
+	ships.clear()
+	for sd in d.get("ships", []):
+		ships.append(FleetShip.from_dict(sd))
 
 
 func _logbook_step(ev: Array) -> void:
@@ -468,15 +562,17 @@ func _blind_reef(b: float) -> Vector2:
 
 
 func _ship_step(s: FleetShip, dt: float, ev: Array) -> void:
+	if s.docked:
+		return
 	var saw := s.sees_light
 	s.sees_light = ship_sees_light(s)
 	if not lamp_on():
 		s.dark_time += dt
 	if s.state == FleetShip.State.SAILING:
-		if saw and not s.sees_light and s.pos.length() < cfg.channel_capture_max + 40.0 and t - s.last_call > 8.0:
+		if saw and not s.sees_light and s.pos.length() < cfg.channel_capture_max + 40.0 and t - s.last_call > 8.0 and not s.unlit:
 			s.last_call = t
 			ev.append(_incoming(s, "%s. We've lost your light, North Point! Can't see a thing out here." % s.name, "lost_light"))
-		elif not saw and s.sees_light and s.answered and t - s.last_call > 8.0:
+		elif not saw and s.sees_light and s.answered and t - s.last_call > 8.0 and not s.unlit:
 			s.last_call = t
 			ev.append(_incoming(s, "We have your light again, North Point.", "has_light"))
 		_try_capture(s, ev)
@@ -487,13 +583,26 @@ func _ship_step(s: FleetShip, dt: float, ev: Array) -> void:
 	s.heading = Geo.turn_toward(s.heading, desired, s.turn_rate * dt)
 	s.speed = move_toward(s.speed, s.target_speed(cfg), cfg.ship_accel * dt)
 	var vel := Geo.dir(s.heading) * s.speed
-	if s.state == FleetShip.State.SAILING and not s.sees_light:
+	if s.state == FleetShip.State.SAILING and not s.sees_light and not (s.protected and s.hold):
 		var onshore := (-s.pos).normalized()
 		vel += onshore * cfg.storm_set * storm
 	s.pos += vel * dt
-	if s.state == FleetShip.State.PILOTING and s.at_route_end(cfg.exit_reach):
+	if s.state == FleetShip.State.PILOTING and s.at_route_end(cfg.exit_reach if not s.story_route else 2.5):
+		if s.story_route:
+			if not s.docked:
+				s.docked = true
+				s.hold = true
+				ev.append({"type": "ship_docked", "ship": s.id, "name": s.name})
+			s.speed = 0.0
+			return
 		_resolve(s, FleetShip.State.SAVED, ev)
 		return
+	if s.state == FleetShip.State.SAILING and s.protected and not s.hold:
+		var tti_now := s.compute_tti(hazards)
+		if tti_now < 5.0:
+			s.hold = true
+			s.ordered = s.heading
+			ev.append(_incoming(s, "%s here. I've stopped her, there's broken water right ahead of me! Tell me which way, North Point!" % s.name, "mayday"))
 	if s.state == FleetShip.State.SAILING:
 		for h in hazards:
 			if s.pos.distance_to(h["pos"]) < h["r"] + s.radius:
@@ -505,7 +614,7 @@ func _ship_step(s: FleetShip, dt: float, ev: Array) -> void:
 			ev.append(_incoming(s, "MAYDAY MAYDAY, %s! Breakers dead ahead, we're going onto the rocks!" % s.name, "mayday"))
 		elif s.tti > cfg.mayday_tti * 1.6:
 			s.mayday_sent = false
-		if not s.answered and t - s.last_call > cfg.recall_interval:
+		if not s.answered and t - s.last_call > cfg.recall_interval and not s.unlit and not story_mode:
 			s.last_call = t
 			ev.append(_incoming(s, "North Point Light, %s, do you read? Requesting instructions, over." % s.name, "recall"))
 	if s.pos.length() > cfg.spawn_radius + 80.0 and s.state == FleetShip.State.SAILING:

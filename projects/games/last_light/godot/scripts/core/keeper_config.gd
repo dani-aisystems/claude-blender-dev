@@ -57,6 +57,7 @@ extends Resource
 	"fishing": {"speed": 3.2, "turn_deg": 14.0, "radius": 2.5, "label": "fishing vessel"},
 	"schooner": {"speed": 2.6, "turn_deg": 10.0, "radius": 3.5, "label": "schooner"},
 	"steamer": {"speed": 2.0, "turn_deg": 7.0, "radius": 5.0, "label": "cargo steamer"},
+	"launch": {"speed": 1.6, "turn_deg": 16.0, "radius": 2.0, "label": "motor launch"},
 }
 @export var spawn_radius := 230.0
 @export var slow_mul := 0.55

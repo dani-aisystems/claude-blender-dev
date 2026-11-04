@@ -66,3 +66,28 @@ Daniel's workspace for creating 3D models, game assets, environments and short f
 4. A versioned `.blend` is saved.
 5. Results are reported as PASS / PARTIAL / FAIL / NOT TESTED with evidence. Never claim a visual or engine check that wasn't done.
 - Run `tools/py -m pytest` after changing anything in `scripts/`.
+
+## Active project: THE LAST LIGHT (`projects/games/last_light/`)
+A first-person narrative lighthouse-keeper game: **Godot 4.7.2** (`tools/godot`) for the game, Blender for the assets. **Start every session by reading** `docs/SESSION_HANDOFF.md`, `docs/PROJECT_STATE.md` and `docs/ROADMAP.md`.
+- **Design docs** (in the project folder):
+  - `DESIGN.md`: the v2 keeper systems;
+  - `REFERENCE_SPEC.md`: the room rebuilt from Daniel's reference images;
+  - `NARRATIVE.md`: story, cast, chapters (direction A chosen).
+- **Sources of truth:**
+  - geometry: `blender/spec.py`;
+  - gameplay numbers: `godot/scripts/core/keeper_config.gd`;
+  - story: `godot/data/story/chapters.json` plus the `*.dlg` files (format documented in `scripts/story/dialogue_db.gd`).
+- **Asset pipeline:** `projects/games/last_light/blender/pipeline.sh` runs build → validate → export → reimport → sync. Generated files in `godot/assets/` may be overwritten (DECISIONS Q10).
+- **Tests** (run all of them after gameplay or story changes):
+  - `tools/godot --headless --path projects/games/last_light/godot -s res://tests/story_test.gd`
+  - `… -s res://tests/sim_v2.gd`
+  - `… -s res://tests/run_tests.gd`
+  - `tools/py -m pytest -q`
+- **Visual QA:** `tools/godot --path projects/games/last_light/godot -- --capture=NAME --shots=menu,60@fp_desk,120@focus_radio --bot=expert`. View the PNGs in `renders/last_light/` with Read.
+- **Rules agreed with Daniel:**
+  - no AI-generated images or voices; dialogue is text plus synthesised radio sound;
+  - portraits are Blender busts from the CC0 Human Base Meshes;
+  - CC0 downloads only with his OK;
+  - local milestone commits OK, **never push**;
+  - ask before deleting legacy code or large assets.
+- **Godot import gotcha:** node names ending in `_wheel`, `_col`, `_rigid` and similar are import hints. Avoid them in Blender object names.

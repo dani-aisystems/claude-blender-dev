@@ -502,6 +502,11 @@ def build_desk(B):
             box(B.bm("M_LL_SteelPaint"), dp(b, px, z + 0.08, c - d / 2 + 0.03), (0.46, 0.02, 0.19), bs)
             box(B.bm("M_LL_Brass"), dp(b, px, z + 0.14, c - d / 2 + 0.015), (0.12, 0.02, 0.018), bs)
     B.collider("desk", dp(b, 0, 0.42, c), (w + 0.04, d + 0.04, 0.84), bs)
+    B.empty("IA_drawer", dp(b, -(w / 2 - 0.27), 0.2, c - d / 2 - 0.02), (0.24, 0.06, 0.11), bs)
+    # teleprinter forecast sheet beside the radar
+    fs = basis_z(u, r * math.cos(-0.25) + o * math.sin(-0.25))
+    box(B.bm("M_LL_Paper"), dp(b, 0.82, top + 0.003, c - 0.25), (0.21, 0.28, 0.002), fs)
+    B.empty("IA_forecast", dp(b, 0.82, top + 0.03, c - 0.25), (0.12, 0.15, 0.04), fs)
     # transceiver (left of centre, R3)
     steel = B.bm("M_LL_SteelPaint")
     rx_d = back - 0.2
@@ -620,6 +625,7 @@ def build_power(B):
     def at(x, z):
         return fc + fb3.col[0] * x + fb3.col[1] * (z - 1.45)
     gauge(B, "battery", at(-0.18, 1.6), fb3, 0.13, CELLS["battery"])
+    B.empty("IA_battery", at(-0.18, 1.6) + fb3.col[2] * 0.05, (0.15, 0.15, 0.06), fb3)
     gauge(B, "charge_amps", at(0.22, 1.62), fb3, 0.09, CELLS["charge"])
     box(B.bm("M_LL_Iron"), at(0.22, 1.28), (0.08, 0.12, 0.02), fb3)
     B.part("PT_charge", "M_LL_Bakelite", at(0.22, 1.28) + fb3.col[2] * 0.02, toggle_frame(fb3), toggle_fn(0.08))
@@ -779,16 +785,22 @@ def build_stair(B):
     for sx in (-1, 1):
         box(plate, dp(b, sx * (w / 2 - 0.06), h / 2, front), (0.12, 0.06, h), bs)
         rivets(B, dp(b, sx * (w / 2 - 0.06), 0.1, front - 0.031), dp(b, sx * (w / 2 - 0.06), h - 0.1, front - 0.031), 14, basis(r, u, -o))
-    hinge = dp(b, -w / 2 + 0.06, 0, front)
-    dd = (-o * math.cos(math.radians(20)) - r * math.sin(math.radians(20))).normalized()
-    db3 = basis(dd, u.cross(dd), u)
-    door = B.bm("M_LL_SteelPaint", "SM_StairDoor")
-    box(door, hinge + dd * 0.5 + u * 1.0 - db3.col[1] * 0.03, (1.0, 0.06, 2.0), db3)
-    cyl(B.bm("M_LL_Brass"), hinge + dd * 0.6 + u * 1.0 - db3.col[1] * 0.08, 0.1, 0.1, 0.02, 20, basis_z(db3.col[1]))
-    torus(B.bm("M_LL_Brass"), hinge + dd * 0.6 + u * 1.0 - db3.col[1] * 0.1, 0.1, 0.012, 20, 6, basis_z(db3.col[1]))
+    # heavy bulkhead door, CLOSED: hinged at the left jamb, opens inward (Godot animates PT_stair_door)
+    hinge = dp(b, -w / 2 + 0.12, 0, front - 0.02)
+    db3 = basis(r, u.cross(r), u)          # X = across the opening, Z = up (hinge axis)
+
+    def door(bm, uv):
+        box(bm, (0.53, 0, 1.03), (1.06, 0.06, 2.04))
+        for z in (0.35, 1.0, 1.7):
+            box(bm, (0.53, -0.035, z), (1.0, 0.012, 0.06))            # stiffeners
+        cyl(bm, (0.85, -0.07, 1.05), 0.09, 0.09, 0.02, 18, basis_z(Vector((0, 1, 0))))
+        torus(bm, (0.85, -0.09, 1.05), 0.09, 0.012, 18, 6, basis_z(Vector((0, 1, 0))))
+        box(bm, (0.95, -0.05, 1.3), (0.14, 0.03, 0.03))                # bolt
+    B.part("PT_stair_door", "M_LL_SteelPaint", hinge, db3, door)
+    B.empty("IA_door", dp(b, 0, 1.1, front - 0.15), (0.55, 0.15, 0.9), bs)
     B.collider("stair_l", dp(b, -w / 2, h / 2, (front + back) / 2), (0.1, back - front, h), bs)
     B.collider("stair_r", dp(b, w / 2, h / 2, (front + back) / 2), (0.1, back - front, h), bs)
-    B.collider("stair_door", hinge + dd * 0.5 + u * 1.0, (1.0, 0.1, 2.0), db3)
+    B.collider("stair_door", dp(b, 0, 1.0, front - 0.02), (1.1, 0.08, 2.0), bs)
     B.collider("stair_well", dp(b, 0, 0.5, 2.8), (1.1, 1.0, 1.0), bs)
     wc = dp(b, 0, 0, 2.8)
     cyl(B.bm("M_LL_Iron", "SM_Stair"), wc - u * 1.5, 0.05, 0.05, 3.0, 12)
@@ -890,6 +902,8 @@ def build_console(B):
     label(B, "MOTOR LOAD", on_hood(-0.05, -0.17), hb3, 0.12)
     label(B, "BEARING", on_hood(0.32, -0.19), hb3, 0.12)
     rivets(B, on_hood(-0.78, 0.19), on_hood(0.78, 0.19), 16, hb3)
+    box(B.bm("M_LL_Paper"), on_hood(-0.62, -0.05) + hb3.col[2] * 0.004, (0.16, 0.11, 0.002), hb3)
+    B.empty("IA_note", on_hood(-0.62, -0.05) + hb3.col[2] * 0.03, (0.1, 0.08, 0.04), hb3)
 
     def on_top(x, y):
         return top_c + top_b3.col[0] * x + top_b3.col[1] * y
@@ -976,9 +990,31 @@ def build_optic_drive(B):
     B.collider("optic_drive", c + u * (F + 1.5), (0.86, 0.86, 3.0))
 
 
+def build_archive(B):
+    """Tall oak archive cabinet left of the stair door: old station logs, papers (R1 storage side)."""
+    b = -161.0
+    bs = wb(b)
+    w, d, h = 0.6, 0.42, 1.7
+    back = back_dist(w)
+    c = back - d / 2
+    box(B.bm("M_LL_WoodDark"), dp(b, 0, h / 2, c), (w, d, h), bs)
+    for k in range(5):
+        z = 0.2 + k * 0.32
+        box(B.bm("M_LL_Wood"), dp(b, 0, z, c - d / 2 - 0.008), (w - 0.06, 0.016, 0.28), bs)
+        box(B.bm("M_LL_Brass"), dp(b, 0, z + 0.08, c - d / 2 - 0.02), (0.1, 0.02, 0.02), bs)
+        box(B.bm("M_LL_Paper"), dp(b, 0, z + 0.02, c - d / 2 - 0.018), (0.08, 0.004, 0.04), bs)   # label cards
+    B.collider("archive", dp(b, 0, h / 2, c), (w + 0.04, d + 0.04, h), bs)
+    B.empty("IA_archive", dp(b, 0, 1.0, c - d / 2 - 0.06), (0.32, 0.08, 0.6), bs)
+    # keepers' photograph above the battery rack
+    pb3, pc = face_frame(-105.0, 0.0, 1.85, back_dist(0.5, 0.0))
+    box(B.bm("M_LL_WoodDark"), pc + pb3.col[2] * 0.012, (0.44, 0.34, 0.024), pb3)
+    box(B.bm("M_LL_Paper", "SM_RoomPhoto"), pc + pb3.col[2] * 0.026, (0.38, 0.28, 0.002), pb3)
+    B.empty("IA_photo", pc + pb3.col[2] * 0.05, (0.22, 0.18, 0.05), pb3)
+
+
 def build_wall_lamps(B):
     for i, b in enumerate(R["wall_lamps"]):
-        z = 2.15 if abs(b) < 120 else 1.75
+        z = 2.15 if abs(b) < 120 else 2.25
         r, o, u = wall_frame(b)
         base = dp(b, 0, z, R_IN - 0.02)
         fb3 = basis(r, u, -o)
@@ -1006,6 +1042,7 @@ def build_room(B):
     build_console(B)
     build_optic_drive(B)
     build_wall_lamps(B)
+    build_archive(B)
 
 
 # ------------------------------------------------------------------ lighthouse exterior

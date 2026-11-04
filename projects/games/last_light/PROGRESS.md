@@ -1,3 +1,5 @@
+> **Superseded (2026-11-04):** current status lives in `docs/PROJECT_STATE.md`, plans in `docs/ROADMAP.md`, and the latest session in `docs/SESSION_HANDOFF.md`. The tables below cover only the v1 top-down prototype.
+
 # THE LAST LIGHT: progress
 
 | Milestone | Status | Evidence |

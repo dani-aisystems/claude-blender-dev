@@ -1,10 +1,13 @@
 extends Node3D
-## One night at North Point: owns KeeperSim and wires the room (station), the world outside,
-## the first-person keeper, the radar screen and the UI. Bot-driven when `bot_mode` is set
-## (menu attract camera, screenshot capture, the exported-app autotest).
+## One session at North Point. Two modes:
+##   story (default): the six-chapter campaign driven by StoryDirector (data/story/*)
+##   watch: the v2 free night (data/night.json) - kept for the bot sims and attract shots
+## Wires KeeperSim, the room (station), the world outside, the keeper, the radar, the HUD and the
+## story presentation. Bot-driven when bot_mode is set (menu attract, captures, autotest).
 
 signal finished(stats: Dictionary)
 signal quit_to_menu
+signal campaign_over(ending: Dictionary)
 
 var sim := KeeperSim.new()
 var station: Node3D
@@ -12,29 +15,41 @@ var outside: Node3D
 var player: CharacterBody3D
 var ui: CanvasLayer
 var radar_vp: SubViewport
+var radar: Control
 var bot: KeeperBot2
 var bot_mode := ""
 var attract := false
+var story_mode := false
+var director: StoryDirector
+var presenter: CanvasLayer
+var audio: Node
+var visitor_fig: Node3D
 var cine_cam: Camera3D
 var _cine_t := 0.0
 var _ended := false
 var _paused := false
+var _moved := 0.0
+var _looked := 0.0
+var _last_yaw := 0.0
+var _last_pos := Vector3.ZERO
+var _story_flags_t := 0.0
 
 
-func start(seed_value: int, mode := "", attract_mode := false) -> void:
+func start(seed_value: int, mode := "", attract_mode := false, story := false, save: Dictionary = {}) -> void:
 	bot_mode = mode
 	attract = attract_mode
-	var night: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/night.json"))
+	story_mode = story
+	var night: Dictionary = {"ships": [], "faults": []} if story else JSON.parse_string(FileAccess.get_file_as_string("res://data/night.json"))
 	sim.setup(KeeperConfig.new(), LayoutData.load_file(), night, seed_value)
+	sim.story_mode = story
 	if bot_mode != "":
 		bot = KeeperBot2.new(bot_mode, seed_value)
 	radar_vp = SubViewport.new()
 	radar_vp.size = Vector2i(512, 512)
-	radar_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED if GameState.user_args.has("noradar") else SubViewport.UPDATE_ALWAYS
-	radar_vp.transparent_bg = false
-	var scope := preload("res://scripts/fp/radar.gd").new()
-	scope.sim = sim
-	radar_vp.add_child(scope)
+	radar_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	radar = preload("res://scripts/fp/radar.gd").new()
+	radar.sim = sim
+	radar_vp.add_child(radar)
 	add_child(radar_vp)
 	outside = preload("res://scripts/fp/outside.gd").new()
 	add_child(outside)
@@ -43,12 +58,17 @@ func start(seed_value: int, mode := "", attract_mode := false) -> void:
 	station.radar_tex = radar_vp.get_texture()
 	add_child(station)
 	station.setup(sim)
+	audio = preload("res://scripts/audio_director.gd").new()
+	add_child(audio)
+	audio.setup(sim, station)
 	if attract:
 		cine_cam = Camera3D.new()
 		cine_cam.fov = 50.0
 		cine_cam.far = 2000.0
 		add_child(cine_cam)
 		cine_cam.current = true
+		audio.set_menu(true)
+		outside.attract = true
 		return
 	player = preload("res://scripts/fp/player.gd").new()
 	player.station = station
@@ -60,22 +80,222 @@ func start(seed_value: int, mode := "", attract_mode := false) -> void:
 	player.prompt_changed.connect(ui.set_prompt)
 	player.focus_changed.connect(ui.set_focus)
 	player.events.connect(_route)
-	player.logbook_requested.connect(func():
-		var open: bool = ui.toggle_logbook()
-		player.enabled = not open
-		player.capture_mouse(not open and player.focused == ""))
+	player.logbook_requested.connect(_toggle_logbook)
+	player.doc_requested.connect(_on_doc)
 	ui.command_requested.connect(func(id, cmd): _route(sim.command(id, cmd)))
 	ui.resume_requested.connect(func(): set_paused(false))
 	ui.restart_requested.connect(func(): finished.emit({"restart": true}))
 	ui.menu_requested.connect(func(): quit_to_menu.emit())
+	ui.save_requested.connect(_manual_save)
+	if story_mode:
+		_setup_story(save)
 	if bot_mode == "":
 		player.capture_mouse(true)
 
+
+# ------------------------------------------------------------------ story
+
+func _setup_story(save: Dictionary) -> void:
+	director = StoryDirector.new()
+	add_child(director)
+	director.setup(sim, bot_mode != "")
+	if GameState.user_args.has("capture"):
+		director.bot_line_s = 2.6
+		director.bot_wait_mul = 1.0
+	presenter = preload("res://scripts/story/story_presenter.gd").new()
+	add_child(presenter)
+	presenter.bind(director)
+	presenter.dialogue.at_radio_fn = _at_radio
+	presenter.dialogue.apply_settings(Settings.v["text_speed"], Settings.v["subtitle_size"])
+	presenter.dialogue.blip.connect(func(kind): audio.ui_blip(kind))
+	presenter.document_closed.connect(_on_doc_closed)
+	director.story_event.connect(_on_story_event)
+	director.request_autosave.connect(func(): autosave())
+	director.campaign_finished.connect(_on_campaign_finished)
+	director.line_shown.connect(func(item): audio.on_line(item))
+	if not save.is_empty():
+		_apply_save(save)
+		director.begin(false)
+	else:
+		director.begin(true)
+
+
+func _at_radio() -> bool:
+	if player == null:
+		return true
+	if player.focused == "radio":
+		return true
+	var f: Dictionary = station.focus.get("radio", {})
+	return f.has("at") and player.global_position.distance_to(Vector3(f["at"].x, player.global_position.y, f["at"].z)) < 1.7
+
+
+func _on_story_event(name_: String, args: Array) -> void:
+	match name_:
+		"sim_events":
+			_route(args[0])
+		"hint":
+			presenter.show_hint(args[0])
+		"timeskip":
+			presenter.timeskip(args[1] if args.size() > 1 else "")
+		"sky":
+			outside.set_sky(args[0])
+		"phantom_echo":
+			radar.phantom = {"bearing": deg_to_rad(float(args[0])), "range": float(args[1]), "until": radar_time() + float(args[2])}
+		"door_open":
+			station.door_open = true
+			audio.sfx_at("door_heavy", station.door_position())
+		"visitor_enter":
+			_spawn_visitor()
+		"knock":
+			audio.knock(station.door_position())
+		"footsteps":
+			audio.footsteps(args[0], station.door_position())
+		"sfx", "static", "music":
+			audio.story_cue(name_, args)
+		_:
+			pass
+
+
+func radar_time() -> float:
+	return sim.t
+
+
+func _spawn_visitor() -> void:
+	if visitor_fig:
+		return
+	visitor_fig = preload("res://scripts/fp/visitor_figure.gd").new()
+	add_child(visitor_fig)
+	var dp: Vector3 = station.door_position()
+	var to_center := Vector3(-dp.x, 0, -dp.z).normalized()
+	visitor_fig.global_position = Vector3(dp.x, 20.0, dp.z) + to_center * 0.55 + to_center.cross(Vector3.UP) * -0.45
+	visitor_fig.look_at(Vector3(0, 20.0, 0) + Vector3(0, 0, 0), Vector3.UP)
+
+
+func _on_doc(id: String) -> void:
+	if not story_mode:
+		return
+	var doc := ""
+	match id:
+		"logbook":
+			doc = "log_1971"
+		"archive":
+			doc = "log_1953"
+		"photo":
+			doc = "photo_keepers"
+		"note":
+			doc = "note_046"
+		"forecast":
+			doc = "forecast"
+		"drawer":
+			if director.state.chapter >= 5:
+				doc = "letter_1957"
+			else:
+				presenter.show_hint("Old tide tables, a tin of pencils, a broken compass. Nothing much.")
+		"door":
+			if director.state.chapter < 4:
+				presenter.show_hint("The stair door. Bolted for the night, the way Father always kept it.")
+	if doc != "":
+		player.enabled = false
+		player.capture_mouse(false)
+		presenter.open_document(doc)
+		director.state.flags["seen_" + doc] = 1
+
+
+func _on_doc_closed(doc: String) -> void:
+	match doc:
+		"log_1971":
+			director.on_player_event("read_log_1971")
+		"log_1953":
+			director.on_player_event("read_log_1953")
+			director.state.clues["log_1953"] = true
+			presenter.open_document("clipping_1954")
+			return
+		"letter_1957":
+			director.on_player_event("read_letter")
+	player.enabled = true
+	player.capture_mouse(player.focused == "")
+
+
+func _toggle_logbook() -> void:
+	if story_mode:
+		_on_doc("logbook")
+		return
+	var open: bool = ui.toggle_logbook()
+	player.enabled = not open
+	player.capture_mouse(not open and player.focused == "")
+
+
+func _on_campaign_finished(ending: Dictionary) -> void:
+	if _ended:
+		return
+	_ended = true
+	SaveSystem.delete("auto")
+	campaign_over.emit(ending)
+
+
+# ------------------------------------------------------------------ save / load
+
+func can_save() -> bool:
+	return story_mode and director != null and not director.is_talking() and director._actions.is_empty() \
+		and director._wait <= 0.0 and not _ended
+
+
+func save_dict() -> Dictionary:
+	var c: Dictionary = director.chapter_data(director.state.chapter)
+	return {"story": director.state.to_dict(), "sim": sim.to_dict(), "chapter_title": c.get("title", ""),
+		"clock": sim.clock_text(),
+		"player": {"pos": [player.global_position.x, player.global_position.y, player.global_position.z], "yaw": player._yaw, "pitch": player._pitch},
+		"station": {"door_open": station.door_open, "visitor": visitor_fig != null}}
+
+
+func _manual_save(slot: String) -> void:
+	if not can_save():
+		ui.show_notice("You can't save in the middle of a scene. Try again in a moment.", 3.0)
+		return
+	if SaveSystem.exists(slot) and not ui.has_meta("confirm_" + slot):
+		ui.set_meta("confirm_" + slot, true)
+		ui.show_notice("Slot %s already holds a save. Choose it again to overwrite." % slot, 3.5)
+		return
+	ui.remove_meta("confirm_" + slot)
+	if SaveSystem.write(slot, save_dict()):
+		ui.show_notice("Saved to slot %s." % slot, 2.5)
+		set_paused(false)
+
+
+func autosave() -> void:
+	if story_mode and bot_mode == "" and can_save():
+		SaveSystem.write("auto", save_dict())
+		ui.show_notice("Progress saved.", 2.0)
+
+
+func _apply_save(d: Dictionary) -> void:
+	sim.from_dict(d["sim"])
+	director.load_data(d["story"])
+	var p: Dictionary = d.get("player", {})
+	if p.has("pos"):
+		player.global_position = Vector3(p["pos"][0], p["pos"][1], p["pos"][2])
+		player._yaw = float(p.get("yaw", 0.0))
+		player._pitch = float(p.get("pitch", 0.0))
+		player._apply_look()
+	var st: Dictionary = d.get("station", {})
+	station.door_open = bool(st.get("door_open", false))
+	if bool(st.get("visitor", false)):
+		_spawn_visitor()
+	for s in sim.ships:
+		if s.is_active():
+			outside.on_events([{"type": "ship_spawned", "ship": s.id, "name": s.name}])
+	if director.state.chapter >= 4 or director.state.flags.has("dusk_done"):
+		outside.set_sky("night")
+
+
+# ------------------------------------------------------------------ loop
 
 func _unhandled_input(event: InputEvent) -> void:
 	if attract or _ended or player == null:
 		return
 	if event.is_action_pressed("pause"):
+		if presenter and presenter.is_document_open():
+			return
 		if ui.logbook.visible:
 			ui.toggle_logbook()
 			player.enabled = true
@@ -90,16 +310,45 @@ func _unhandled_input(event: InputEvent) -> void:
 func set_paused(p: bool) -> void:
 	_paused = p
 	get_tree().paused = p
-	ui.show_pause(p)
-	player.capture_mouse(not p and player.focused == "")
+	ui.show_pause(p, story_mode)
+	player.capture_mouse(not p and player.focused == "" and not (presenter and presenter.is_document_open()))
 
 
 func _physics_process(delta: float) -> void:
-	if _ended:
+	if _ended and not story_mode:
 		return
 	if bot:
 		_route(bot.act(sim, delta))
 	_route(sim.step(delta))
+	if story_mode and player:
+		_track_player(delta)
+
+
+func _track_player(delta: float) -> void:
+	if bot_mode != "":
+		# bot-driven runs (captures/autotest): satisfy interaction objectives the way the headless test does
+		for f in ["moved", "looked", "used_battery", "read_log_1971", "read_log_1953", "read_letter", "at_door", "at_radio"]:
+			director.state.flags[f] = 1
+		return
+	var p := player.global_position
+	_moved += Vector2(p.x - _last_pos.x, p.z - _last_pos.z).length()
+	_last_pos = p
+	_looked += absf(wrapf(player._yaw - _last_yaw, -PI, PI))
+	_last_yaw = player._yaw
+	_story_flags_t -= delta
+	if _story_flags_t > 0.0:
+		return
+	_story_flags_t = 0.2
+	var st := director.state
+	if _moved > 1.5:
+		st.flags["moved"] = 1
+	if _looked > 1.2:
+		st.flags["looked"] = 1
+	var dp: Vector3 = station.door_position()
+	st.flags["at_door"] = 1 if Vector2(p.x - dp.x, p.z - dp.z).length() < 1.8 else st.flags.get("at_door_once", 0)
+	if st.flags["at_door"] == 1:
+		st.flags["at_door_once"] = 1
+	st.flags["at_radio"] = 1 if _at_radio() else 0
 
 
 func _route(events: Array) -> void:
@@ -107,27 +356,36 @@ func _route(events: Array) -> void:
 		return
 	station.on_events(events)
 	outside.on_events(events)
+	if audio:
+		audio.on_events(events)
+	if director:
+		director.on_sim_events(events)
+		for e in events:
+			if e["type"] == "inspect":
+				director.on_player_event("used_" + String(e["device"]))
 	if ui:
 		_ui_events(events)
-	for e in events:
-		if e["type"] in ["game_won", "game_lost"] and not _ended:
-			_ended = true
-			_finish.call_deferred()
+	if not story_mode:
+		for e in events:
+			if e["type"] in ["game_won", "game_lost"] and not _ended:
+				_ended = true
+				_finish.call_deferred()
 
 
 func _ui_events(events: Array) -> void:
 	for e in events:
 		match e["type"]:
 			"radio":
-				ui.add_subtitle(e["from"], e["text"], false)
+				if not Settings.v["subtitles"]:
+					continue
+				if not story_mode or e.get("kind", "") in ["ack", "position", "lost_light", "has_light", "mayday", "piloting", "saved", "lost", "call", "recall"]:
+					ui.add_subtitle(e["from"], e["text"], false)
 			"tx":
 				ui.add_subtitle("North Point", e["text"], true)
 			"radio_busy":
 				ui.show_notice("Still transmitting…", 1.5)
 			"radio_dead":
 				ui.show_notice("The radio is dead: no power.", 2.5)
-			"gen_start":
-				ui.show_notice("The generator catches and settles into a rumble.")
 			"gen_crank_fail":
 				ui.show_notice("It turns over but won't catch. Is the fuel valve open?" if e["why"] == "valve" else "Out of diesel.")
 			"gen_too_hot":
@@ -136,8 +394,6 @@ func _ui_events(events: Array) -> void:
 				ui.show_notice("Generator running hot. Switch charging off for a while.")
 			"gen_overheat":
 				ui.show_notice("The generator cuts out: overheated.", 5.0)
-			"gen_stop":
-				ui.show_notice("The generator winds down.", 2.5)
 			"battery_low":
 				ui.show_notice("Battery below a quarter.", 4.0)
 			"battery_dead":
@@ -145,15 +401,16 @@ func _ui_events(events: Array) -> void:
 			"brownout":
 				ui.show_notice("The lights dip: the main circuit is overloaded!", 3.0)
 			"breaker_trip":
-				ui.show_notice("MAIN breaker tripped" + (" by the jammed motor!" if e["cause"] == "motor" else ": overload!"), 5.0)
+				if e["cause"] != "story":
+					ui.show_notice("MAIN breaker tripped" + (" by the jammed motor!" if e["cause"] == "motor" else ": overload!"), 5.0)
 			"jam":
-				ui.show_notice("A grinding shudder from above: the rotation motor has jammed.", 5.0)
-			"jam_cleared":
-				ui.show_notice("The motor frees with a clunk.", 3.0)
+				if not story_mode:
+					ui.show_notice("A grinding shudder from above: the rotation motor has jammed.", 5.0)
 			"logbook":
 				ui.show_notice("New entry in the keeper's log  (L)", 4.0)
 			"ship_saved":
-				ui.show_notice("%s is safe. +%d" % [e["name"], e["points"]], 4.0)
+				if not story_mode:
+					ui.show_notice("%s is safe. +%d" % [e["name"], e["points"]], 4.0)
 			"ship_lost":
 				ui.show_notice("%s has struck the rocks." % e["name"], 6.0)
 
@@ -167,10 +424,12 @@ func _finish() -> void:
 func _process(delta: float) -> void:
 	if attract and cine_cam:
 		_cine_t += delta
-		var a := _cine_t * 0.05 + 2.4
-		var r := 46.0 + 6.0 * sin(_cine_t * 0.07)
-		cine_cam.position = Vector3(sin(a) * r, 15.0 + 3.0 * sin(_cine_t * 0.05), cos(a) * r)
-		cine_cam.look_at(Vector3(0, 19.5, 0), Vector3.UP)
+		# slow push-in on the lighthouse from the sea (menu)
+		var a := 2.75 + 0.03 * sin(_cine_t * 0.05)
+		var r := 120.0 - 10.0 * sin(_cine_t * 0.03)
+		cine_cam.position = Vector3(sin(a) * r, 9.0 + 1.5 * sin(_cine_t * 0.11), cos(a) * r - 40.0)
+		cine_cam.look_at(Vector3(0, 17.0, 0), Vector3.UP)
+		cine_cam.rotation.z = 0.004 * sin(_cine_t * 0.7)
 
 
 func show_end(stats: Dictionary, best: bool) -> void:

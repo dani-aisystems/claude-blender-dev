@@ -1,0 +1,25 @@
+[center][font_size=34]THE LAST LIGHT[/font_size]
+North Point Light, Outer Hebrides, 14-15 November 1971
+
+[i]A story of a light that went out, and a man who wrote it down.[/i]
+
+[font_size=26]Made with[/font_size]
+Godot Engine 4.7 (MIT)  ·  Blender 5.2 (GPL) for every model in the lighthouse and the watch room
+Story, dialogue, code, models, documents, textures of dials and charts, and every sound:
+made for this game in this workspace (no AI-generated images or voices).
+
+[font_size=26]Third-party assets[/font_size]
+Scanned PBR textures from Poly Haven (polyhaven.com), CC0 1.0 Public Domain:
+cliff_side · coast_land_rocks_01 · sparse_grass · painted_concrete · rusty_painted_metal · distressed_painted_planks
+(logged in assets/ASSET_LICENSES.md)
+
+Typefaces: Apple macOS system fonts (Baskerville, Georgia, Avenir Next, DIN Condensed, Bradley Hand,
+Snell Roundhand, Noteworthy, American Typewriter), used as installed on the player's system and for
+rendering the in-game documents.
+
+[font_size=26]Cast (in order of appearance)[/font_size]
+Callum Mackay, principal keeper  ·  Morag Fraser, Stornoway Coastguard
+Rory Bain, Kittiwake  ·  Hector Macleod, Gannet  ·  Elspeth Ross, Iona Star
+The man at the door
+
+[i]The characters, vessels, the North Point Light and the events of 1953 are fictional.[/i][/center]

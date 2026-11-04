@@ -6,6 +6,7 @@ signal prompt_changed(text: String)
 signal focus_changed(id: String)          # "" when leaving a device view
 signal events(events: Array)
 signal logbook_requested
+signal doc_requested(id: String)
 
 const EYE := 1.65
 const WALK := 1.6
@@ -44,7 +45,8 @@ func _ready() -> void:
 	head.position.y = EYE
 	add_child(head)
 	camera = Camera3D.new()
-	camera.fov = 72.0
+	camera.fov = float(Settings.v["fov"])
+	Settings.changed.connect(func(): camera.fov = float(Settings.v["fov"]))
 	camera.near = 0.03
 	camera.far = 1200.0
 	head.add_child(camera)
@@ -67,8 +69,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not enabled:
 		return
 	if event is InputEventMouseMotion and focused == "" and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		_yaw -= event.relative.x * MOUSE_SENS
-		_pitch = clampf(_pitch - event.relative.y * MOUSE_SENS, -1.45, 1.45)
+		var sens: float = MOUSE_SENS * float(Settings.v["mouse_sens"])
+		var inv := -1.0 if Settings.v["invert_y"] else 1.0
+		_yaw -= event.relative.x * sens
+		_pitch = clampf(_pitch - event.relative.y * sens * inv, -1.45, 1.45)
 		_apply_look()
 	elif event.is_action_pressed("interact") or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed):
 		_press(event)
@@ -100,6 +104,8 @@ func _press(_event: InputEvent) -> void:
 				enter_focus(d.get("focus_id", id))
 		"logbook":
 			logbook_requested.emit()
+		"doc", "door":
+			doc_requested.emit(id)
 		"wheel":
 			if focused == "":
 				enter_focus("console")

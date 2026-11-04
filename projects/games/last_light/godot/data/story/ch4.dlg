@@ -1,0 +1,94 @@
+# THE LAST LIGHT · Chapter 4 · The Visitor
+
+== ch4_watch mode=thought
+~ There she is on the radar. Small, steady, coming down the North Sound like she's done it a thousand times.
+~ No lights. In this. Nobody runs dark in this unless they want to.
+~ If I put the beam on her by hand, I'll see what she is.
+
+== ch4_bow mode=thought
+[if lit_by_hand("Visitor")] ~ The beam finds her. A small wooden motor-fisher, black hull, wheelhouse aft, heavy on the water.
+[if lit_by_hand("Visitor")] ~ White letters on the bow. S Y. Two. One. Four.
+[if not lit_by_hand("Visitor")] ~ She slides into the lee of the island before I can put the light on her. But I saw the bow as she turned. S Y two one four.
+~ SY 214 was the Mary Ellen.
+
+== ch4_docked mode=thought
+~ She's alongside the landing below the light. The engine note drops, coughs, stops.
+~ Then she's dark. Not a lantern. Not a cigarette.
+! static fade
+~ Even the speaker's gone quiet. Not static. Silence, as if the whole of Channel 16 is holding its breath.
+
+== ch4_door mode=person
+! knock
+~ Three knocks. Slow. Evenly spaced, like a man who has all night.
+VISITOR: Evening, keeper.
+VISITOR: I could not see your light.
+* Who's there? -> who
+* [if clue("sy214")] You came in on SY 214. That boat's at the bottom of the East Gut. -> sy
+* The landing's private. State your business or get back in your boat. -> hard
+= who
+VISITOR: A man who's come a long way in poor weather. That's enough to be going on with.
+-> probe
+= sy
+! add rel.ross 1
+VISITOR: She is. That's her sister. Same yard, same lines. I bought her for scrap and spent three years making her look like the one I lost.
+VISITOR: You've good eyes, Callum.
+-> probe
+= hard
+! add rel.ross -1
+VISITOR: Private, is it. The Board's landing, the Board's light, the Board's book. Aye. I know whose everything is.
+= probe
+* How do you know my name? -> name
+* What do you want? -> want
+* [if not has_flag("called_morag")] (Go to the radio and call Morag.) -> radio
+* [if clue("same_hand")] Tell me what happened on the fifteenth of November, 1953. -> fifteenth
+= name
+VISITOR: Your father's boy. You were thin as a boathook, and you used to sing to the clockwork when you wound it. Fear a' bhàta. Your father hated that song.
+VISITOR: He kept a half-bottle of Grant's behind the Admiralty Tables. Third shelf. Is it still there?
+! clue grants
+-> probe2
+= want
+VISITOR: To come in out of the rain, first. Then to see a page in your book.
+-> probe2
+= radio
+! set called_morag=1
+~ I back away from the door to the desk without taking my eyes off it.
+CALLUM: Stornoway, North Point. There's a man at my door. Came off that dark boat. Over.
+MORAG: ...North Point, Stornoway. Callum, the lifeboat's out on a shout at the Shiants. Two hours at least. Do not open that door. Do you hear me? Over.
+CALLUM: I hear you.
+MORAG: I'm staying on the set. Leave your handset keyed if you have to. Stornoway listening.
+~ Back to the door. The knocking hasn't come again. He's waiting.
+-> probe2
+= fifteenth
+! add rel.ross 1
+VISITOR: You were twenty-three. I was the man on the wheel.
+VISITOR: At ten to two the light at North Point was dark. I said so on the radio. A girl in Stornoway wrote it down.
+-> probe2
+= probe2
+VISITOR: The clockwork stuck tonight, didn't it. At forty-six degrees. It always did.
+VISITOR: Open the door, Callum. I'm sixty-four, I'm soaked to the bone, and I've no wish to harm you. I want to talk to you before I die. I'll not be long about either.
+* (Draw the bolt and open the door.) -> open
+* Say who you are first. Your name. -> name_ask
+* (Keep the door shut.) -> shut
+= name_ask
+VISITOR: You know my name. Your father wrote it in his book, under the word "blame."
+! wait 1.5
+VISITOR: Alasdair Ross. Master of the Mary Ellen.
+! set knows_name=1
+* (Draw the bolt and open the door.) -> open
+* (Keep the door shut.) -> shut
+= open
+! set door_open=1
+! door_open
+~ The bolt is stiff with salt. The door comes in with the storm behind it.
+~ An old man in an oilskin, one hand on the rail, rain running off the brim of his sou'wester. He doesn't step in until I stand aside.
+! visitor_enter
+ROSS: Thank you.
+-> END
+= shut
+! set door_shut=1
+VISITOR: ...Aye. I'd have done the same, at your age, with a ghost at the door.
+! sfx paper_slide
+~ Something scrapes under the door. A photograph, cracked and soft as cloth.
+~ Eight men on a deck at Leverburgh pier. The one at the wheel is laughing. On the back, in pencil: "Mary Ellen, July 1953. A. Ross, master."
+! clue photo_1953
+VISITOR: I'll talk through the door, then. I've talked to worse.
