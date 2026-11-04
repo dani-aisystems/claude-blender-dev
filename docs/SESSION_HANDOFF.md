@@ -1,7 +1,7 @@
 # Session handoff: 2026-11-04 (session 2, Stage 0)
 
 ## ⚠ Parallel sessions and file ownership (Daniel, 2026-11-04)
-**Update (1b checkpoint): Daniel handed `build.py` (all geometry) to the staged-polish session.** The geometry session's open items (optic drive, generator, stair door, storage, windows) are folded into Stage 1 iterations 2–3. Its Iteration A stays uncommitted, awaiting Daniel's review.
+**Update (1b checkpoint): Daniel handed `build.py` (all geometry) to the staged-polish session.** The geometry session's open items (optic drive, generator, stair door, storage, windows) are folded into Stage 1 iterations 2–3. Its Iteration A was **committed with Daniel's OK** in `5f22e63` (iteration 2 checkpoint).
 
 Two sessions worked on the cabin in parallel. **Daniel decided to split the work by layer.**
 
@@ -31,7 +31,10 @@ The staged-polish session won't edit `build.py` (needed for bevels, smooth shadi
 
 Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (current stage and iteration, decisions, feedback log, next task), and with `docs/PROJECT_STATE.md`.
 
-## Latest status (2026-11-04, afternoon)
+## Latest status (2026-11-04, evening)
+- **Stage 1:** iterations 1b and 2 approved and committed (`2559508`, `5f22e63`). **Next is iteration 3** (devices); see ROADMAP.
+
+## Earlier status (2026-11-04, afternoon)
 - **Done and reviewed:** Stage 0 (approved, commit `a7ffc25`), Stage 1 steps 1.0 and 1a (Daniel continued to 1b, commit `4aff7b0`).
 - **Stage 1b:** the code is done but not committed. The **visual check is on hold until Daniel says the Mac is free.** Next step and the queued capture command are in ROADMAP.md, Stage 1 log.
 - **Machine-load policy (Daniel):**

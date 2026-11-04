@@ -1,7 +1,7 @@
 # Roadmap: THE LAST LIGHT (living stage tracker)
 
 ## ⚠ Parallel sessions and file ownership (Daniel, 2026-11-04)
-**Update (1b checkpoint): Daniel handed `build.py` (all geometry) to the staged-polish session.** The geometry session's open items (optic drive, generator, stair door, storage, windows) are folded into Stage 1 iterations 2–3. Its Iteration A stays uncommitted, awaiting Daniel's review.
+**Update (1b checkpoint): Daniel handed `build.py` (all geometry) to the staged-polish session.** The geometry session's open items (optic drive, generator, stair door, storage, windows) are folded into Stage 1 iterations 2–3. Its Iteration A was **committed with Daniel's OK** in `5f22e63` (iteration 2 checkpoint).
 
 Two sessions worked on the cabin in parallel. **Daniel decided to split the work by layer.**
 
@@ -44,8 +44,8 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | | |
 |---|---|
 | **Stage** | 1, cabin lighting, materials and architecture |
-| **Iteration** | 2, architecture. Implemented and visually verified 2026-11-04; **awaiting Daniel's checkpoint review** |
-| **Next actionable task** | Iteration 2 in `build.py`: walls and dado in geometry, windows, wainscot, ceiling and conduits, stair bulkhead and heavy door, lamps, floor, story anchors. Then bevels and smooth shading |
+| **Iteration** | 3, devices (starting 2026-11-04). Iteration 2 is approved and committed (`5f22e63`) |
+| **Next actionable task** | Iteration 3, devices in priority order:<br>• P0: stair door and housing (reads as a black slab), generator auxiliary set (day-tank, extractor, exhaust, AUX plate, capped MAIN ENGINES pipe), power chain, console, radio. Each must pass the 8-item checklist.<br>• P1: optic drive (motor, gearbox, standby clockwork, governor, revolution counter, the 046 worn tooth), desk, stair |
 
 ## Stages
 | # | Stage | Status |
