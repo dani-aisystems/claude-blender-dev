@@ -59,8 +59,9 @@ func _ready() -> void:
 	cv.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	cv.offset_left = -700
 	cv.offset_right = 700
-	cv.offset_top = -80
-	cv.offset_bottom = 80
+	# upper-middle (~37 % of the height): clear of the interaction prompt under the crosshair
+	cv.offset_top = -300
+	cv.offset_bottom = -140
 	cv.alignment = BoxContainer.ALIGNMENT_CENTER
 	card.add_child(cv)
 	card_title = UIStyle.label("", 64, UIStyle.INK, UIStyle.serif())

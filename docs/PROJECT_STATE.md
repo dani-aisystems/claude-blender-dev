@@ -18,6 +18,7 @@ North Point Light, Outer Hebrides, the night of 14–15 November 1971. The playe
 | 2026-11-04 | **No AI-generated images or voices** (CLAUDE.md). Dialogue is text with synthesised radio sound; no voice acting. |
 | 2026-11-04 | Portraits: **Blender 3D busts** from Blender Studio's CC0 Human Base Meshes, three expressions per character (approved; ⬜ not built yet). |
 | 2026-11-04 | 8 more 2k CC0 interior texture sets approved and downloaded (⬜ not yet wired into materials). |
+| 2026-11-04 (session 2) | **Staged polish programme.** Stages run 0 → 6, and each one needs Daniel's explicit approval. Cabin direction: maintained but aged 1971 NLB, cinematic but readable, period green and cream, full room remodel. Generator is an auxiliary standby set in the room. Optic drive is a motor plus clockwork standby. macOS only. All of it is recorded in `docs/ROADMAP.md`. |
 
 ## 3. Implemented
 ### Game (Godot, `projects/games/last_light/godot/`)
@@ -25,6 +26,8 @@ North Point Light, Outer Hebrides, the night of 14–15 November 1971. The playe
 |---|---|---|
 | First-person controller (walk, look, capsule collision, eased device views) | ✅ | `scripts/fp/player.gd` |
 | Data-driven interaction (`IA_*` volumes from the GLB, toggles, holds, cycles, documents, door) | ✅ | `scripts/fp/station.gd` (`DEVICES` table) |
+| Crosshair picking: a specific control beats its cabinet's info/focus volume; furniture doesn't occlude controls mounted on it | ✅ Stage 0 fix (before it, START, the breakers and the console knobs couldn't be targeted). Covered by `tests/interaction_test.gd` | `scripts/fp/player.gd::pick()` |
+| Mouse-capture policy: one place decides (free-walk only; not while paused, in device views, documents, logbook or open replies) | ✅ Stage 0 fix. Covered by `tests/regress_test.gd`, and windowed for the real mouse mode | `scripts/fp/game_fp.gd::mouse_should_capture()` |
 | Station rules: power, generator (valve/crank/charge/temperature/fuel), breakers and overload, light modes (OFF/AUTO/MANUAL), handwheel, jams, radio orders, fleet, channel piloting | ✅ (headless tests) | `scripts/core/keeper_sim.gd`, `fleet_ship.gd`, `keeper_config.gd` |
 | Radar PPI drawn in a SubViewport onto the desk CRT | ✅ (seen in captures) | `scripts/fp/radar.gd` |
 | Exterior: Gerstner ocean with foam, storm sky, volumetric beam, rain, lightning, island, reefs, jetty, ships riding the waves | 🟡 (seen in captures; island, reefs and ships are procedural Godot stand-ins) | `scripts/fp/outside.gd`, `ship_view2.gd`, `ocean_waves.gd`, `shaders/*` |
@@ -51,10 +54,14 @@ North Point Light, Outer Hebrides, the night of 14–15 November 1971. The playe
 | Island, reef rocks and ships as Blender models | ⬜ (procedural stand-ins in Godot) |
 | Character portraits | ⬜ (base meshes downloaded; see the handoff for measurements) |
 
-## 4. Test and verification status (last run 2026-11-04)
+## 4. Test and verification status (last run 2026-11-04, session 2 / Stage 0)
 | Check | Command | Result |
 |---|---|---|
-| Workspace pytest | `tools/py -m pytest -q` | ✅ pass |
+| Workspace pytest (now includes GLB hooks, import hints, normals, budgets) | `tools/py -m pytest -q` | ✅ 18 pass |
+| Stage 0 regressions (mouse after reply, reply/panel overlap at 5 aspect ratios, pause input, radio-order keys) | `… -s res://tests/regress_test.gd`. Run without `--headless` for the real mouse-mode checks | ✅ 40/40 windowed; 38/38 headless (mouse-mode checks skipped) |
+| Interaction checklist (radio, generator, power, console, door, desk and documents: walkable approach from spawn, prompt, part, state, sound trigger, console-view clicks, document open and close, save/load) | `… -s res://tests/interaction_test.gd` | ✅ 134 checks, 0 failures, 6 warnings (documents open with no sound → Stage 5) |
+| QA sweep: dialogue fit (546 lines, 142 replies, text size 1.0 and 1.5) and options apply live | `… -s res://tests/qa_sweep_test.gd -- --windowed` (headless skips the display checks) | ✅ 948/948 |
+| Audio objective QA (peak, RMS, DC, clipping, loop seams) | `tools/py projects/games/last_light/audio/analyze.py` | ✅ 37 files: no clipping, seamless loops. 2 minor flags (`click_button` DC, `horn_fishing` mastered hot) |
 | v1 unit tests | `tools/godot --headless --path projects/games/last_light/godot -s res://tests/run_tests.gd` | ✅ 95/95 |
 | v1 sim gates | `… -s res://tests/sim.gd -- --seeds=1-5` | ✅ no gate failures |
 | v2 sim gates | `… -s res://tests/sim_v2.gd -- --seeds=1-5` | ✅ no gate failures |
@@ -62,7 +69,32 @@ North Point Light, Outer Hebrides, the night of 14–15 November 1971. The playe
 | Build smoke test | `"projects/games/last_light/build/The Last Light.app/Contents/MacOS/The Last Light" -- --autotest=60 --bot=expert --autotest-out=/tmp/at.json` | ✅ (earlier in this session; the app predates the rain fix) |
 
 ## 5. Known issues and limitations
-1. **Performance NOT verified.** The first run gave 60 fps; later runs sat at about 22 fps even with every heavy effect off and at half resolution, with render CPU at about 1 ms. That suggests macOS throttling a background window. Metal reports no GPU time. Daniel must measure at the desk.
+1. **Performance: baseline measured (Stage 0), and the main cause found.** On the Retina display the 1920-wide capture window is **3840×2410 physical pixels**, so 3D renders at about 9.3 MP on High. Frame time tracks pixel count, so the game is fill-rate bound; it is not mainly macOS throttling, which was session 1's theory. Metal still reports 0 GPU time.
+
+   Worst-case bench (storm 1.0, lightning every 3 s, generator running, one ship). These are indicative numbers from my runs; Daniel should confirm with the window frontmost:
+
+   | Preset | 3D scale | Median (ms) | 95th percentile (ms) |
+   |---|---|---|---|
+   | Low | 0.75 | 25–26 | 27–30 |
+   | Medium | 0.90 | 32–45 | 46–54 |
+   | High | 1.0 | 44–51 | 47–69 |
+   | **High** | **0.5** (about 1080p-equivalent pixels) | **18.1** | **18.7** |
+
+   The budget is 16.7 ms. The JSON files are `renders/last_light/s0_q{0,1,2}_bench.json` and `s0_q2_s50_bench.json`.
+
+   To re-measure: `tools/godot --path projects/games/last_light/godot -- --capture=NAME --bench --quality=2 --bot=expert`, optionally with `--scale3d=0.5`.
+
+   **Iteration 0.2: Auto render resolution is now the default** (`Settings.render_scale()`, FSR 1.0). Bench files `s02_q{0,1,2}_bench.json`, median then 95th percentile in ms:
+
+   | Preset | fp_desk | fp_window | fp_gen |
+   |---|---|---|---|
+   | High (scale 0.47) | 18.9 / 20.7 | 19.8 / 36.1 | 31.9 / 37.1 |
+   | Medium (0.43) | 14.6 / 17.3 | 15.2 / 20.1 | 16.2 / 22.4 |
+   | Low (0.36) | 25.0 / 29.2 | 12.0 / 16.6 | 11.0 / 14.7 |
+
+   These numbers are **noisy**: the window was not focused for most shots, and frame times seem to snap to the 8.3 ms vsync steps of the 120 Hz display. Low's 25 ms on fp_desk is probably that artefact. High in the generator view is still over budget; shadow presets are Stage 1a work.
+
+   Visual comparison: `renders/last_light/s02_render_res_vs_s0.png`. The captures are downscaled to 1920 px, so they understate how much sharper Native looks on the Retina screen.
 2. **Play length NOT verified.** Bots finish the campaign in about 1,000 sim-seconds. A human estimate is 45–70 minutes against a 2-hour target; nobody has played it start to finish.
 3. **Audio never listened to.** Synthesised sounds may be harsh or badly balanced.
 4. **Portraits not implemented.** The radio panel shows line-art identity cards. The Visitor and Ross have only the silhouette.
@@ -73,6 +105,6 @@ North Point Light, Outer Hebrides, the night of 14–15 November 1971. The playe
    - the photograph documents are simple drawings;
    - island, reefs and ships are Godot stand-ins.
 7. The `.app` in `projects/games/last_light/build/` was exported **before** the rain fix and the latest story changes. Re-export before shipping.
-8. `assets/ASSET_LICENSES.md` has a **duplicate line** for `concrete_floor_worn_001`, from a download race.
+8. ~~Duplicate licence line~~: fixed in Stage 0.
 9. Large files: `assets/textures` is 709 MB, `assets/models/human_base_meshes` 98 MB (zip plus extracted), `projects/games/last_light/build` 292 MB (gitignored). Free disk was 23 GB.
-10. Uncommitted work: everything after commit `98c570e` (story system, audio, menus, saves, rain fix, documents, downloads). See SESSION_HANDOFF.md.
+10. Session-1 work is committed locally as `51cc8b9` (not pushed). The textures and base meshes are still untracked by design. Stage 0 changes are uncommitted until Daniel approves the stage.

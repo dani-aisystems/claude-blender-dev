@@ -25,6 +25,7 @@ var pause_panel: Control
 var end_panel: Control
 var fade: ColorRect
 var selected_ship := -1
+var number_keys_taken_fn: Callable          # true while dialogue replies own the number keys
 var _notice_t := 0.0
 var _sub_items: Array = []
 
@@ -204,6 +205,8 @@ func _refresh_vessels() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if get_tree().paused:                    # this layer processes during pause for its menu: no orders
+		return
 	if radio_panel.visible and event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_TAB:
 			var act := sim.active_ships()
@@ -216,6 +219,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_refresh_vessels()
 			get_viewport().set_input_as_handled()
 		elif event.keycode >= KEY_1 and event.keycode <= KEY_6:
+			if number_keys_taken_fn.is_valid() and number_keys_taken_fn.call():
+				return                       # leave it to the dialogue replies
 			_send(COMMANDS[event.keycode - KEY_1][0])
 			get_viewport().set_input_as_handled()
 

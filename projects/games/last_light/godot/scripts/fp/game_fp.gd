@@ -79,6 +79,7 @@ func start(seed_value: int, mode := "", attract_mode := false, story := false, s
 	add_child(ui)
 	player.prompt_changed.connect(ui.set_prompt)
 	player.focus_changed.connect(ui.set_focus)
+	player.focus_changed.connect(func(_id): refresh_mouse())
 	player.events.connect(_route)
 	player.logbook_requested.connect(_toggle_logbook)
 	player.doc_requested.connect(_on_doc)
@@ -106,7 +107,10 @@ func _setup_story(save: Dictionary) -> void:
 	add_child(presenter)
 	presenter.bind(director)
 	presenter.dialogue.at_radio_fn = _at_radio
+	presenter.dialogue.mouse_restore_fn = refresh_mouse
+	ui.number_keys_taken_fn = presenter.dialogue.has_open_choices
 	presenter.dialogue.apply_settings(Settings.v["text_speed"], Settings.v["subtitle_size"])
+	Settings.changed.connect(_on_settings_changed)     # method (not lambda): auto-disconnects when freed
 	presenter.dialogue.blip.connect(func(kind): audio.ui_blip(kind))
 	presenter.document_closed.connect(_on_doc_closed)
 	director.story_event.connect(_on_story_event)
@@ -213,7 +217,7 @@ func _on_doc_closed(doc: String) -> void:
 		"letter_1957":
 			director.on_player_event("read_letter")
 	player.enabled = true
-	player.capture_mouse(player.focused == "")
+	refresh_mouse()
 
 
 func _toggle_logbook() -> void:
@@ -311,7 +315,29 @@ func set_paused(p: bool) -> void:
 	_paused = p
 	get_tree().paused = p
 	ui.show_pause(p, story_mode)
-	player.capture_mouse(not p and player.focused == "" and not (presenter and presenter.is_document_open()))
+	refresh_mouse()
+
+
+## The one place that decides whether mouse-look owns the cursor. Free-walk only: not for bots, and
+## not while paused, in a device view, reading a document/logbook, or while dialogue choices are open.
+func mouse_should_capture() -> bool:
+	if player == null or attract or bot_mode != "":
+		return false
+	if _paused or player.focused != "" or ui.logbook.visible:
+		return false
+	if presenter and (presenter.is_document_open() or presenter.dialogue.has_open_choices()):
+		return false
+	return true
+
+
+func _on_settings_changed() -> void:
+	if presenter:
+		presenter.dialogue.apply_settings(Settings.v["text_speed"], Settings.v["subtitle_size"])
+
+
+func refresh_mouse() -> void:
+	if player:
+		player.capture_mouse(mouse_should_capture())
 
 
 func _physics_process(delta: float) -> void:

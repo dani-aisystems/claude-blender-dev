@@ -13,6 +13,8 @@ const WALK := 1.6
 const SPRINT := 2.6
 const REACH := 1.9
 const MOUSE_SENS := 0.0022
+const CONTAINER_KINDS := ["info", "focus"]   # big volumes around a whole cabinet / console
+const CONTAINER_DEPTH := 0.6                 # a control this far behind a container's surface wins
 
 var station: Node                          # station.gd
 var camera: Camera3D
@@ -209,22 +211,64 @@ func _ray_hit_id(from_mouse: bool) -> String:
 	else:
 		origin = camera.global_position
 		dir = -camera.global_transform.basis.z
-	var q := PhysicsRayQueryParameters3D.create(origin, origin + dir * (REACH + (1.2 if from_mouse else 0.0)), 1 << 1)
-	q.collide_with_areas = false
-	var hit := space.intersect_ray(q)
-	if hit.is_empty():
+	return pick(space, origin, dir, REACH + (1.2 if from_mouse else 0.0))
+
+
+## The control along a ray. Small controls (breakers, START, console knobs) sit INSIDE the larger
+## "info"/"focus" volume of their cabinet, so the first volume hit is not always the one meant:
+##  - inside a device view that device's own volume is ignored (its controls are what you click);
+##  - a specific control up to CONTAINER_DEPTH behind a container volume wins over the container;
+##  - furniture colliders do not hide controls mounted on them; walls, floor, ceiling and the stair
+##    housing/door still do (no using things through a wall).
+func pick(space: PhysicsDirectSpaceState3D, origin: Vector3, dir: Vector3, length: float) -> String:
+	var hits: Array = []
+	var exclude: Array[RID] = []
+	for i in 6:
+		var q := PhysicsRayQueryParameters3D.create(origin, origin + dir * length, 1 << 1, exclude)
+		var h := space.intersect_ray(q)
+		if h.is_empty():
+			break
+		exclude.append(h["rid"])
+		var id: String = h["collider"].get_meta("ia", "")
+		var d: Dictionary = station.DEVICES.get(id, {})
+		if d.is_empty():
+			continue
+		if focused != "" and (id == focused or d.get("focus_id", "") == focused):
+			continue
+		hits.append({"id": id, "kind": d["kind"], "dist": origin.distance_to(h["position"])})
+	if hits.is_empty():
 		return ""
-	# walls (layer 1) occlude: re-test on layer 1 and compare distance
-	var q2 := PhysicsRayQueryParameters3D.create(origin, hit["position"], 1)
-	var block := space.intersect_ray(q2)
-	if not block.is_empty() and origin.distance_to(block["position"]) < origin.distance_to(hit["position"]) - 0.05:
+	var best: Dictionary = hits[0]
+	if best["kind"] in CONTAINER_KINDS:
+		for h in hits.slice(1):
+			if not (h["kind"] in CONTAINER_KINDS) and h["dist"] - best["dist"] <= CONTAINER_DEPTH:
+				best = h
+				break
+	if _occluded(space, origin, dir, best["dist"]):
 		return ""
-	var id: String = hit["collider"].get_meta("ia", "")
-	var d: Dictionary = station.DEVICES.get(id, {})
-	# device views only expose their own controls; the room only exposes reachable devices
-	if focused == "" and id in ["mode", "intensity", "handwheel"]:
-		return id
-	return id if not d.is_empty() else ""
+	return best["id"]
+
+
+func _occluded(space: PhysicsDirectSpaceState3D, origin: Vector3, dir: Vector3, dist: float) -> bool:
+	var exclude: Array[RID] = [get_rid()]
+	for i in 6:
+		var q := PhysicsRayQueryParameters3D.create(origin, origin + dir * maxf(dist - 0.05, 0.0), 1, exclude)
+		var b := space.intersect_ray(q)
+		if b.is_empty():
+			return false
+		if _is_occluder(b["collider"]):
+			return true
+		exclude.append(b["rid"])
+	return false
+
+
+static func _is_occluder(c: Object) -> bool:
+	if not (c is Node):
+		return true
+	var n := String((c as Node).name)
+	if not n.begins_with("COL_"):
+		return true
+	return n.begins_with("COL_wall") or n.begins_with("COL_floor") or n.begins_with("COL_ceiling") or n.begins_with("COL_stair")
 
 
 func _update_prompt() -> void:

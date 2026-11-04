@@ -12,6 +12,7 @@ var v := {
 	"window_mode": 3,            # 0 windowed, 3 fullscreen, 4 exclusive fullscreen
 	"resolution": "1920x1080",   # windowed size
 	"quality": 2,                # 0 low, 1 medium, 2 high
+	"render_res": 0,             # 0 auto: 3D at ~1920x1080-equivalent pixels (HiDPI), 1 native
 	"vsync": true,
 	"max_fps": 0,                # 0 = unlimited
 	"fov": 72.0,
@@ -31,6 +32,7 @@ func _ready() -> void:
 	_ensure_buses()
 	load_settings()
 	apply()
+	get_tree().root.size_changed.connect(apply_render_scale)   # window resize / fullscreen toggle
 
 
 func _ensure_buses() -> void:
@@ -80,7 +82,33 @@ func apply() -> void:
 		var i := AudioServer.get_bus_index(b)
 		if i >= 0:
 			AudioServer.set_bus_volume_db(i, linear_to_db(maxf(v["vol_" + b.to_lower()], 0.0001)))
+	apply_render_scale()
 	changed.emit()
+
+
+## 3D render scale actually used: the quality preset's scale, times (in Auto) the factor that brings
+## the window's PHYSICAL pixel count down to 1920x1080. A Retina window of 1920x1205 points is
+## 3840x2410 pixels, ~4.5x the pixels of 1080p (Stage 0 bench: 47 ms -> 18 ms per frame on High).
+func render_scale() -> float:
+	var base := q_scale3d()
+	if int(v["render_res"]) == 1:
+		return base
+	var px: Vector2i = DisplayServer.window_get_size()
+	var area := maxf(float(px.x) * float(px.y), 1.0)
+	var fit := minf(1.0, sqrt(1920.0 * 1080.0 / area))
+	return clampf(base * fit, 0.25, 1.0)
+
+
+## Applies render_scale() to the root viewport, upscaling with AMD FSR 1.0 below native.
+## --scale3d=X (captures / benchmarks) overrides it with a fixed scale.
+func apply_render_scale() -> void:
+	if not is_inside_tree():
+		return
+	var vp := get_tree().root
+	var s := float(GameState.user_args["scale3d"]) if GameState.user_args.has("scale3d") else render_scale()
+	vp.scaling_3d_scale = s
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if s < 0.99 else Viewport.SCALING_3D_MODE_BILINEAR
+	vp.fsr_sharpness = 0.2
 
 
 ## Quality presets consumed by outside.gd / station.gd.

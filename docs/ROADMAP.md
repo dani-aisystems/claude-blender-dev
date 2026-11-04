@@ -1,58 +1,213 @@
-# Roadmap: THE LAST LIGHT
+# Roadmap: THE LAST LIGHT (living stage tracker)
 
-Priorities are ordered by player impact and the risk of building on unverified ground. Each item lists its acceptance check.
+Development runs as a **staged polish programme**. Each stage follows the same loop:
 
-## P0: verify what exists
-1. **Human playtest of Chapter 1** at the desk, windowed and fullscreen. Fix anything that blocks progress.
-   - Accept when: chapter 1 completes by hand; dialogue is readable; radio choices unlock at the desk; the generator tutorial works.
-2. **Performance measurement** with the window frontmost: `tools/godot --path projects/games/last_light/godot -- --capture=perf --shots=40@fp_desk,60@fp_window --bot=expert`. Read the `PERF` lines.
-   - Accept when: 60 fps at 1080p High on the M3, or a Medium preset that reaches it.
-3. **Listen to the audio** (`godot/assets/audio/*.wav`). Rebalance or regenerate in `audio/synth.py`.
+1. inspect;
+2. propose;
+3. agree with Daniel (AskUserQuestion);
+4. implement;
+5. validate;
+6. **get Daniel's explicit approval**.
 
-## P1: the requested visual upgrades (in progress at handoff)
-4. **Interior materials** using the 8 new 2k CC0 sets:
-   - add them to `blender/sync_assets.py` (`CC0` list), then remap `LLMaterials.GRADES`:
+A stage is complete only when Daniel says so. A build that compiles, or Claude's own judgement, does not count. The full approved plan for this session is at `~/.claude/plans/pasted-content-id-5a42-the-staged-crown.md` (revision 2).
 
-     | Material | Texture set |
-     |---|---|
-     | Wood | `oak_veneer_01` |
-     | WoodDark | `dark_wooden_planks` |
-     | SteelPaint | `green_metal_rust` |
-     | SteelRust | `rusty_metal_02` |
-     | Iron | `metal_plate_02` |
-     | Concrete | `plastered_wall_02` |
-     | Floor | `concrete_floor_worn_001` |
+## Current position
+| | |
+|---|---|
+| **Stage** | 1, cabin lighting, materials and architecture |
+| **Iteration** | 1.0, the period-accuracy and story-readiness review (started 2026-11-04) |
+| **Next actionable task** | Write the 1.0 review into `REFERENCE_SPEC.md`, then iteration 1a, lighting and import correctness, measured against the `s0` captures and the `s02` bench |
 
-   - add a second, macro-scale sample against tiling;
-   - add a dust term on up-facing surfaces;
-   - add an interior `ReflectionProbe` (interior mode, sized to the room);
-   - optionally use VoxelGI on High only.
-   - Accept when: captures `fp_desk`, `fp_power` and `fp_console` show real grain and rust and no sky reflections indoors; fps holds.
-5. **Character portraits** (approved method: Blender 3D busts):
-   - write `blender/portraits.py` to:
-     - append `GEO-head_animation_realistic` plus its iris and sclera (male), or crop `GEO-body_female_realistic` / `GEO-body_male_realistic` at the neck;
-     - shape six characters (Callum, Morag, Rory, Hector, Elspeth, Ross);
-     - add particle hair, stubble and beards, collars and hats;
-     - make three expressions (neutral, tense, sorrow) by regional deformation of brows and mouth corners;
-     - render with Cycles at 512×640 with a 1970s photo grade;
-     - output to `godot/assets/portraits/<id>_<expr>.png`;
-   - extend the `.dlg` speaker syntax to `MORAG(tense): …`;
-   - show portraits in `dialogue_ui.gd`: in the radio card, and in-person for Ross after he's revealed. Keep the Visitor silhouetted until his name is known.
-   - Accept when: the contact sheet is reviewed; each character is consistent across their expressions; the dialogue capture looks clean.
-6. Re-export the `.app` and rerun the smoke test.
+## Stages
+| # | Stage | Status |
+|---|---|---|
+| 0 | Critical fixes and regression baseline | ✅ **approved by Daniel 2026-11-04** (iteration 0.2) |
+| 1 | Cabin lighting, materials and architecture | 🟡 in progress (iterations 1.0, 1a, 1b, 2, 3, 4) |
+| 2 | First-person interactions and gameplay | ⬜ |
+| 3 | Dialogue, characters and story pacing | ⬜ |
+| 4 | Outside world and major story events | ⬜ |
+| 5 | Sound and cinematic presentation | ⬜ |
+| 6 | Menus, effects and final polish | ⬜ |
 
-## P2: content and polish toward the 2-hour target
-7. Optional content that adds meaning, not padding:
-   - more documents (the Board's 1954 reply to Ross; Morag's notebook page; a maintenance ledger);
-   - optional radio conversations (Morag check-ins, Rory banter);
-   - examinable objects tied to clues.
+## Approved decisions (Daniel, 2026-11-04)
+| Topic | Decision |
+|---|---|
+| Order | The stage order above. Gameplay blockers come first; story needs decide which exterior assets get built |
+| Cabin condition | **Maintained but aged.** A 1971 Northern Lighthouse Board station: polished brass, gloss paint and varnished oak, showing 20+ years of wear (chips at hand height, worn traffic paths, rubbed brass, patched repairs) |
+| Lighting | **Cinematic but readable.** Warm low-key pools, shadows deep but not black, cold window spill, lightning through the glass, gauges always readable |
+| Palette | **Period green and cream.** Grey-green machinery, cream gloss walls over a dark-green dado, varnished oak, brass, dark-green window frames |
+| Scope | **Full room remodel.** Keep the REFERENCE_SPEC layout and bearings, and every gameplay hook |
+| Floor | Dark polished concrete, bevelled brass compass rose, rug, traffic wear |
+| Optic drive | An electric rotation motor and reduction gearbox, with the weight-driven clockwork kept as standby (fly-ball governor, revolution counter). No lens parts in the room. The console handwheel is the manual fallback |
+| Generator | Stays in the watch room as a small **auxiliary standby set** (exhaust through the wall, extractor fan, fuel day-tank). The main engine room is downstairs and out of action |
+| Platform | **macOS only for now.** Performance is measured on Daniel's M3 |
+| Retina rendering | **1080p-equivalent 3D by default** on HiDPI displays: upscaled, with the UI kept pixel-sharp, plus a "Render resolution" option to go native. Implement in Stage 1a with the presets |
+| Git | Generated 2k texture copies in `godot/assets/textures` are gitignored, **only after** regeneration is shown to be reproducible and documented |
 
-   Then playtest and time a full run.
-8. Model in Blender the island terrain, reef rocks, three ship hulls plus the launch, and a proper jetty and path (replacing the Godot stand-ins). Add a sound for the visitor's boat docking.
-9. Lighting pass: reduce the black ceiling-beam triangles (add ceiling fill and lighten the beam material), tune the floor wetness, make the lamps flicker and react to power events.
-10. Accessibility and options QA: click every option and confirm it changes something; test controller support.
+## Working rules for every stage
+- **Checkpoint format** (exactly four parts):
+  1. a matched before/after contact sheet (same shots, forced states and preset);
+  2. a short change summary;
+  3. test results, each marked PASS / PARTIAL / FAIL / NOT TESTED: the suites, the interaction checklist, and median and 95th-percentile frame time against the last baseline;
+  4. 2–4 decisions for Daniel.
+- **Interaction checklist** for the primary workstations (radio, generator, power panel, light console, door):
+  - checks 1–3, 5, 6 and 8 are automated in `godot/tests/interaction_test.gd`;
+  - check 4 (believable animation) and check 7 (readable instruments) are judged from captures;
+  - check 6: whether the audio *sounds* right is Daniel's call.
+- **Performance:** frame-time budget of 16.7 ms for both median and 95th percentile on High, in the worst-case bench. Investigate any checkpoint regression above +10 % median or +15 % 95th percentile. Triangle, mesh and material counts are guardrails only (`tests/test_last_light_hooks.py`).
+- **Asset priority tiers** (Stage 1 onward):
 
-## P3: housekeeping
-11. Decide whether to delete the v1 top-down code (`scripts/main.gd`, `game_world.gd`, `ui/hud.gd`, `core/sim_world.gd`, `beam_model.gd`, `ship_model.gd`, `keeper_bot.gd`, `wave_schedule.gd`, `scenes/main.tscn`, `tests/run_tests.gd`, `tests/sim.gd`) and the debug harness `tests/debug_station.gd`. **Ask Daniel first.**
-12. Put the Godot-side PNG textures and docs under Git LFS (`projects/games/**/*.png`), and remove the redundant `human-base-meshes-bundle-v1.4.1.zip` (**ask first**).
-13. A CI job for the headless suites.
+  | Tier | Assets | Treatment |
+  |---|---|---|
+  | P0 | Radio, generator controls, power panel, console, door | Highest detail plus the full checklist |
+  | P1 | Windows, desk, optic drive, stair, main lamps | High quality |
+  | P2 | Storage, conduits, furniture | Modular |
+  | P3 | Bolts, clutter | Cheap: decals and texture detail |
+
+  Every new object states what it adds: gameplay, realism, story or composition.
+- Local milestone commits only after approval. **Never push.**
+
+## Stage 0: critical fixes and regression baseline (2026-11-04)
+**Done:**
+- **Checkpoint commit** `51cc8b9` (local), and the duplicate licence line removed.
+- **Blockers fixed:**
+  1. **Mouse look restored after a dialogue reply.** game_fp now has a single `mouse_should_capture()` / `refresh_mouse()`, also used by pause, document close and focus changes. As a result, unpausing with replies on screen no longer re-captures the mouse.
+  2. **Replies no longer overlap the radio command panel.** They sit lower-left, stacked above the speech panel. While replies are open, the number keys belong to them and no longer also send a radio order.
+  3. **Pause:** input under the pause menu no longer advances dialogue, picks replies, runs the typewriter, or sends radio orders. That last one was found during the work.
+  4. **Found by the new interaction test:** START, all three breakers, and the console mode/intensity knobs **could not be targeted by the crosshair**. They sit inside their cabinet's bigger info/focus volume, and the furniture collider occluded them. `player.pick()` now prefers the specific control and ignores the focused device's own volume. Furniture colliders no longer hide controls mounted on them; walls, floor, ceiling and stair still block.
+- **Tooling:**
+  - `capture_fp.gd` gained:
+    - views `fp_ceiling`, `cu_lamp`, `cu_optic`, `cu_console`, `cu_power`, `cu_window`, `cu_door`;
+    - states `!dark`, `!flash`, `!gen_off`, `!dawn`;
+    - flags `--quality=`, `--nohud`, `--bench`;
+    - a plan view that clips at the ceiling and no longer hides the battery rack.
+  - The same views are in `blender/review_views.py`.
+  - New `tests/test_last_light_hooks.py` (pytest, with the frozen v006 hook fixture), `godot/tests/regress_test.gd` and `godot/tests/interaction_test.gd`.
+- **Baselines:**
+  - captures `renders/last_light/s0_*` (sheets `s0_sheet_a.png`, `s0_sheet_b.png`);
+  - bench JSON `renders/last_light/s0_q{0,1,2}_bench.json`;
+  - results in `docs/PROJECT_STATE.md` §4.
+
+**Daniel's feedback log:**
+- 2026-11-04: reviewed plan revision 1 and asked for six changes:
+  - blockers first;
+  - iteration 1 split;
+  - prototype VoxelGI, light culling and the probe before relying on them;
+  - asset tiers;
+  - the interaction checkpoint;
+  - frame-time budgets;
+  - a period-accuracy review;
+  - story-ready placements;
+  - the four-part checkpoint format;
+  - reproducible ignored assets.
+
+  All are folded into revision 2.
+- 2026-11-04: Stage 0 checkpoint (iteration 0.1) presented. Daniel chose **"Another iteration"** and picked 1080p-equivalent Retina rendering. For iteration 0.2 he selected all four areas (UI nits, Retina fix, a sweep of play issues across controls / dialogue / visual-performance / menus-saves-audio, and more coverage). He gave no specific bug, so it was read as **"do a thorough QA sweep yourself"**.
+
+**Iteration 0.2 (2026-11-04):**
+- **Retina:** `Settings.render_scale()` and `apply_render_scale()` render 3D at 1080p-equivalent, upscaled with FSR 1.0. A new Options entry, "Render resolution", offers Auto or Native. It's re-applied on window resize, and `--scale3d` overrides it.
+- **UI nits:** the chapter card moved to about 37 % of screen height, clear of the prompt. Buttons got 16 px horizontal padding.
+- **Dialogue at large text sizes (found by the sweep):**
+  - at the Options maximum (1.5×), 23 radio lines grew **off the bottom of the screen**;
+  - long ch4 replies stretched to 908 px.
+
+  Now the speech panel and subtitles grow upwards, replies follow the top of the speech block (`_layout_choices`), and reply text wraps within its 700 px column.
+- **Options:** text size and text speed now apply live (`game_fp._on_settings_changed`). The radio panel's italic text size is scaled too.
+- **Coverage:**
+  - `interaction_test.gd` gained a walkability flood-fill from spawn and the desk workstation (chart, radar, logbook, drawer, forecast, photo, note, archive), with open and close checked for each document;
+  - new `godot/tests/qa_sweep_test.gd` (dialogue fit for all 546 line renders and 142 replies at two text sizes, plus options live-apply);
+  - new `audio/analyze.py`;
+  - a true before/after image of the reply layout: `renders/last_light/s0_reply_before_after.png`.
+
+**Logged for later stages (not blockers):**
+- Documents open with **no sound**. `paper_slide.wav` exists → Stage 5.
+- UIStyle uses the hover style for keyboard focus too, which causes the double highlight in the main menu → Stage 6.
+- `horn_fishing.wav` is mastered hot (RMS −9.3 dBFS, though it plays at −14 dB). `click_button.wav` has a tiny DC offset → Stage 5.
+- At 1.0× the tallest radio line exactly fills its 222 px slot; at 1.5× the panel grows to 349 px → Stage 3 (consider a shorter line length).
+- 2026-11-04: **Daniel approved Stage 0** (iteration 0.2) and kept **High as the default preset** until Stage 1a reworks shadows and GI.
+
+## Stage 1: cabin (planned; starts after Stage 0 approval)
+1. **1.0 Review:** infrastructure logic, story anchors and the tier table, written into `REFERENCE_SPEC.md`.
+2. **1a Lighting and import correctness** (existing geometry):
+   - cull masks to keep exterior lights out, plus a shadow-behaviour test;
+   - window spill and lightning through the glass;
+   - lamp fixes (light inside the glass, soft shadows, no glass shadows);
+   - I-beam z-fight;
+   - mipmaps and VRAM import;
+   - a ReflectionProbe test matrix (power on and off, generator off, flash, dawn);
+   - SSAO + SSIL per preset; wire up the unused `q_shadows()`.
+3. **1b Material richness:**
+   - palette in `spec.py`;
+   - smooth shading and bevels;
+   - metric UVs;
+   - vertex wear mask;
+   - `room_pbr.gdshader`;
+   - 2k sets through `sync_assets.py` (reproducibility check before the gitignore);
+   - rain-glass rewrite;
+   - an optional VoxelGI spike, adopted only on evidence.
+4. **2 Architecture:**
+   - two-tone walls, dado and cornice;
+   - splayed windows with dark-green frames;
+   - oak wainscot;
+   - ceiling and conduits following the power chain;
+   - stair bulkhead with a heavy door;
+   - well-glass lamps;
+   - floor;
+   - story anchors.
+5. **3 Devices:**
+   - P0 first, each passing the checklist: radio, generator set, power chain, console, door;
+   - then the optic drive, desk and stair.
+6. **4 Detail:** P2 story props (calendar, diagram, logbook shelf, oilskins, kettle, barometer), then P3 decals and repairs, then a performance pass.
+
+## Later stages (scope only)
+**Stage 2: interactions and gameplay**
+- hover highlight and crosshair state;
+- `hint_device` (currently a no-op);
+- teach Tab and the scroll wheel;
+- gamepad look (`interact` and `boost` share the A button);
+- vessel buttons rebuilt every 30 frames lose hover and focus.
+
+**Stage 3: dialogue, characters and story**
+- Portraits: Blender CC0 busts (the approved method; see `docs/SESSION_HANDOFF.md`).
+  - Write `blender/portraits.py`: six characters, three expressions each, Cycles at 512×640 with a 1970s grade.
+  - Extend `.dlg` with `SPEAKER(expr):`.
+  - Show portraits in `dialogue_ui.gd`.
+- Bundled OFL fonts, which also fix italics.
+- The clipped radio ID-card text.
+- Text scaling that covers all of the text.
+- A dialogue backlog.
+- A document viewer that doesn't close on any click.
+- Pacing: ch1 is front-loaded (15 beats); the ch6 jam has no beat explaining it.
+- A per-ending card (`main_fp.gd:254` ignores the ending).
+- Chapter fades.
+- Optional content: more documents, optional radio talk.
+- Decide whether there's a telephone.
+
+**Stage 4: outside world and story events**
+- Dock, the visitor's boat and its docking sound, the stairwell approach.
+- Eased weather (`keeper_sim.gd:264` snaps); dusk hue; horizon skirt colour.
+- Blender island, reefs, ship hulls and launch, prioritised by what the story shows.
+- Wakes and spray.
+
+**Stage 5: sound and cinematics**
+- Daniel's listening session (the audio has never been heard).
+- Reverb, outside muffling, radio band-pass.
+- Player footsteps (`step_stone_*` unused).
+- Music arc.
+- Audio in the credits.
+- The visitor's entrance.
+
+**Stage 6: menus, effects and polish**
+- Pause: Options, Load and Quit; confirm before leaving to the main menu.
+- Slider hitch (`settings.gd:63-71`); the double highlight in the main menu.
+- Spray, exhaust, sparks, ship fade-outs.
+- Final optimisation: ocean LOD, radar at 30 Hz, menu cost.
+- Re-export the `.app`.
+- A timed full playthrough.
+
+**Housekeeping (ask Daniel first)**
+- Delete the v1 top-down code and its tests (`run_tests.gd`, `sim.gd`)? Note: those 95 tests are the only v1 coverage.
+- Delete `tests/debug_station.gd`?
+- Delete the redundant base-mesh zip?
+- Git LFS for game PNGs.
+- A CI job for the headless suites.

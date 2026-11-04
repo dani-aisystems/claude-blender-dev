@@ -31,6 +31,7 @@ var mode := "radio"
 var speed_cps := 42.0                       # Settings: typewriter speed
 var text_scale := 1.0                       # Settings: subtitle size
 var at_radio_fn: Callable                   # returns true when the player is at the handset
+var mouse_restore_fn: Callable              # game decides the mouse mode once choices close
 var radio_panel: PanelContainer
 var card: Control
 var r_name: Label
@@ -48,6 +49,7 @@ var _done_t := 0.0
 var _choices: Array = []
 var _active := false
 var _t := 0.0
+var _freed_mouse := false                   # we made the cursor visible for the choices
 
 
 func _ready() -> void:
@@ -64,6 +66,7 @@ func _ready() -> void:
 	radio_panel.offset_right = 48 + 820
 	radio_panel.offset_top = -270
 	radio_panel.offset_bottom = -48
+	radio_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN   # long lines / large text grow UP, never off-screen
 	radio_panel.visible = false
 	add_child(radio_panel)
 	var h := HBoxContainer.new()
@@ -90,6 +93,7 @@ func _ready() -> void:
 	sub_box.offset_top = -210
 	sub_box.offset_bottom = -60
 	sub_box.alignment = BoxContainer.ALIGNMENT_END
+	sub_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	sub_box.visible = false
 	add_child(sub_box)
 	s_name = UIStyle.label("", 18, UIStyle.AMBER, UIStyle.sans())
@@ -99,12 +103,17 @@ func _ready() -> void:
 	s_text.custom_minimum_size = Vector2(1280, 0)
 	sub_box.add_child(s_text)
 	# --- choices ---
+	# Lower-left, stacked directly above whatever text is showing (radio panel or subtitles) and growing
+	# upwards (_layout_choices), so replies sit next to the line they answer at any text size and never
+	# cover the radio command panel (right edge) or the subtitles.
 	choice_box = VBoxContainer.new()
-	choice_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-	choice_box.offset_left = -720
-	choice_box.offset_right = -60
-	choice_box.offset_top = -40
-	choice_box.offset_bottom = 300
+	choice_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	choice_box.offset_left = 48
+	choice_box.offset_right = 48 + 700
+	choice_box.offset_bottom = -270 - 14
+	choice_box.offset_top = -270 - 14 - 236
+	choice_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	choice_box.alignment = BoxContainer.ALIGNMENT_END
 	choice_box.add_theme_constant_override("separation", 8)
 	add_child(choice_box)
 
@@ -130,6 +139,7 @@ func apply_settings(cps: float, scale: float) -> void:
 	speed_cps = cps
 	text_scale = scale
 	r_text.add_theme_font_size_override("normal_font_size", int(25 * scale))
+	r_text.add_theme_font_size_override("italics_font_size", int(25 * scale))
 	s_text.add_theme_font_size_override("normal_font_size", int(28 * scale))
 	s_text.add_theme_font_size_override("italics_font_size", int(28 * scale))
 
@@ -167,12 +177,18 @@ func close() -> void:
 	_active = false
 	radio_panel.visible = false
 	sub_box.visible = false
+	_choices = []
 	_clear_choices()
+	_restore_mouse()
 	blip.emit("close")
 
 
 func is_active() -> bool:
 	return _active
+
+
+func has_open_choices() -> bool:
+	return not _choices.is_empty() and choice_box.get_child_count() > 0
 
 
 # ------------------------------------------------------------------ internals
@@ -189,22 +205,51 @@ func _refresh_choices() -> void:
 	for c in _choices:
 		var b := UIStyle.button("%d   %s" % [c["index"] + 1, c["text"]])
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.custom_minimum_size = Vector2(640, 46)
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART    # long replies wrap inside the 700 px column
+		b.custom_minimum_size = Vector2(700, 46)
 		b.add_theme_font_size_override("font_size", int(21 * text_scale))
 		var idx: int = c["index"]
 		b.pressed.connect(func(): _pick(idx))
 		choice_box.add_child(b)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_freed_mouse = true
+	_layout_choices()
+
+
+## Keep the reply stack 14 px above the top of the visible speech block (radio panel or subtitles).
+func _layout_choices() -> void:
+	var vp_h := get_viewport_rect().size.y
+	var top := vp_h - 48.0
+	if radio_panel.visible:
+		top = radio_panel.get_global_rect().position.y
+	elif sub_box.visible:
+		top = sub_box.get_global_rect().position.y
+	choice_box.offset_bottom = top - 14.0 - vp_h
+	choice_box.offset_top = choice_box.offset_bottom - 236.0
 
 
 func _clear_choices() -> void:
 	for c in choice_box.get_children():
+		choice_box.remove_child(c)      # detach now so the box is empty this frame (layout, tests)
 		c.queue_free()
 
 
+## Hand the mouse back to the game (it re-captures only if no device view, document, logbook or
+## pause is open). Done BEFORE choice_made so that choices opened by the next step free it again.
+func _restore_mouse() -> void:
+	if not _freed_mouse:
+		return
+	_freed_mouse = false
+	if mouse_restore_fn.is_valid():
+		mouse_restore_fn.call()
+
+
 func _pick(i: int) -> void:
+	if get_tree().paused:
+		return
 	_choices = []
 	_clear_choices()
+	_restore_mouse()
 	choice_made.emit(i)
 
 
@@ -223,10 +268,12 @@ func _render() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	card.queue_redraw()
-	if not _active:
+	if not _active or get_tree().paused:      # the typewriter freezes under the pause menu
 		return
 	if not _choices.is_empty() and choice_box.get_child_count() == 0:
 		_refresh_choices()      # the player may have walked to the radio
+	if choice_box.get_child_count() > 0:
+		_layout_choices()       # the speech block can grow while the line types out
 	if _shown < _full.length():
 		if _pause > 0.0:
 			_pause -= delta
@@ -250,7 +297,7 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not _active:
+	if not _active or get_tree().paused:      # this layer keeps processing during pause: ignore input
 		return
 	if not _choices.is_empty():
 		if event is InputEventKey and event.pressed and not event.echo and event.keycode >= KEY_1 and event.keycode <= KEY_4:

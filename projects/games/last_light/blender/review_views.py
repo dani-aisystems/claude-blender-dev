@@ -40,8 +40,14 @@ def eye(bearing_from, dist_from, toward_bearing, toward_dist, z_from=1.65, z_to=
             dirv(toward_bearing) * toward_dist + Vector((0, 0, F + z_to)))
 
 
+def lens_for_vfov(vfov_deg, aspect=16 / 9, sensor=36.0):
+    """Blender focal length (horizontal sensor fit) matching a Godot vertical FOV at 16:9."""
+    hfov = 2 * math.atan(math.tan(math.radians(vfov_deg) / 2) * aspect)
+    return sensor / 2 / math.tan(hfov / 2)
+
+
 VIEWS = {
-    # name: (from, to, lens, cutaway)
+    # name: (from, to, lens, cutaway). The fp_ceiling/cu_* views mirror godot/scripts/capture_fp.gd exactly.
     "plan": ((0, 0, F + 13.0), (0, 0.001, F), 22, True),
     "iso": ((-6.5, -7.0, F + 8.5), (0.2, 0.4, F + 0.6), 24, True),
     "fp_desk": (*eye(180, 0.2, 20, 3.0, 1.62, 1.05), 18, False),      # R3: from the desk chair area, looking N/NE
@@ -49,6 +55,13 @@ VIEWS = {
     "fp_console": (*eye(-110, 0.5, 78, 3.0, 1.65, 0.95), 20, False),
     "fp_gen": (*eye(30, 0.8, -140, 3.0, 1.65, 0.9), 20, False),
     "fp_stair": (*eye(0, 1.0, 180, 3.0, 1.65, 1.0), 20, False),
+    "fp_ceiling": (*eye(200, 0.7, 30, 1.9, 1.6, 3.05), lens_for_vfov(80), False),
+    "cu_lamp": (*eye(62, 2.0, 62, 3.25, 1.85, 2.05), lens_for_vfov(55), False),
+    "cu_optic": (*eye(20, 1.3, 45, 2.78, 1.5, 1.25), lens_for_vfov(55), False),
+    "cu_console": (*eye(78, 1.75, 78, 2.9, 1.6, 0.95), lens_for_vfov(50), False),
+    "cu_power": (*eye(-80, 1.4, -80, 3.0, 1.6, 1.2), lens_for_vfov(62), False),
+    "cu_window": (*eye(0, 1.4, 0, 3.42, 1.65, 1.75), lens_for_vfov(55), False),
+    "cu_door": (*eye(180, 0.2, 180, 2.0, 1.65, 1.1), lens_for_vfov(55), False),
     "ext": ((24, -38, 12), (0, 0, 17), 40, False),
 }
 

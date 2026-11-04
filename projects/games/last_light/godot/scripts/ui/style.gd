@@ -70,6 +70,8 @@ static func button(text: String) -> Button:
 	normal.border_color = LINE
 	normal.set_border_width_all(1)
 	normal.set_corner_radius_all(4)
+	normal.content_margin_left = 16        # left-aligned buttons (dialogue replies) need breathing room
+	normal.content_margin_right = 16
 	var hover := normal.duplicate()
 	hover.bg_color = Color(0.12, 0.09, 0.05, 0.75)
 	hover.border_color = AMBER

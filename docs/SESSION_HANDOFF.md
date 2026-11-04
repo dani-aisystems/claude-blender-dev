@@ -1,88 +1,115 @@
-# Session handoff: 2026-11-03 → 2026-11-04 (session 1)
+# Session handoff: 2026-11-04 (session 2, Stage 0)
 
-Read this together with `docs/PROJECT_STATE.md`, which describes what exists, and `docs/ROADMAP.md`, which sets out what's next.
+Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (current stage and iteration, decisions, feedback log, next task), and with `docs/PROJECT_STATE.md`.
 
-## How the brief evolved (all of these are Daniel's requests, in order)
-1. Build a small top-down beam-steering game, THE LAST LIGHT. Godot was chosen and installed. → commit `fe0d387`.
-2. A visual-realism overhaul (art direction, PBR, ocean, weather). CC0 textures approved.
-3. **Pivot to a first-person keeper simulator** in one room: generator and battery, lighthouse controls, radio, ships. → `48becde`, `98c570e`.
-4. **Rebuild the room from 4 reference images.** Only 3 arrived; R4 duplicated R3, and Daniel said to proceed without it. → `REFERENCE_SPEC.md`.
-5. **Two-hour narrative mystery:** story, dialogue system, cinematic menu, options, save/load, documents, the visitor sequence. Daniel chose story A, voices as text plus radio sound. → uncommitted.
-6. **Three fixes:**
-   - rain inside the room (✅ fixed, partly verified);
-   - character portraits with faces (⬜ approved method: Blender CC0 base-mesh busts);
-   - photoreal interior textures (⬜ eight 2k CC0 sets downloaded, not yet wired in).
-7. This handoff.
+## Update: iteration 0.2 (same day)
+Daniel asked for another iteration and selected every area: UI nits, the Retina fix, a play-issue sweep (controls, dialogue, visual and performance, menus, saves and audio), and more coverage. He gave no specific bug, so this was done as a self-run QA sweep. The full list is in ROADMAP.md, under "Iteration 0.2".
 
-## What changed this session (uncommitted since `98c570e`)
-- **Story layer:**
-  - `scripts/story/` holds the dialogue DB, runner, StoryState, StoryDirector and presenter;
-  - `scripts/ui/dialogue_ui.gd`;
-  - `data/story/ch1–ch6.dlg` and `chapters.json`;
-  - `data/credits.txt`.
-- **Station and gameplay hooks for the story:**
-  - `keeper_sim.gd`: story mode, `spawn_story_ship` (fixed routes, unlit or protected ships), `trigger_fault`, `to_dict`/`from_dict`;
-  - `fleet_ship.gd`: `unlit`, `docked`, `story_route`, `protected`, serialisation;
-  - `keeper_bot2.gd`: confirms positions first; raises the lamp from LOW; fixed target selection.
-- **Room (Blender `build.py`):**
-  - a hinged closed stair door (`PT_stair_door`, `IA_door`);
-  - an archive cabinet (`IA_archive`);
-  - `IA_drawer`, `IA_battery`, `IA_photo`, `IA_note`, `IA_forecast`;
-  - wall lamps by the door raised to 2.25 m;
-  - rebuilt as `last_light_v006.blend`, GLB v004.
-- **Game:**
-  - `game_fp.gd` rewritten to run the story mode (director, presenter, documents, door, visitor, player tracking, save/restore);
-  - `main_fp.gd` rewritten: menu, loading, options, load and credits panels;
-  - autoloads `Settings` (`scripts/settings.gd`) and `SaveSystem` (`scripts/save_system.gd`);
-  - `audio_director.gd`, `visitor_figure.gd`;
-  - a jetty in `outside.gd`;
-  - the radar phantom echo;
-  - a dusk sky.
-- **Audio:** `projects/games/last_light/audio/synth.py` writes 37 WAV files to `godot/assets/audio/` (never listened to).
-- **Documents:** `blender/documents.py` writes 8 PNGs plus `docs.json` to `godot/assets/docs/`.
-- **Build:** `export_presets.cfg` (macOS universal, ad-hoc), ETC2/ASTC import enabled; `.app` exported to `projects/games/last_light/build/` (before the rain fix).
-- **Rain fix (latest edit):** `outside.gd::_rain()` now uses a ring emitter (inner radius 6.5 m) plus a `GPUParticlesCollisionHeightField3D` (76×44×76 m, 512 px) with `COLLISION_HIDE_ON_CONTACT`. In the capture `renders/last_light/rainfix_*.png` (watch mode, t≈280–290 s), no streaks show indoors and rain is visible outside.
-- **Downloads (approved):**
-  - 8 Poly Haven 2k sets in `assets/textures/`: `oak_veneer_01`, `dark_wooden_planks`, `old_wood_floor`, `green_metal_rust`, `rusty_metal_02`, `metal_plate_02`, `plastered_wall_02`, `concrete_floor_worn_001`;
-  - Blender Studio *Human Base Meshes v1.4.1* (CC0) in `assets/models/human_base_meshes/`, extracted to `bundle/human-base-meshes-bundle-v1.4.1/human_base_meshes_bundle.blend`;
-  - all logged in `assets/ASSET_LICENSES.md`, where `concrete_floor_worn_001` appears twice because of a download race.
+**Code changes:**
+- `settings.gd`: `render_res` setting, `render_scale()`, `apply_render_scale()`.
+- `main_fp.gd`: Render resolution option.
+- `dialogue_ui.gd`: grow upwards, `_layout_choices()`, wrapped replies, italic scaling.
+- `game_fp.gd`: `_on_settings_changed`.
+- `story_presenter.gd`: chapter card moved up.
+- `style.gd`: button padding.
+- New `tests/qa_sweep_test.gd` and `audio/analyze.py`. `interaction_test.gd` now has the walkability flood-fill and the desk and document checks.
 
-## Portrait groundwork (measured in the bundle, Blender world coordinates)
-| Object | Bounds / position | Notes |
-|---|---|---|
-| `GEO-head_animation_realistic` (3242 verts, MULTIRES level 1, no shape keys, no materials) | x 1.326–1.600, y −0.169–0.078, z 0.509–0.880 | Faces **−Y** (nose tip about (1.463, −0.169, 0.729)) |
-| Its eyes: `.sclera.L` / `.sclera.R` | centres (1.495, −0.126, 0.767) and (1.430, −0.126, 0.767) | Also has `.iris.L` / `.iris.R` |
-| Mouth (estimate) | z ≈ 0.69; corners at x = centre ± 0.025 | |
-| `GEO-body_female_realistic` (MULTIRES 3) | eyes at z 1.534, x ≈ −1.307 / −1.34 | Crop above the shoulders for women's busts |
-| `GEO-body_male_realistic` | exists; not measured | |
+**Results:**
 
-No expressions exist in the bundle, so build them as regional deformations: inner brow up = worry; brow down and in = tension; mouth corners down = sorrow.
+| Suite | Result |
+|---|---|
+| interaction | 134 checks, 0 failures, 6 warnings (no document sound) |
+| qa_sweep (windowed) | 948/948 |
+| regress | 40/40 windowed |
+| story / sim_v2 / run_tests / pytest | all pass |
 
-## Exact next steps
-1. **Commit the session's work.** Ask Daniel, since this handoff request said not to commit without authorisation, even though milestone commits were authorised earlier. Suggested commands:
-   ```
-   git add projects/games/last_light docs CLAUDE.md assets/ASSET_LICENSES.md
-   git commit -m "THE LAST LIGHT: narrative campaign, dialogue, menu/options/saves, audio, rain fix"
-   ```
-   Do **not** add `assets/textures/*` (709 MB) or the base-mesh bundle without discussing LFS.
-2. Wire the new textures into the interior materials (ROADMAP P1 item 4), then capture and review.
-3. Build the portraits (ROADMAP P1 item 5).
-4. Re-export the `.app` and run the smoke test; ask Daniel to playtest Chapter 1 and measure fps.
+**Before/after of the reply layout:** `renders/last_light/s0_reply_before_after.png`, captured from a scratch worktree of `51cc8b9` (worktree removed afterwards).
+
+**Still awaiting Daniel's Stage 0 approval.**
+
+## Where we are
+- Daniel started a **staged polish programme**. Each stage goes inspect → propose → agree → implement → validate, then needs **explicit approval** from him.
+- He reviewed plan revision 1 and asked for changes. Revision 2 was approved and is saved at `~/.claude/plans/pasted-content-id-5a42-the-staged-crown.md`. The binding parts are copied into ROADMAP.md.
+- **Stage 0 is implemented and waiting for Daniel's approval.** Do not start Stage 1 until he approves Stage 0.
+- Stage 0's changes are **uncommitted**. Commit them as a local milestone only after approval, and never push.
+
+## Stage 0: what changed
+| Area | Change |
+|---|---|
+| Commit | `51cc8b9`: a local checkpoint of all session-1 work. The textures and base-mesh bundle stay untracked by design. |
+| `scripts/ui/dialogue_ui.gd` | Replies moved lower-left above the speech panel. `mouse_restore_fn` and `_restore_mouse()` run before `choice_made`. `has_open_choices()`. Input, typewriter and `_pick` are ignored while paused. `_clear_choices` detaches immediately. |
+| `scripts/fp/game_fp.gd` | `mouse_should_capture()` and `refresh_mouse()` are the single place that decides mouse capture. Pause, document close and focus changes all route through them. `ui.number_keys_taken_fn` is wired up. |
+| `scripts/fp/fp_ui.gd` | No radio orders while paused. Number keys yield to open replies (`number_keys_taken_fn`). |
+| `scripts/fp/player.gd` | New `pick()` and `_occluded()`, with the rules below. |
+| `scripts/capture_fp.gd` | New views, forced-state suffixes `!dark`, `!flash`, `!gen_off` and `!dawn`, and flags `--quality=N`, `--nohud` and `--bench`. The plan view clips at the ceiling. The cutaway no longer hides the battery rack or the room's optic gears. |
+| `blender/review_views.py` | Mirrors the new views, with `lens_for_vfov()`. |
+| Tests | New `tests/test_last_light_hooks.py` with fixture `tests/fixtures/last_light_hooks_v006.json` (80 frozen hooks, 49 colliders). New `godot/tests/regress_test.gd` and `godot/tests/interaction_test.gd`. |
+| Docs | ROADMAP rewritten as the stage tracker. PROJECT_STATE updated: decisions, tests, the performance finding. |
+
+The new rules in `player.pick()`:
+- a specific control beats its cabinet's info or focus volume;
+- the focused device's own volume is ignored;
+- only walls, floor, ceiling and stair occlude.
+
+Before this, **START, all three breakers and the console mode/intensity knobs couldn't be targeted by the crosshair**.
+
+## Evidence
+| Item | Where |
+|---|---|
+| Baseline captures | `renders/last_light/s0_*` (19 shots), with sheets `s0_sheet_a.png` (room views) and `s0_sheet_b.png` (close-ups, plan, iso, focus views) |
+| Reply layout | `renders/last_light/s0_regress_reply_layout.png` |
+| Blender versions of the new views | `renders/last_light/blender_s0views_sheet.png` (rendered before `cu_door` was moved back to 1.75 m from the door) |
+| Bench | `renders/last_light/s0_q{0,1,2}_bench.json` and `s0_q2_s50_bench.json`. Summary in PROJECT_STATE §5.1 |
+
+**Tests: all green.** Commands are in PROJECT_STATE §4.
+
+| Suite | Result |
+|---|---|
+| pytest | 18 pass |
+| regress | 40/40 windowed, 38/38 headless |
+| interaction | 93/93 |
+| story_test | 0 failures |
+| sim_v2 | no gate failures |
+| run_tests | 95/95 |
+
+## Key findings to carry into Stage 1
+1. **Performance is fill-rate bound on Retina.** The window is 3840×2410 physical pixels.
+
+   | Preset | 3D scale | Median frame time |
+   |---|---|---|
+   | High | 1.0 | 44–51 ms |
+   | High | 0.5 (about 1080p-equivalent) | 18.1 ms |
+
+   The default render resolution on HiDPI displays is a decision for Daniel.
+2. **Lantern light leaks through the roof** (`fp_desk!dark`). With the room lights off, the walls and floor stay lit.
+3. **Lightning lights the room uniformly through the roof**, not through the windows (`!flash`).
+4. **Spoke shadows from the wall lamps** (`cu_lamp`). Green machinery reads as dark striped wood (`cu_console`, `cu_power`). The optic column shows white discs (`cu_optic`).
+5. **Small UI issues for later stages:**
+   - the chapter card overlaps the "Step back" prompt in the first seconds;
+   - reply buttons have almost no left padding;
+   - the radio ID card text was clipped in older captures (Stage 3).
+
+## Next steps
+1. Present the Stage 0 checkpoint and get Daniel's approval. (This handoff was written while waiting for it.)
+2. After approval:
+   - make the local commit: "THE LAST LIGHT Stage 0: gameplay blockers, interaction picking, QA tooling, baselines";
+   - start **Stage 1, step 1.0**: the period-accuracy and story-readiness review, written into REFERENCE_SPEC.md;
+   - then **iteration 1a** (lighting and import correctness), measured against the s0 captures and bench.
+
+## Gotchas learned this session
+- **Mouse mode in headless Godot:** the headless display server ignores mouse modes. Run `regress_test.gd` **windowed** for the real `Input.mouse_mode` checks; headless skips them and says so.
+- **Vessel refresh:** `fp_ui._refresh_vessels()` runs every 30 frames and resets `selected_ship` to −1 when there are no ships. In tests, set the selection just before injecting a key.
+- **Loads re-enter the beat:** loading re-enters the saved beat and re-runs its `do` actions (ch1 beat 0 sets mode and intensity to 0). This is by design. Test save/load from a beat that doesn't touch the station.
+- **The door swings at 1.2 rad/s**, about 0.02 rad per frame. "Settled" checks need a tighter threshold than "moved" checks.
+- **Units:** `sim.bearing` is in **radians**.
+- **`COL_` colliders** are named `COL_x-convcolonly` in the GLB on purpose. The hook test requires the hint on `COL_` nodes and forbids hints everywhere else.
+- **Metal GPU time:** `viewport_get_measured_render_time_gpu` returns 0 on Metal, so use frame time.
+- **Corrupt-save errors:** `story_test.gd` prints two "Parse JSON failed" errors. They're expected, because it tests corrupt saves on purpose.
 
 ## Workspace cleanup candidates (NOT deleted; ask Daniel)
-- `projects/games/last_light/godot/tests/debug_station.gd`: debug harness, safe to remove.
-- v1 top-down code and tests: obsolete, but tests still pass. See ROADMAP P3.
-- `assets/models/human_base_meshes/human-base-meshes-bundle-v1.4.1.zip`: redundant after extraction (50 MB).
-- `projects/games/last_light/build/TheLastLight.zip` plus the `.app` (gitignored, 292 MB): stale until re-exported.
-- `renders/` and `exports/`: gitignored and reproducible.
-- Scratchpad (outside the repo): a 1.2 GB Godot export-template download, `godot_docs/` (useful offline API reference; regenerate with `godot --headless --doctool <dir>`).
-
-## Gotchas learned
-- **Godot's glTF import treats name suffixes as hints.** `_wheel` made a VehicleWheel3D, so the handwheel is now `PT_handwheel`. Avoid node names ending in `_col`, `_wheel`, `_rigid`, `_navmesh` and similar.
-- **The Blender empty convention:** `IA_*` empties' scale is the half-size of the interaction box. Articulated `PT_`/`NDL_` parts rotate about Blender local Z, which is Godot local Y.
-- **Typed GDScript:** `int != bool` errors at runtime. `var x := <untyped expr>` is a parse error, so annotate types explicitly.
-- **`--check-only` false errors:** it reports "GameState/Settings/SaveSystem not found" because autoloads aren't loaded in that mode. Ignore those.
-- **Capture fps** is unreliable when the window isn't frontmost (see PROJECT_STATE §5).
-- **Headless story bot:** dialogue advances in 0.05 s and waits are ×0.02. Captures use 2.6 s per line (`game_fp.gd` sets this when `--capture` is passed).
-- **Saves** are taken only between beats (`game_fp.can_save()`), so loading restores the beat start and never replays half a scene.
-- **`tools/fetch_cc0.py`** logs the licence even on a re-run that skips existing files, which caused the duplicate line.
+These are unchanged from session 1:
+- `tests/debug_station.gd`;
+- the v1 top-down code;
+- the base-mesh zip;
+- the stale `.app`;
+- the scratchpad Godot export-template download.
