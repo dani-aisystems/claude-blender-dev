@@ -1,0 +1,27 @@
+{
+ "_doc": "THE LAST LIGHT v2 night script. t = seconds from 02:17. bearing in degrees (0 = north, clockwise). aim: 'reef' (blind course onto the nearest reef), or a number = heading offset in degrees from straight at the light. Seeded jitter: +-3 s, +-4 deg.",
+ "ships": [
+  {"t": 15, "name": "Kittiwake", "kind": "fishing", "bearing": 8, "aim": 18, "stage": 1,
+   "call": "North Point Light, this is fishing vessel Kittiwake. We're lost in the murk, visibility near nothing. Requesting a course in, over."},
+  {"t": 120, "name": "Gannet", "kind": "schooner", "bearing": -52, "aim": "reef", "stage": 2,
+   "call": "North Point, North Point, schooner Gannet. We've lost the shore lights. Can you guide us in? Over."},
+  {"t": 255, "name": "Corrie May", "kind": "fishing", "bearing": 60, "aim": "reef", "stage": 3,
+   "call": "Light station, this is Corrie May, fishing, coming in from the east. The sea's building fast. Need a bearing, over."},
+  {"t": 290, "name": "Lowestoft Star", "kind": "schooner", "bearing": -18, "aim": -14, "stage": 3,
+   "call": "North Point Light, Lowestoft Star. Running before the wind, can't see a thing. Advise, over."},
+  {"t": 395, "name": "Bonnie Jean", "kind": "fishing", "bearing": 30, "aim": "reef", "stage": 3,
+   "call": "North Point, Bonnie Jean here, two souls aboard. We're taking water and need the quickest way in, over."},
+  {"t": 470, "name": "Meridian", "kind": "steamer", "bearing": 72, "aim": "reef", "stage": 4,
+   "call": "Mayday relay, North Point Light, this is cargo vessel Meridian. Steering gear's sluggish and we're drifting toward the eastern rocks. Request immediate assistance, over."}
+ ],
+ "faults": [
+  {"t": 275, "type": "jam"},
+  {"t": 500, "type": "jam"}
+ ],
+ "logbook": [
+  {"t": 0, "title": "02:17 — Watch begins", "text": "Storm warning from the coastguard. Battery bank at about 60%. The light is on AUTO, lamp at NORMAL.\n\nShips will call on the radio (desk, north wall). Use CONFIRM POSITION to find them on the radar, then TURN PORT / TURN STARBOARD (30° each) to line them up with a channel on the chart: West Gut 314°, North Sound 000°, East Gut 046°.\n\nA ship that can see our light and is lined up inbound on a channel will pilot itself home."},
+  {"t": 100, "title": "Power", "text": "The battery won't last the night. Start the generator (south-west cage): open the FUEL VALVE, then hold START until it catches. Switch CHARGE on at the charger (west wall).\n\nWatch the generator TEMP: switch CHARGE off before it reaches the red, or it will shut itself down to cool. Close the fuel valve to stop the engine and save diesel."},
+  {"t": 250, "title": "Rotation motor", "text": "Salt gets into the gear race in heavy weather. If the MOTOR LOAD needle swings into the red and the amber lamp lights, the motor has jammed: turn MODE to OFF, then back to AUTO. Left jammed, it will trip the MAIN breaker.\n\nIn an emergency use MANUAL and turn the HANDWHEEL: a focused beam reaches ships far out in the fog."},
+  {"t": 420, "title": "Main breaker", "text": "Lamp on HIGH with the radar, the room lights and a transmission can overload the main circuit. If everything goes dark, reset MAIN at the distribution cabinet (west wall). Switch off the room lights or radar to save power."}
+ ]
+}

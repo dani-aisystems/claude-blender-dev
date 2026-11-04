@@ -290,12 +290,62 @@ def build_chart(spec):
     return img
 
 
+def compass_rose():
+    S = 1024
+    img = Image.new("RGB", (S, S), (40, 38, 34))
+    d = ImageDraw.Draw(img)
+    c = S / 2
+    brass, dark = (176, 138, 70), (58, 52, 44)
+    d.ellipse([20, 20, S - 20, S - 20], outline=brass, width=14)
+    d.ellipse([70, 70, S - 70, S - 70], outline=brass, width=5)
+    for k in range(32):
+        a = math.radians(k * 11.25 - 90)
+        r0 = 440 if k % 2 else 420
+        d.line([c + r0 * math.cos(a), c + r0 * math.sin(a), c + 470 * math.cos(a), c + 470 * math.sin(a)], fill=brass, width=4)
+    for k, L in enumerate([400, 260, 400, 260, 400, 260, 400, 260]):
+        a = math.radians(k * 45 - 90)
+        w = math.radians(9 if k % 2 == 0 else 12)
+        tip = (c + L * math.cos(a), c + L * math.sin(a))
+        l = (c + 60 * math.cos(a - math.pi / 2 + 0.0), c + 60 * math.sin(a - math.pi / 2))
+        r = (c + 60 * math.cos(a + math.pi / 2), c + 60 * math.sin(a + math.pi / 2))
+        d.polygon([tip, l, (c, c)], fill=brass)
+        d.polygon([tip, r, (c, c)], fill=dark)
+        del w
+    f = font("Georgia Bold.ttf", 90)
+    for txt, ang in (("N", -90), ("E", 0), ("S", 90), ("W", 180)):
+        a = math.radians(ang)
+        d.text((c + 360 * math.cos(a), c + 360 * math.sin(a)), txt, font=f, fill=brass, anchor="mm")
+    d.ellipse([c - 30, c - 30, c + 30, c + 30], fill=brass)
+    return aged(img, 50, 10)
+
+
+def rug():
+    W, H = 1024, 704
+    rnd = random.Random(9)
+    img = Image.new("RGB", (W, H), (92, 30, 26))
+    d = ImageDraw.Draw(img)
+    navy, cream, ochre, red = (30, 36, 58), (196, 176, 140), (160, 112, 52), (120, 36, 30)
+    for k, col in enumerate([navy, cream, red, ochre, navy]):
+        m = 18 + k * 22
+        d.rectangle([m, m, W - m, H - m], outline=col, width=12)
+    for x in range(140, W - 140, 48):
+        for y in range(140, H - 140, 48):
+            col = [navy, ochre, cream][(x // 48 + y // 48) % 3]
+            d.polygon([(x, y - 18), (x + 18, y), (x, y + 18), (x - 18, y)], outline=col, width=4)
+    d.ellipse([W / 2 - 150, H / 2 - 110, W / 2 + 150, H / 2 + 110], fill=navy, outline=cream, width=8)
+    d.polygon([(W / 2, H / 2 - 80), (W / 2 + 100, H / 2), (W / 2, H / 2 + 80), (W / 2 - 100, H / 2)], fill=red, outline=ochre, width=6)
+    img = img.filter(ImageFilter.GaussianBlur(1.2))
+    return aged(img, 60, 22)
+
+
 def main():
     spec = load_spec()
     OUT.mkdir(exist_ok=True)
     atlas = build_atlas(spec)
     atlas.save(OUT / "T_LL_Atlas.png")
     build_chart(spec).save(OUT / "T_LL_Chart.png")
+    compass_rose().save(OUT / "T_LL_Rose.png")
+    rug().save(OUT / "T_LL_Rug.png")
     print("TEXTURES_RESULT", json.dumps({"atlas": str(OUT / "T_LL_Atlas.png"), "chart": str(OUT / "T_LL_Chart.png")}))
 
 

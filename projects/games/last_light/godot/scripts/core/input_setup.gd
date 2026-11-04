@@ -8,6 +8,13 @@ const BINDINGS := {
 	"boost": [KEY_SPACE],
 	"pause": [KEY_ESCAPE, KEY_P],
 	"fullscreen": [KEY_F11],
+	"move_forward": [KEY_W, KEY_UP],
+	"move_back": [KEY_S, KEY_DOWN],
+	"move_left": [KEY_A, KEY_LEFT],
+	"move_right": [KEY_D, KEY_RIGHT],
+	"interact": [KEY_E],
+	"sprint": [KEY_SHIFT],
+	"logbook": [KEY_L],
 }
 
 
@@ -31,6 +38,11 @@ static func ensure() -> void:
 	_add_joy_button("beam_right", JOY_BUTTON_DPAD_RIGHT)
 	_add_joy_button("boost", JOY_BUTTON_A)
 	_add_joy_button("pause", JOY_BUTTON_START)
+	_add_joy_axis("move_left", JOY_AXIS_LEFT_X, -1.0)
+	_add_joy_axis("move_right", JOY_AXIS_LEFT_X, 1.0)
+	_add_joy_axis("move_forward", JOY_AXIS_LEFT_Y, -1.0)
+	_add_joy_axis("move_back", JOY_AXIS_LEFT_Y, 1.0)
+	_add_joy_button("interact", JOY_BUTTON_A)
 
 
 static func _add_joy_axis(action: String, axis: JoyAxis, value: float) -> void:

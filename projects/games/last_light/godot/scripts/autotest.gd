@@ -14,8 +14,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_elapsed += delta
-	var w = main.world
-	var done: bool = _elapsed >= limit or (w != null and w.sim.result != SimWorld.Result.RUNNING)
+	var w = main.get("game") if main.get("game") != null else main.get("world")
+	var done: bool = _elapsed >= limit or (w != null and int(w.sim.result) != 0)
 	if not done:
 		return
 	var stats: Dictionary = w.sim.stats() if w else {}

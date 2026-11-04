@@ -7,6 +7,11 @@ var games_played := 0
 var last_result: Dictionary = {}
 var seed_override := -1
 var user_args := {}
+var prof := {}          # name -> accumulated usec (perf investigation)
+
+
+func prof_add(name_: String, usec: int) -> void:
+	prof[name_] = prof.get(name_, 0) + usec
 
 
 func _ready() -> void:
