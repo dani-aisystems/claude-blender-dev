@@ -142,9 +142,10 @@ func _swap_materials(mi: MeshInstance3D) -> void:
 		var rep := LLMaterials.get_room_mat(nm)      # Stage 1b: interior palette looks (exterior keeps get_mat)
 		if rep:
 			mi.set_surface_override_material(i, rep)
-		elif m is BaseMaterial3D and nm in ["M_LL_Atlas", "M_LL_Chart", "M_LL_Rose", "M_LL_Rug"]:
+		elif m is BaseMaterial3D and nm in ["M_LL_Atlas", "M_LL_Chart", "M_LL_Rose", "M_LL_Rug", "M_LL_Photo", "M_LL_Logbook"]:
 			var bm := (m as BaseMaterial3D).duplicate()
-			bm.roughness = 0.35 if nm == "M_LL_Atlas" else 0.8
+			# Iteration A: the framed print is semi-gloss photo paper; the ledger is matte rag paper
+			bm.roughness = {"M_LL_Atlas": 0.35, "M_LL_Photo": 0.5, "M_LL_Logbook": 0.88}.get(nm, 0.8)
 			bm.metallic = 0.0
 			bm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 			mi.set_surface_override_material(i, bm)
@@ -551,7 +552,11 @@ func _process_body(delta: float) -> void:
 	_update_windows()
 	_update_probe(f if room_on else 0.0, room_on)
 	for id in lamps:
-		if id == "desk" or id.begins_with("wall") or id == "cage":
+		if id.begins_with("wall"):
+			# well-glass bulb: bright enough to read as lit, dim enough that the globe and guard stay
+			# visible (4.0 bloomed into a white blob and a ghost disc in the window glass, iteration 2)
+			_lamp(id, 1.5 * f if room_on else 0.0)
+		elif id == "desk" or id == "cage":
 			_lamp(id, 4.0 * f if room_on else 0.0)
 		elif id == "stair":
 			lamps[id].emission = Color(1.0, 0.75, 0.42) if room_on else Color(1.0, 0.15, 0.08)

@@ -121,17 +121,19 @@ def clock(seed=0):
     d = ImageDraw.Draw(img)
     c = S / 2
     d.ellipse([c - 240, c - 240, c + 240, c + 240], fill=(238, 232, 214))
-    fnt = font("Georgia Bold.ttf", 54)
+    fnt = font("Georgia Bold.ttf", 46)
     for h in range(12):
         a = math.radians(h * 30 - 90)
         num = ["XII", "I", "II", "III", "IIII", "V", "VI", "VII", "VIII", "IX", "X", "XI"][h]
-        d.text((c + 180 * math.cos(a), c + 180 * math.sin(a)), num, font=fnt, fill=INK, anchor="mm")
+        d.text((c + 166 * math.cos(a), c + 166 * math.sin(a)), num, font=fnt, fill=INK, anchor="mm")
     for m in range(60):
         a = math.radians(m * 6 - 90)
         r0 = 214 if m % 5 else 205
         d.line([c + r0 * math.cos(a), c + r0 * math.sin(a), c + 228 * math.cos(a), c + 228 * math.sin(a)], fill=INK,
                width=4 if m % 5 == 0 else 2)
-    d.text((c, c + 80), "TRINITY HOUSE", font=font("Georgia.ttf", 24), fill=(90, 84, 76), anchor="mm")
+    # Iteration A: period fix, North Point is a Northern Lighthouse Board station (Trinity House is English)
+    d.text((c, c - 92), "NORTHERN", font=font("Georgia.ttf", 20), fill=(90, 84, 76), anchor="mm")
+    d.text((c, c - 68), "LIGHTHOUSE BOARD", font=font("Georgia.ttf", 20), fill=(90, 84, 76), anchor="mm")
     return aged(img, seed, 14)
 
 
@@ -141,11 +143,12 @@ def selector_plate(title, positions, angles, seed=0):
     d = ImageDraw.Draw(img)
     c = S / 2
     d.ellipse([c - 240, c - 240, c + 240, c + 240], fill=(40, 42, 44), outline=(90, 90, 92), width=6)
-    fnt = font("DIN Condensed Bold.ttf", 54)
+    fnt = font("DIN Condensed Bold.ttf", 50)
     for txt, ang in zip(positions, angles):
         a = math.radians(ang - 90)
-        d.line([c + 120 * math.cos(a), c + 120 * math.sin(a), c + 150 * math.cos(a), c + 150 * math.sin(a)], fill=IVORY, width=6)
-        d.text((c + 196 * math.cos(a), c + 196 * math.sin(a)), txt, font=fnt, fill=IVORY, anchor="mm")
+        # index marks start outside the knob skirt (r 0.049 m of the 0.1 m plate = 125 px) so they stay visible
+        d.line([c + 128 * math.cos(a), c + 128 * math.sin(a), c + 158 * math.cos(a), c + 158 * math.sin(a)], fill=IVORY, width=8)
+        d.text((c + 186 * math.cos(a), c + 186 * math.sin(a)), txt, font=font("DIN Condensed Bold.ttf", 44 if len(txt) > 4 else 50), fill=IVORY, anchor="mm")
     d.text((c, c + 200), title, font=font("DIN Condensed Bold.ttf", 34), fill=(160, 160, 160), anchor="mm")
     return aged(img, seed, 8)
 
@@ -204,7 +207,7 @@ def build_atlas(spec):
         "signal": gauge("SIGNAL", ["0", "3", "6", "9", "+20"], seed=6, face=(250, 214, 150)),
         "bearing": compass(7),
         "clock": clock(8),
-        "mode_plate": selector_plate("MODE", ["OFF", "AUTO", "MAN"], [-60, 0, 60], 9),
+        "mode_plate": selector_plate("MODE", ["OFF", "AUTO", "MANUAL"], [-60, 0, 60], 9),
         "intensity_plate": selector_plate("LAMP", ["LOW", "NORM", "HIGH"], [-60, 0, 60], 10),
         "radio_dial": radio_dial(11),
         "notice": notice(12),

@@ -9,6 +9,9 @@ cd "$WS"
 COLS=("${@:-watch_room lighthouse}")
 [[ $# -eq 0 ]] && COLS=(watch_room lighthouse)
 tools/py projects/games/last_light/blender/textures.py >/dev/null
+# story documents + the in-world photo/logbook textures they feed (T_LL_Photo, T_LL_Logbook). The raw photo
+# render (photo_render.py, Cycles, ~10 min) is NOT rerun here: it only changes when the photo scene changes.
+tools/py projects/games/last_light/blender/documents.py >/dev/null
 OUT=$(tools/bl -P projects/games/last_light/blender/build.py -- --new --save 2>&1 | grep BUILD_RESULT)
 echo "$OUT" | cut -c1-220
 BLEND=$(echo "$OUT" | sed -E 's/.*"saved": "([^"]+)".*/\1/')

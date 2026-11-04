@@ -44,7 +44,7 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | | |
 |---|---|
 | **Stage** | 1, cabin lighting, materials and architecture |
-| **Iteration** | 2, architecture (starting 2026-11-04). 1b is approved |
+| **Iteration** | 2, architecture. Implemented and visually verified 2026-11-04; **awaiting Daniel's checkpoint review** |
 | **Next actionable task** | Iteration 2 in `build.py`: walls and dado in geometry, windows, wainscot, ceiling and conduits, stair bulkhead and heavy door, lamps, floor, story anchors. Then bevels and smooth shading |
 
 ## Stages
@@ -207,6 +207,22 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
   - **Brightness, a decision for Daniel:** desk mean 0.199 vs 0.144 approved in 1a; shadows (10th percentile) 0.046 vs 0.020. The rise comes from the correct palette albedo (cream walls, real floor and oak), not from extra light: ambient 0.8 → 0.45 and wall lamps 1.35 → 0.85 were already cut.
   - **Daniel's 1b decisions (2026-11-04):** 1b approved; keep the brighter palette-driven look (desk mean about 0.20); `build.py` handed over (see the ownership note at the top).
   - **Deferred to after the geometry session lands:** bevels, smooth shading, metric UVs and the vertex wear mask, because they need `build.py`. The VoxelGI spike stays optional.
+- **Iteration 2 (2026-11-04), architecture, now in `build.py` (the session owns it since the 1b checkpoint):**
+  - **Mesh quality:** smooth shading split at 35° (`mesh_obj`); every box thicker than 12 mm chamfered (`box(bevel=)`); colliders and the floor slab unbevelled. Without that, the floor showed a 25 cm tile grid.
+  - **Walls and windows:**
+    - dark skirting and an oak dado rail at the paint line;
+    - a stepped crown cornice;
+    - raised oak panelling under the windows (rails plus 5 stiles per bay);
+    - a brass casement handle and stay per window.
+  - **Ceiling and power:** grey-green riveted beams and a riveted boss plate; power-chain conduits (`build_conduits`: generator → charger → batteries → distribution → ring mains).
+  - **Lamps and door:**
+    - well-glass bulkhead lamps (globe plus brass guard; bulb emission 1.5, since 4.0 bloomed into a blob and a ghost disc in the glass);
+    - stair door with a 20 mm light gap and lever dogs.
+  - **Story anchors:** `ANCHOR_door_photo`, `ANCHOR_door_audio`, `ANCHOR_calendar`, `ANCHOR_diagram`, `ANCHOR_telephone`, `ANCHOR_tide_tables`, `ANCHOR_logbook_shelf`, `ANCHOR_oilskins`, `ANCHOR_gear_046`.
+  - **Build:** v011 `.blend`, GLB v009, 75.1k tris (was about 52k), 0 validation FAIL.
+  - **Tests:** hooks, budgets, interaction (134) and story all pass.
+  - **Evidence:** `renders/last_light/s12_vs_s1b_a.png`, `s12_rest.png`, `s12b_lamps.png`.
+  - **Not yet done:** splayed window reveals. The stair door and housing still read as a near-black slab; that's P0 iteration-3 work.
 
 ## Stage 1: cabin (planned; starts after Stage 0 approval)
 1. **1.0 Review:** infrastructure logic, story anchors and the tier table, written into `REFERENCE_SPEC.md`.

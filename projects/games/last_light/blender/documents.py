@@ -184,9 +184,50 @@ def forecast():
     return img
 
 
+RAW_KEEPERS = HERE / "tex" / "src" / "photo_keepers_raw.png"   # blender/photo_render.py (CC0 base meshes)
+
+
+def silver_print(raw, seed):
+    """Raw Cycles render -> 1950s silver gelatin snapshot: grey tone, soft lens, compressed and lifted
+    tonal range, warm-grey toning, vignette, film grain, a few soft creases."""
+    rnd = random.Random(seed)
+    W, H = raw.size
+    g = raw.convert("L").filter(ImageFilter.GaussianBlur(1.1))
+    # S-curve, then lift the blacks / dull the whites (faded print)
+    g = g.point(lambda v: int(14 + 222 * (0.5 - 0.5 * math.cos(math.pi * (v / 255.0) ** 1.05))))
+    vig = Image.new("L", (W, H), 0)
+    vd = ImageDraw.Draw(vig)
+    for k in range(40):
+        t = k / 40
+        vd.ellipse([-W * 0.25 + t * W * 0.2, -H * 0.3 + t * H * 0.22, W * 1.25 - t * W * 0.2, H * 1.3 - t * H * 0.22],
+                   fill=int(255 * t))
+    vig = vig.filter(ImageFilter.GaussianBlur(60))
+    g = Image.composite(g, g.point(lambda v: int(v * 0.72)), vig)
+    grain = Image.effect_noise((W, H), 34).filter(ImageFilter.GaussianBlur(0.6))
+    g = Image.blend(g, grain, 0.12)
+    img = Image.merge("RGB", (g, g.point(lambda v: int(v * 0.965)), g.point(lambda v: int(v * 0.885))))
+    d2 = ImageDraw.Draw(img, "RGBA")
+    for _ in range(3):
+        x, y = rnd.randint(0, W), rnd.randint(0, H)
+        pts = [(x, y)]
+        for _ in range(10):
+            x += rnd.randint(10, 60)
+            y += rnd.randint(-14, 14)
+            pts.append((x, y))
+        d2.line(pts, fill=(240, 232, 214, 70), width=1)
+    return img
+
+
 def photo(kind):
     W, H = 1100, 800
     rnd = random.Random(5 if kind == "keepers" else 8)
+    if kind == "keepers" and RAW_KEEPERS.exists():
+        img = silver_print(Image.open(RAW_KEEPERS).convert("RGB").resize((W, H), Image.LANCZOS), 5)
+        framed = Image.new("RGB", (W + 80, H + 160), (236, 229, 212))
+        framed.paste(img, (40, 40))
+        fd = ImageDraw.Draw(framed)
+        jitter_text(fd, (60, H + 70), "Iain & Callum Mackay, North Point, May 1952", MORAG(34), PENCIL, 3)
+        return framed
     img = Image.new("RGB", (W, H), (120, 100, 75))
     d = ImageDraw.Draw(img)
     # sky / sea gradient in sepia
@@ -241,6 +282,28 @@ def photo(kind):
     return framed
 
 
+TEX = HERE / "tex"
+
+
+def logbook_spread(left, right):
+    """The open station log on the desk: a wide NLB ledger, two landscape pages side by side
+    (2048 x 716, each page 1024 x 716 = the 1500 x 1050 log page; left page = u 0..0.5).
+    Left = 13 Nov, right = 14 Nov (the readable log_1971 document). A darker gutter marks the binding."""
+    W, H = 2048, 716
+    out = Image.new("RGB", (W, H), PAPER)
+    for k, pg in enumerate((left, right)):
+        out.paste(pg.resize((W // 2, H), Image.LANCZOS), (k * W // 2, 0))
+    # aged ledger stock is darker than the reading copy: at the full cream (albedo ~0.9) the desk lamp
+    # blew the pages out to white (iA_after cu_logbook); x0.78 keeps the hot spot below clipping
+    out = out.point(lambda v: int(v * 0.78))
+    d = ImageDraw.Draw(out, "RGBA")
+    for i in range(60):   # gutter shading into the binding
+        a = int(110 * (1 - i / 60) ** 2)
+        d.line([W // 2 - i, 0, W // 2 - i, H], fill=(60, 45, 30, a))
+        d.line([W // 2 + i, 0, W // 2 + i, H], fill=(60, 45, 30, a))
+    return out
+
+
 DOCS = {}
 
 
@@ -291,7 +354,20 @@ def main():
         "deckhand Kenneth Bain, was below at the time ...")
     add("forecast", "Teleprinter, 1600 GMT", forecast(),
         "GALE WARNING ISSUED 1600 GMT 14 NOV 1971. HEBRIDES MINCHES SOUTHWESTERLY SEVERE GALE 9 INCREASING STORM 10 IMMINENT.")
-    add("photo_keepers", "Photograph on the wall", photo("keepers"), "Iain & Callum Mackay, North Point, May 1952.")
+    keepers = photo("keepers")
+    add("photo_keepers", "Photograph on the wall", keepers, "Iain & Callum Mackay, North Point, May 1952.")
+    # in-world textures (build.py TEXTURED): the framed print on the wall and the open logbook on the desk
+    TEX.mkdir(exist_ok=True)
+    keepers.save(TEX / "T_LL_Photo.png", optimize=True)
+    rows13 = [   # routine entries the day before (no story facts beyond NARRATIVE.md: same hand, same station)
+        (C, "13.11", "07.58", "W 4", "Fair", "Light extinguished. Lamp and lens cleaned."),
+        (C, "", "10.15", "W 4", "Fair", "Engine run 1 hr. Batteries 92%. Fuel day tank topped up."),
+        (C, "", "14.00", "SW 5", "Cloudy", "Barometer 1004 mb, falling."),
+        (C, "", "16.24", "SW 5", "Cloudy", "Light exhibited. Lamp normal."),
+        (C, "", "21.00", "SW 6", "Showers", "Radio check Stornoway CG. All well."),
+    ]
+    logbook_spread(log_page(1971, rows13, 70, "NOVEMBER"), log_page(1971, rows71, 71, "NOVEMBER")).save(
+        TEX / "T_LL_Logbook.png", optimize=True)
     add("photo_1953", "Photograph slid under the door", photo("crew"),
         "Eight men on a deck at Leverburgh pier. On the back, in pencil: \"Mary Ellen, July 1953. A. Ross, master.\"")
     (OUT / "docs.json").write_text(json.dumps(DOCS, indent=1))

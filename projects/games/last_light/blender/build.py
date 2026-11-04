@@ -79,7 +79,8 @@ MATS = {
     "M_LL_Collision": ("#FF00FF", 1.0, 0.0, {}),
 }
 TEXTURED = {"M_LL_Atlas": "T_LL_Atlas.png", "M_LL_Chart": "T_LL_Chart.png", "M_LL_Rose": "T_LL_Rose.png",
-            "M_LL_Rug": "T_LL_Rug.png"}
+            "M_LL_Rug": "T_LL_Rug.png",
+            "M_LL_Photo": "T_LL_Photo.png", "M_LL_Logbook": "T_LL_Logbook.png"}   # documents.py (Iteration A)
 
 
 def textured_material(name, image_path):
@@ -147,9 +148,24 @@ def m4(loc, b3=None):
     return m
 
 
-def box(bm, loc, size, b3=None):
+BEVEL = {"on": True, "max": 0.006}    # Stage 1 iteration 2: small chamfers so edges catch the light
+
+
+def box(bm, loc, size, b3=None, bevel=None):
+    """Box; every box thicker than 12 mm gets a small chamfer (min(6 mm, 20 % of its thinnest side)).
+    bevel=0 disables it (colliders); a number forces that width."""
     mat = m4(Vector(loc), b3) @ Matrix.Diagonal((*size, 1.0))
-    return bmesh.ops.create_cube(bm, size=1.0, matrix=mat)["verts"]
+    verts = bmesh.ops.create_cube(bm, size=1.0, matrix=mat)["verts"]
+    thin = min(abs(v) for v in size)
+    w = bevel if bevel is not None else (min(BEVEL["max"], 0.2 * thin) if BEVEL["on"] and thin >= 0.012 else 0.0)
+    if w <= 0.0:
+        return verts
+    faces = list({f for v in verts for f in v.link_faces})
+    edges = list({e for v in verts for e in v.link_edges})
+    out = bmesh.ops.bevel(bm, geom=edges, offset=w, offset_type="OFFSET", segments=1, profile=0.5,
+                          affect="EDGES", clamp_overlap=True)
+    keep = [f for f in faces if f.is_valid] + list(out.get("faces", []))
+    return list({v for f in keep for v in f.verts})
 
 
 def cyl(bm, loc, r1, r2, depth, segs, b3=None, caps=True):
@@ -286,7 +302,7 @@ class Builder:
             self.mesh_obj(f"{prefix}_{mat.replace('M_LL_', '')}", bm, mat, keep_uv=mat in TEXTURED)
         self.buckets = {}
 
-    def mesh_obj(self, name, bm, mat, matrix=None, keep_uv=False):
+    def mesh_obj(self, name, bm, mat, matrix=None, keep_uv=False, extra_mats=()):
         bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
         if not keep_uv and mat not in ("M_LL_Glass",):
             bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
@@ -296,18 +312,28 @@ class Builder:
         bm.normal_update()
         bm.to_mesh(me)
         bm.free()
-        me.materials.append(material(mat))
+        # Stage 1 iteration 2: smooth shading split at 35 degrees, so cylinders, the round wall and tori
+        # shade smoothly while box edges stay crisp (the glTF exporter writes the split normals).
+        if not name.startswith("COL_"):
+            for poly in me.polygons:
+                poly.use_smooth = True
+            if hasattr(me, "set_sharp_from_angle"):
+                me.set_sharp_from_angle(angle=math.radians(35.0))
+        for mname in (mat, *extra_mats):
+            me.materials.append(material(mname))
         obj = bpy.data.objects.new(name, me)
         self.coll.objects.link(obj)
         if matrix is not None:
             obj.matrix_world = matrix
         return obj
 
-    def part(self, name, mat, loc, b3, build_fn, keep_uv=False):
+    def part(self, name, mat, loc, b3, build_fn, keep_uv=False, extra_mats=()):
+        """Articulated part. build_fn may tag faces with material_index 1.. for extra_mats (e.g. a white
+        index line on a knob) so the detail rotates with the part without a child node."""
         bm = bmesh.new()
         uvl = bm.loops.layers.uv.new("UVMap")
         build_fn(bm, uvl)
-        return self.mesh_obj(name, bm, mat, matrix=m4(Vector(loc), b3), keep_uv=keep_uv)
+        return self.mesh_obj(name, bm, mat, matrix=m4(Vector(loc), b3), keep_uv=keep_uv, extra_mats=extra_mats)
 
     def empty(self, name, loc, half_size=(0.1, 0.1, 0.1), b3=None, kind="CUBE"):
         e = bpy.data.objects.new(name, None)
@@ -319,7 +345,7 @@ class Builder:
     def collider(self, name, loc, size, b3=None):
         bm = bmesh.new()
         bm.loops.layers.uv.new("UVMap")
-        box(bm, (0, 0, 0), size)
+        box(bm, (0, 0, 0), size, bevel=0.0)
         obj = self.mesh_obj(f"COL_{name}-convcolonly", bm, "M_LL_Collision")
         obj.matrix_world = m4(Vector(loc), b3)
         obj.data.transform(obj.matrix_basis)
@@ -337,10 +363,69 @@ def knob_fn(radius, height):
     return f
 
 
+def lathe(bm, center, b3, profile, segs=32):
+    """Closed solid of revolution about the frame's local Z. profile = closed loop of (radius, z) points.
+    Used for gauge bezels and flanges: a RING, so nothing covers the dial face (Iteration A)."""
+    rings = []
+    for rr, zz in profile:
+        rings.append([bm.verts.new(Vector(center) + b3 @ Vector((rr * math.cos(2 * math.pi * i / segs),
+                                                                   rr * math.sin(2 * math.pi * i / segs), zz)))
+                      for i in range(segs)])
+    n = len(rings)
+    out = []
+    for k in range(n):
+        a, b2 = rings[k], rings[(k + 1) % n]
+        for i in range(segs):
+            j = (i + 1) % segs
+            out.append(bm.faces.new((a[i], a[j], b2[j], b2[i])))
+    return out
+
+
+def prism(bm, pts, z0, z1):
+    """Convex flat polygon (local XY) extruded from z0 to z1. Returns its verts."""
+    lo = [bm.verts.new((x, y, z0)) for x, y in pts]
+    hi = [bm.verts.new((x, y, z1)) for x, y in pts]
+    bm.faces.new(list(reversed(lo)))
+    bm.faces.new(hi)
+    for i in range(len(pts)):
+        j = (i + 1) % len(pts)
+        bm.faces.new((lo[i], lo[j], hi[j], hi[i]))
+    return lo + hi
+
+
+def tag(verts, index):
+    for v in verts:
+        for f in v.link_faces:
+            f.material_index = index
+
+
 def needle_fn(length, width=0.006):
+    """Tapered pointer with a counterweight tail and a raised hub. Local Z layers (part sits 4 mm above
+    the dial face): blade 5-8 mm, hub 3-11 mm, so needle + hub stay below the gauge glass (Iteration A)."""
     def f(bm, uv):
-        box(bm, (0, length * 0.38, 0.004), (width, length, 0.004))
-        cyl(bm, (0, 0, 0.006), width * 2.2, width * 2.2, 0.012, 12)
+        w = width
+        prism(bm, [(-w * 0.55, -0.22 * length), (w * 0.55, -0.22 * length), (w * 0.3, 0.86 * length),
+                   (0.0, length), (-w * 0.3, 0.86 * length)], 0.005, 0.008)
+        cyl(bm, (0, -0.21 * length, 0.0065), w * 0.85, w * 0.85, 0.003, 12)     # rounded counterweight tail
+        cyl(bm, (0, 0, 0.007), w * 2.0, w * 1.6, 0.008, 16)                     # hub / pivot boss
+    return f
+
+
+def selector_fn(radius):
+    """Rotary selector (bar knob): fluted skirt, body, tapered pointer bar with a WHITE index inlay
+    (material index 1) so the active position reads from the first-person view."""
+    def f(bm, uv):
+        cyl(bm, (0, 0, 0.006), radius * 1.3, radius * 1.25, 0.012, 24)            # skirt on the plate
+        for k in range(24):                                                        # flutes
+            a = 2 * math.pi * k / 24
+            box(bm, (radius * 1.27 * math.cos(a), radius * 1.27 * math.sin(a), 0.006), (0.004, 0.006, 0.011),
+                basis_z(Vector((0, 0, 1)), Vector((math.cos(a), math.sin(a), 0))))
+        cyl(bm, (0, 0, 0.022), radius * 0.78, radius * 0.7, 0.022, 20)            # body
+        L = radius * 1.3                                                           # tip stops at the index tick
+        prism(bm, [(-radius * 0.3, -L * 0.5), (radius * 0.3, -L * 0.5), (radius * 0.2, L * 0.92),
+                   (0.0, L), (-radius * 0.2, L * 0.92)], 0.012, 0.046)               # pointer bar
+        tag(prism(bm, [(-0.0035, 0.0), (0.0035, 0.0), (0.0035, L * 0.88), (0.0, L * 0.95), (-0.0035, L * 0.88)],
+                  0.04, 0.0475), 1)                                                  # index line, 1.5 mm proud
     return f
 
 
@@ -352,16 +437,29 @@ def toggle_fn(length=0.08):
     return f
 
 
-def gauge(B, name, center, b3, radius, cell):
+def gauge(B, name, center, b3, radius, cell, needle_mat="M_LL_Bakelite"):
+    """Panel instrument, layered along the face normal with no two surfaces in one plane (Iteration A):
+         case   (dark iron cup)            -30 .. -4 mm   (behind the face)
+         dial   (atlas disc)                 +3 mm
+         needle (NDL_ part at +4 mm)        +7 .. +15 mm  (blade + hub)
+         glass  (disc inside the bezel)    +18.5 .. +21.5 mm
+         bezel  (brass RING, inner 0.985 r) -6 .. +24 mm
+    Before: the bezel was a solid brass cylinder whose top cap sat exactly at the dial plane (+3 mm), so the
+    two z-fought ("jagged brass shapes through the face", IMG_3117 / IMG_3121), and the hub top touched the
+    glass. One shared function, so the fix covers all eight dials."""
     z = b3.col[2]
-    cyl(B.bm("M_LL_Brass"), Vector(center) - z * 0.012, radius * 1.13, radius * 1.08, 0.03, 32, b3)
-    for k in range(4):   # bezel screws
+    c = Vector(center)
+    r = radius
+    cyl(B.bm("M_LL_Iron"), c - z * 0.017, r * 1.06, r * 1.06, 0.026, 32, b3)
+    lathe(B.bm("M_LL_Brass"), c, b3, [(r * 0.985, -0.006), (r * 1.15, -0.006), (r * 1.15, 0.004),
+                                       (r * 1.11, 0.018), (r * 1.05, 0.024), (r * 0.985, 0.024)], 40)
+    for k in range(4):   # bezel screws, on the bezel flange
         a = math.pi / 4 + k * math.pi / 2
-        sphere(B.bm("M_LL_Iron"), Vector(center) + b3 @ Vector((radius * 1.22 * math.cos(a), radius * 1.22 * math.sin(a), -0.004)), 0.006, 6, 4)
+        sphere(B.bm("M_LL_Iron"), c + b3 @ Vector((r * 1.12 * math.cos(a), r * 1.12 * math.sin(a), 0.009)), max(0.003, r * 0.035), 8, 5)
     atlas = B.bm("M_LL_Atlas")
-    disc_uv(atlas, B.uv(atlas), Vector(center) + z * 0.003, b3, radius, 40, cell)
-    B.part(f"NDL_{name}", "M_LL_Bakelite", Vector(center) + z * 0.004, b3, needle_fn(radius * 0.85))
-    cyl(B.bm("M_LL_Glass", "SM_GaugeGlass"), Vector(center) + z * 0.018, radius * 1.02, radius * 1.02, 0.004, 32, b3)
+    disc_uv(atlas, B.uv(atlas), c + z * 0.003, b3, r, 48, cell)
+    B.part(f"NDL_{name}", needle_mat, c + z * 0.004, b3, needle_fn(r * 0.86, max(0.004, r * 0.065)))
+    cyl(B.bm("M_LL_Glass", "SM_GaugeGlass"), c + z * 0.02, r * 0.99, r * 0.99, 0.003, 40, b3)
 
 
 def lamp(B, name, center, b3, color, r=0.018):
@@ -426,9 +524,18 @@ def build_shell(B):
             ring_seg(conc, b0, b1, R_IN, R_OUT, W["top"], H)
             ring_seg(B.bm("M_LL_WoodDark"), b0, b1, R_IN - 0.035, R_IN, 0.05, W["sill"] - 0.04)          # wainscot
             ring_seg(B.bm("M_LL_Wood"), b0, b1, R_IN - 0.14, R_IN + 0.12, W["sill"] - 0.04, W["sill"])     # sill board
+            # raised panelling: top and bottom rails proud of the recessed wainscot (stiles below)
+            ring_seg(B.bm("M_LL_Wood", "SM_Wainscot"), b0, b1, R_IN - 0.055, R_IN - 0.035, 0.74, 0.86)
+            ring_seg(B.bm("M_LL_Wood", "SM_Wainscot"), b0, b1, R_IN - 0.055, R_IN - 0.035, 0.05, 0.17)
         else:
             ring_seg(conc, b0, b1, R_IN, R_OUT, 0, H)
-            ring_seg(B.bm("M_LL_SteelRust", "SM_RoomBand"), b0, b1, R_IN - 0.012, R_IN, 0.0, 0.14)     # skirting
+            ring_seg(B.bm("M_LL_Iron", "SM_RoomBand"), b0, b1, R_IN - 0.014, R_IN, 0.0, 0.14)          # dark skirting
+            # oak dado rail at the paint line (room_pbr dado_h = 1.05): a stepped half-round
+            ring_seg(B.bm("M_LL_Wood", "SM_DadoRail"), b0, b1, R_IN - 0.022, R_IN, 1.03, 1.07)
+            ring_seg(B.bm("M_LL_Wood", "SM_DadoRail"), b0, b1, R_IN - 0.012, R_IN, 1.022, 1.078)
+        # stepped crown moulding where the wall meets the ceiling (all the way round)
+        ring_seg(B.bm("M_LL_Concrete", "SM_Cornice"), b0, b1, R_IN - 0.06, R_IN, H - 0.06, H)
+        ring_seg(B.bm("M_LL_Concrete", "SM_Cornice"), b0, b1, R_IN - 0.03, R_IN, H - 0.11, H - 0.06)
     for i in range(32):
         b = -180 + 360 * (i + 0.5) / 32
         r, o, u = wall_frame(b)
@@ -462,6 +569,17 @@ def build_shell(B):
         box(gb, at(0, zc, -0.01), (chord - 0.02, 0.012, hh - 0.02), bs)
         B.mesh_obj(f"GLS_window_{int(c) % 360:03d}", gb, "M_LL_Glass")
         box(steel, at(0, z1 + 0.04, 0.12), (chord + 0.1, 0.4, 0.08), bs)
+        # wainscot stiles under this bay: 5 stiles -> 4 raised panels
+        for k in range(5):
+            sb_ = c + (k - 2) * (R["bay_half_deg"] * 2 / 4) * 0.94
+            box(B.bm("M_LL_Wood", "SM_Wainscot"), dp(sb_, 0, (0.17 + 0.74) / 2, R_IN - 0.045), (0.07, 0.02, 0.57), wb(sb_))
+        # brass casement fittings: a lever handle on the centre mullion and a stay on the bottom rail
+        brass = B.bm("M_LL_Brass", "SM_WinBrass")
+        hp = at(0.0, z0 + hh * 0.42, 0.075)
+        cyl(brass, hp, 0.018, 0.018, 0.018, 12, fb3)
+        box(brass, hp - o * 0.012 + r * 0.045, (0.09, 0.016, 0.012), bs)
+        box(brass, at(-chord / 4, z0 + fr + 0.018, 0.07), (chord * 0.32, 0.014, 0.012), bs)
+        cyl(brass, at(-chord / 4 - chord * 0.16, z0 + fr + 0.018, 0.07), 0.012, 0.012, 0.02, 10, fb3)
     # floor tiles inside the circle, with a hole for the stair well
     floor = B.bm("M_LL_Floor")
     cell = 0.25
@@ -476,7 +594,7 @@ def build_shell(B):
             v = Vector((cx, cy, 0))
             if abs(v.dot(sr)) < 0.55 and 2.3 < v.dot(so) < 3.3:
                 continue
-            box(floor, (cx, cy, F - 0.1), (cell, cell, 0.2))
+            box(floor, (cx, cy, F - 0.1), (cell, cell, 0.2), bevel=0.0)   # one seamless slab: no 25 cm tile grooves
     B.collider("floor", (0, 0, F - 0.25), (8, 8, 0.5))
     rose = B.bm("M_LL_Rose")
     disc_uv(rose, B.uv(rose), (0, 0, F + 0.002), Matrix.Identity(3), 0.62, 48, None)
@@ -484,7 +602,7 @@ def build_shell(B):
     # ceiling + steel I-beams (R2/R3)
     cyl(B.bm("M_LL_Concrete", "SM_RoomCeiling"), (0, 0, CEIL + 0.1), R_OUT, R_OUT, 0.2, 64)
     B.collider("ceiling", (0, 0, CEIL + 0.25), (8, 8, 0.5))
-    rust = B.bm("M_LL_SteelRust", "SM_CeilBeams")   # own bucket: the plan/iso cutaway hides it alone
+    rust = B.bm("M_LL_SteelPaint", "SM_CeilBeams")  # grey-green riveted steel; own bucket for the cutaway
     for i in range(8):
         a = math.radians(i * 45 + 22.5)
         d = Vector((math.sin(a), math.cos(a), 0))
@@ -495,7 +613,12 @@ def build_shell(B):
         ibeam(rust, c, L, b3)
         rivets(B, c - d * (L / 2 - 0.1) + side * 0.012 + Vector((0, 0, -0.05)),
                c + d * (L / 2 - 0.1) + side * 0.012 + Vector((0, 0, -0.05)), 10, basis(d, Vector((0, 0, 1)), side))
-    torus(rust, (0, 0, CEIL - 0.12), 0.45, 0.13, 24, 6)
+    # riveted boss plate where the eight beams meet (was a plain torus)
+    cyl(rust, (0, 0, CEIL - 0.03), 0.52, 0.52, 0.05, 40)
+    cyl(rust, (0, 0, CEIL - 0.11), 0.4, 0.44, 0.12, 40)
+    for k in range(16):
+        a = 2 * math.pi * k / 16
+        sphere(B.bm("M_LL_Iron", "SM_CeilBeams"), (0.47 * math.cos(a), 0.47 * math.sin(a), CEIL - 0.058), 0.01, 8, 5)
     for z, rr in ((2.78, 0.035), (2.92, 0.025)):
         torus(B.bm("M_LL_Iron", "SM_RoomPipes"), (0, 0, F + z), R_IN - 0.08, rr, 96, 8)
     for b in range(-180, 180, 20):
@@ -586,12 +709,13 @@ def build_desk(B):
     # chart, open logbook, compass, binoculars, books, mug, pencil cup
     top_b3 = basis(r, o, u)
     quad_uv(B.bm("M_LL_Chart"), B.uv(B.bm("M_LL_Chart")), dp(b, 0.1, top + 0.002, c - 0.12), top_b3, 0.8, 0.6, (0, 0, 1, 1))
-    lb3 = basis_z(u, r * math.cos(0.2) + o * math.sin(0.2))
-    lbc = dp(b, -0.58, top + 0.015, c - 0.16)
-    for s in (-1, 1):
-        box(B.bm("M_LL_Paper"), lbc + lb3.col[0] * (s * 0.115), (0.22, 0.3, 0.012), lb3)
-    box(B.bm("M_LL_Leather"), lbc - u * 0.008, (0.48, 0.32, 0.01), lb3)
-    B.empty("IA_logbook", lbc + u * 0.04, (0.25, 0.17, 0.06), lb3)
+    # Station log (IMG_3119): open NLB ledger with the real 13/14 Nov entries (documents.py -> T_LL_Logbook).
+    # Before: two blank paper boxes, and basis_z(u, ~r) turned the book 90 degrees (spine across the reader).
+    lr = (r * math.cos(0.12) + o * math.sin(0.12)).normalized()
+    lb3 = basis(lr, u.cross(lr), u)
+    lbc = dp(b, -0.6, top, c - 0.16)
+    logbook(B, lbc, lb3)
+    B.empty("IA_logbook", lbc + u * 0.05, (0.3, 0.12, 0.06), lb3)
     B.empty("IA_chart", dp(b, 0.1, top + 0.05, c - 0.12), (0.42, 0.32, 0.06), top_b3)
     cc = dp(b, 0.45, top + 0.02, c - 0.2)
     cyl(B.bm("M_LL_Brass"), cc, 0.07, 0.07, 0.04, 24)
@@ -809,7 +933,11 @@ def build_stair(B):
     db3 = basis(r, u.cross(r), u)          # X = across the opening, Z = up (hinge axis)
 
     def door(bm, uv):
-        box(bm, (0.53, 0, 1.03), (1.06, 0.06, 2.04))
+        # 20 mm gap under the door: the stair light shows beneath it, and in ch4 a photograph slides through
+        box(bm, (0.53, 0, 1.04), (1.06, 0.06, 2.04))
+        for z in (0.45, 1.65):                                         # lever dogs on the latch side
+            box(bm, (0.99, -0.05, z), (0.035, 0.035, 0.13))
+            cyl(bm, (0.99, -0.04, z + 0.05), 0.014, 0.014, 0.03, 10, basis_z(Vector((0, 1, 0))))
         for z in (0.35, 1.0, 1.7):
             box(bm, (0.53, -0.035, z), (1.0, 0.012, 0.06))            # stiffeners
         cyl(bm, (0.85, -0.07, 1.05), 0.09, 0.09, 0.02, 18, basis_z(Vector((0, 1, 0))))
@@ -838,6 +966,9 @@ def build_stair(B):
     B.mesh_obj("LMP_stair", bm, "M_LL_Lamp")
     B.empty("LIGHT_stair", dp(b, 0, h - 0.2, (front + back) / 2), (0.05, 0.05, 0.05), kind="SPHERE")
     B.empty("SPAWN_player", dp(b, 0.0, 0.0, 1.45), (0.2, 0.2, 0.2), kind="ARROWS")
+    # story anchors (REFERENCE_SPEC Stage 1 review): the slid photograph lands here; knocks and voice come from here
+    B.empty("ANCHOR_door_photo", dp(b, 0.1, 0.004, front - 0.32), (0.12, 0.09, 0.01), bs)
+    B.empty("ANCHOR_door_audio", dp(b, 0.0, 1.6, front + 0.05), (0.05, 0.05, 0.05), bs, kind="SPHERE")
 
 
 # ------------------------------------------------------------------ storage, extinguisher, notice, clock
@@ -881,7 +1012,7 @@ def build_storage(B):
     cyl(B.bm("M_LL_WoodDark"), cc + cb3.col[2] * 0.02, 0.2, 0.2, 0.04, 32, cb3)
     disc_uv(B.bm("M_LL_Atlas"), B.uv(B.bm("M_LL_Atlas")), cc + cb3.col[2] * 0.042, cb3, 0.18, 40, CELLS["clock"])
     B.part("NDL_clock_h", "M_LL_Iron", cc + cb3.col[2] * 0.045, cb3, needle_fn(0.1, 0.01))
-    B.part("NDL_clock_m", "M_LL_Iron", cc + cb3.col[2] * 0.05, cb3, needle_fn(0.15, 0.007))
+    B.part("NDL_clock_m", "M_LL_Iron", cc + cb3.col[2] * 0.054, cb3, needle_fn(0.15, 0.007))   # blade clears the hour hand
 
 
 # ------------------------------------------------------------------ light console + optic drive (R1/R2: east)
@@ -906,14 +1037,23 @@ def build_console(B):
         th = r * 0.02
         hexa(steel, [p - th for p in pts] + [p + th for p in pts])
     hood_d = d - slope_len
-    box(steel, dp(b, 0, 1.2, back - hood_d / 2), (w, hood_d, 0.4), bs)
     hb3, hc = face_frame(b, 0, 1.2, back - hood_d - 0.002, 15)
+    # Instrument hood with its front face IN the 15-degree instrument plane. Before (Iteration A): a box with a
+    # vertical front, so the upper half of every tilted dial sat inside it (IMG_3117: dials cut horizontally).
+    tilt_c = math.cos(math.radians(15))
+
+    def hood_pt(x, zz, at_wall=False):
+        p = hc + r * x + hb3.col[1] * ((zz - 1.2) / tilt_c) - hb3.col[2] * 0.025
+        return p + o * (back - p.dot(o)) if at_wall else p
+    corners = [(x, at) for x, at in ((-w / 2, False), (-w / 2, True), (w / 2, True), (w / 2, False))]
+    hexa(steel, [hood_pt(x, 0.975, at) for x, at in corners] + [hood_pt(x, 1.4, at) for x, at in corners])
 
     def on_hood(x, y):
         return hc + hb3.col[0] * x + hb3.col[1] * y
     box(steel, hc - hb3.col[2] * 0.015, (w - 0.02, 0.42, 0.03), hb3)
-    gauge(B, "bearing", on_hood(0.32, 0.0), hb3, 0.17, CELLS["bearing"])
-    cyl(B.bm("M_LL_Brass"), on_hood(0.32, 0.0) - hb3.col[2] * 0.005, 0.215, 0.215, 0.03, 40, hb3)
+    gauge(B, "bearing", on_hood(0.32, 0.0), hb3, 0.17, CELLS["bearing"], needle_mat="M_LL_Ceramic")
+    # brass mounting flange: a RING behind the bezel (it was a solid 0.215 m disc 7 mm IN FRONT of the dial)
+    lathe(B.bm("M_LL_Brass"), on_hood(0.32, 0.0), hb3, [(0.19, -0.004), (0.222, -0.004), (0.222, 0.004), (0.19, 0.006)], 48)
     gauge(B, "motor", on_hood(-0.05, 0.03), hb3, 0.09, CELLS["motor"])
     lamp(B, "motor_fault", on_hood(-0.05, -0.13), hb3, "amber")
     lamp(B, "console_power", on_hood(-0.35, -0.13), hb3, "green")
@@ -929,7 +1069,8 @@ def build_console(B):
     for key, x in (("mode", 0.2), ("intensity", 0.5)):
         cpos = on_top(x, 0.0)
         disc_uv(B.bm("M_LL_Atlas"), B.uv(B.bm("M_LL_Atlas")), cpos + top_b3.col[2] * 0.002, top_b3, 0.1, 40, CELLS[f"{key}_plate"])
-        B.part(f"PT_{key}", "M_LL_Bakelite", cpos + top_b3.col[2] * 0.003, top_b3, knob_fn(0.038, 0.045))
+        B.part(f"PT_{key}", "M_LL_Bakelite", cpos + top_b3.col[2] * 0.003, top_b3, selector_fn(0.038),
+               extra_mats=("M_LL_Ceramic",))
         B.empty(f"IA_{key}", cpos + top_b3.col[2] * 0.03, (0.07, 0.07, 0.05), top_b3)
     for k in range(4):
         sphere(B.bm("M_LL_Iron"), on_top(-0.75 + k * 0.5, 0.14), 0.007, 6, 4)
@@ -1026,31 +1167,125 @@ def build_archive(B):
     B.empty("IA_archive", dp(b, 0, 1.0, c - d / 2 - 0.06), (0.32, 0.08, 0.6), bs)
     # keepers' photograph above the battery rack
     pb3, pc = face_frame(-105.0, 0.0, 1.85, back_dist(0.5, 0.0))
-    box(B.bm("M_LL_WoodDark"), pc + pb3.col[2] * 0.012, (0.44, 0.34, 0.024), pb3)
-    box(B.bm("M_LL_Paper", "SM_RoomPhoto"), pc + pb3.col[2] * 0.026, (0.38, 0.28, 0.002), pb3)
+    photo_frame(B, pc, pb3)
     B.empty("IA_photo", pc + pb3.col[2] * 0.05, (0.22, 0.18, 0.05), pb3)
 
 
+def photo_frame(B, pc, pb3, pw=0.33):
+    """Framed print (IMG_3122). Before: a blank M_LL_Paper box. Now: the story photograph (documents.py ->
+    T_LL_Photo: Iain & Callum Mackay, May 1952) on a backing board, a mitred oak moulding that slopes up to
+    a raised inner lip, and a glass pane (shadowless, see station.gd)."""
+    ph = pw * 960 / 1180                     # texture aspect
+    A, Bh = pw / 2 + 0.034, ph / 2 + 0.034   # moulding outer half-size
+    a, bh = pw / 2 - 0.004, ph / 2 - 0.004   # inner edge laps 4 mm over the print
+    wood = B.bm("M_LL_WoodDark", "SM_RoomPhoto")
+    P = lambda x, y, z: pc + pb3 @ Vector((x, y, z))
+    for (ox0, oy0, ox1, oy1, ix0, iy0, ix1, iy1) in ((-A, -Bh, A, -Bh, -a, -bh, a, -bh), (A, -Bh, A, Bh, a, -bh, a, bh),
+                                                  (A, Bh, -A, Bh, a, bh, -a, bh), (-A, Bh, -A, -Bh, -a, bh, -a, -bh)):
+        hexa(wood, [P(ox0, oy0, 0), P(ox1, oy1, 0), P(ix1, iy1, 0.004), P(ix0, iy0, 0.004),
+                    P(ox0, oy0, 0.018), P(ox1, oy1, 0.018), P(ix1, iy1, 0.027), P(ix0, iy0, 0.027)])
+    box(wood, pc + pb3.col[2] * 0.004, (2 * A - 0.01, 2 * Bh - 0.01, 0.006), pb3)            # backing board
+    photo = B.bm("M_LL_Photo")
+    quad_uv(photo, B.uv(photo), pc + pb3.col[2] * 0.0085, pb3, pw, ph, (0, 0, 1, 1))
+    box(B.bm("M_LL_Glass", "SM_PhotoGlass"), pc + pb3.col[2] * 0.0165, (pw + 0.02, ph + 0.02, 0.0015), pb3)
+
+
+def logbook(B, c, b3, pw=0.28, pd=0.196):
+    """Open ledger: leather boards and spine, two curved page blocks (rising from the gutter, flattening
+    toward the fore-edge) whose top sheet carries the log texture; a red ribbon marker."""
+    P = lambda x, y, z: c + b3 @ Vector((x, y, z))
+    lea = B.bm("M_LL_Leather", "SM_RoomLog")
+    for s in (-1, 1):
+        box(lea, P(s * (pw / 2 + 0.006), 0, 0.0025), (pw + 0.012, pd + 0.014, 0.004), b3)
+    cyl(lea, P(0, 0, 0.004), 0.011, 0.011, pd + 0.014, 12, b3 @ basis_z(Vector((0, 1, 0))))
+    paper = B.bm("M_LL_Paper", "SM_RoomLog")
+    tex = B.bm("M_LL_Logbook")
+    uvl = B.uv(tex)
+    N = 12
+
+    def zt(t):
+        return 0.006 + 0.012 * math.sin(min(1.0, t * 1.25) * math.pi / 2) - 0.002 * t
+    for s in (-1, 1):
+        for i in range(N):
+            t0, t1 = i / N, (i + 1) / N
+            x0, x1 = s * pw * t0, s * pw * t1
+            h0, h1 = zt(t0), zt(t1)
+            hexa(paper, [P(x0, -pd / 2, 0.004), P(x1, -pd / 2, 0.004), P(x1, pd / 2, 0.004), P(x0, pd / 2, 0.004),
+                         P(x0, -pd / 2, h0 - 0.0008), P(x1, -pd / 2, h1 - 0.0008), P(x1, pd / 2, h1 - 0.0008), P(x0, pd / 2, h0 - 0.0008)])
+            (xa, ha, ua), (xb, hb, ub) = sorted(((x0, h0, 0.5 + s * 0.5 * t0), (x1, h1, 0.5 + s * 0.5 * t1)))
+            vs = [tex.verts.new(P(xa, -pd / 2, ha)), tex.verts.new(P(xb, -pd / 2, hb)),
+                  tex.verts.new(P(xb, pd / 2, hb)), tex.verts.new(P(xa, pd / 2, ha))]
+            f = tex.faces.new(vs)          # CCW seen from +Z (textured buckets keep their winding)
+            for loop, uvv in zip(f.loops, ((ua, 0.0), (ub, 0.0), (ub, 1.0), (ua, 1.0))):
+                loop[uvl].uv = uvv
+    box(B.bm("M_LL_Red", "SM_RoomLog"), P(0.012, -pd / 2 - 0.02, 0.0045), (0.007, 0.05, 0.0008), b3)   # ribbon
+
+
 def build_wall_lamps(B):
+    """Cast well-glass bulkhead fittings (Stage 1 iteration 2): cast backplate and neck, a glass globe,
+    and a brass guard (two meridian rings + an equator ring). The light sits at the bulb in the globe;
+    SM_WallLamps casts no shadows (station.gd), so the guard throws no stripes."""
     for i, b in enumerate(R["wall_lamps"]):
         z = 2.15 if abs(b) < 120 else 2.25
         r, o, u = wall_frame(b)
         base = dp(b, 0, z, R_IN - 0.02)
         fb3 = basis(r, u, -o)
-        cyl(B.bm("M_LL_Brass", "SM_WallLamps"), base - o * 0.02, 0.09, 0.09, 0.04, 20, fb3)
-        g = base - o * 0.11
-        cyl(B.bm("M_LL_Glass", "SM_WallLampGlass"), g, 0.07, 0.07, 0.16, 16, fb3)
-        for k in range(6):
-            a = 2 * math.pi * k / 6
-            box(B.bm("M_LL_Brass", "SM_WallLamps"), g + fb3 @ Vector((0.078 * math.cos(a), 0.078 * math.sin(a), 0)), (0.01, 0.01, 0.17), fb3)
-        torus(B.bm("M_LL_Brass", "SM_WallLamps"), g + fb3.col[2] * 0.08, 0.078, 0.008, 16, 6, fb3)
+        brass = B.bm("M_LL_Brass", "SM_WallLamps")
+        cyl(brass, base - o * 0.015, 0.085, 0.08, 0.03, 24, fb3)                          # cast backplate
+        cyl(B.bm("M_LL_Iron", "SM_WallLamps"), base - o * 0.05, 0.035, 0.03, 0.05, 16, fb3)  # neck
+        g = base - o * 0.135
+        sphere(B.bm("M_LL_Glass", "SM_WallLampGlass"), g, 0.072, 18, 12)
+        torus(brass, g, 0.079, 0.0045, 28, 5, basis_z(r))                                 # meridian
+        torus(brass, g, 0.079, 0.0045, 28, 5, basis_z(u))                                 # equator
+        torus(brass, g, 0.079, 0.0045, 28, 5, basis_z(o))                                 # front ring
+        cyl(brass, g - o * 0.075, 0.02, 0.02, 0.012, 12, fb3)                             # guard boss
         bm = bmesh.new()
         bm.loops.layers.uv.new("UVMap")
-        sphere(bm, g, 0.04)
+        sphere(bm, g, 0.032)
         B.mesh_obj(f"LMP_wall_{i}", bm, "M_LL_Lamp")
-        # the light sits at the bulb INSIDE the glass: 0.1 m in front of it, the six cage bars threw
-        # 1.2 m radial "fan" shadows across the wall (Stage 0 cu_lamp capture)
         B.empty(f"LIGHT_wall_{i}", g, (0.05, 0.05, 0.05), kind="SPHERE")
+
+
+def conduit(B, b0, b1, z, dist=None, r=0.013, step=4.0):
+    """Surface steel conduit along the wall from bearing b0 to b1 at height z, with saddle clips."""
+    dist = dist if dist is not None else R_IN - 0.045
+    bm = B.bm("M_LL_Iron", "SM_RoomConduit")
+    n = max(1, int(abs(b1 - b0) / step))
+    pts = [dp(b0 + (b1 - b0) * k / n, 0, z, dist) for k in range(n + 1)]
+    for p0, p1 in zip(pts, pts[1:]):
+        seg_cyl(bm, p0, p1, r, 8)
+    for k in range(0, n + 1, 3):
+        bb = b0 + (b1 - b0) * k / n
+        box(bm, dp(bb, 0, z, dist + 0.012), (0.035, 0.02, 0.04), wb(bb))
+
+
+def build_conduits(B):
+    """The power chain made visible (REFERENCE_SPEC Stage 1 review): generator -> charger -> batteries ->
+    distribution -> the room / lamp / radar circuits (the ring mains at 2.78 m)."""
+    gen, chg, bat, dist = R["generator"], R["charger"], R["batteries"], R["distribution"]
+    d = R_IN - 0.045
+    conduit(B, gen, chg, 2.35)                                  # generator output to the charger
+    drop(B, gen, 0.25, 2.35, 1.72, d, 0.013)
+    drop(B, chg, -0.18, 2.35, 1.82, d, 0.013)
+    conduit(B, chg, bat, 2.45)                                  # charger to the battery bank
+    drop(B, chg, 0.0, 2.45, 1.82, d, 0.013)
+    drop(B, bat, -0.3, 2.45, 0.95, d, 0.013)
+    conduit(B, bat, dist, 2.55)                                 # battery bank to the distribution board
+    drop(B, bat, 0.3, 2.55, 0.95, d, 0.013)
+    drop(B, dist, 0.2, 2.55, 1.85, d, 0.013)
+    drop(B, dist, -0.2, 2.78, 1.85, d, 0.016)                   # distribution up to the ring mains
+
+
+def build_anchors(B):
+    """Story anchors (non-interactive empties; Godot ignores them): positions reserved now so later
+    story stages never force an architectural rebuild."""
+    B.empty("ANCHOR_calendar", dp(-18.0, 0, 1.55, R_IN - 0.02), (0.15, 0.2, 0.01), wb(-18.0))
+    B.empty("ANCHOR_diagram", dp(-67.0, 0, 2.0, R_IN - 0.02), (0.3, 0.2, 0.01), wb(-67.0))
+    B.empty("ANCHOR_telephone", dp(R["desk"], 0.95, 0.8, 2.75), (0.12, 0.1, 0.08), wb(R["desk"]))
+    B.empty("ANCHOR_tide_tables", dp(R["storage"], -0.2, 1.05, R_IN - 0.3), (0.15, 0.1, 0.12), wb(R["storage"]))
+    B.empty("ANCHOR_logbook_shelf", dp(R["storage"], 0.3, 1.45, R_IN - 0.3), (0.25, 0.12, 0.12), wb(R["storage"]))
+    B.empty("ANCHOR_oilskins", dp(166.0, 0, 1.7, R_IN - 0.05), (0.2, 0.4, 0.1), wb(166.0))
+    B.empty("ANCHOR_gear_046", dp(R["optic_drive"], 0, 1.2, 2.78 - 0.3), (0.06, 0.06, 0.06), wb(R["optic_drive"]), kind="SPHERE")
 
 
 def build_room(B):
@@ -1064,6 +1299,8 @@ def build_room(B):
     build_optic_drive(B)
     build_wall_lamps(B)
     build_archive(B)
+    build_conduits(B)
+    build_anchors(B)
 
 
 # ------------------------------------------------------------------ lighthouse exterior
