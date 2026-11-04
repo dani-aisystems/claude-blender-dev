@@ -340,7 +340,12 @@ func _operate(ws: String, dev: String) -> void:
 			state_ok = hint_ok and g.station.door_open
 			state_note = "bolted hint=%s, story open=%s" % [hint_ok, g.station.door_open]
 	var snd1 := _audio_count()
-	await _frames(60)
+	# Did the part move at ANY point? (Some motions are momentary: the handset dips only while
+	# transmitting. Comparing just the final pose was flaky at background CPU priority.)
+	var moved_any := false
+	for i in 60:
+		await process_frame
+		moved_any = moved_any or _moved(pose0, _pose(dev))
 	var pose1 := _pose(dev)
 	_row(ws, dev, "state", "PASS" if state_ok else "FAIL", state_note)
 	if sound_expected:
@@ -350,7 +355,8 @@ func _operate(ws: String, dev: String) -> void:
 	else:
 		_row(ws, dev, "sound", "N/A", "no one-shot for %s" % kind)
 	if PART.has(dev):
-		_row(ws, dev, "part", "PASS" if _moved(pose0, pose1) else "FAIL", "%s moved" % PART[dev] if _moved(pose0, pose1) else "%s did not move" % PART[dev])
+		var mv := moved_any or _moved(pose0, pose1)
+		_row(ws, dev, "part", "PASS" if mv else "FAIL", "%s moved" % PART[dev] if mv else "%s did not move" % PART[dev])
 	else:
 		_row(ws, dev, "part", "N/A", "no moving part (%s)" % kind)
 	# tidy up so the next device starts from a sane state

@@ -14,9 +14,25 @@ WS = HERE.parents[3]
 EXPORTS = WS / "exports" / "last_light" / "gltf"
 MODELS = HERE.parent / "godot" / "assets" / "models"
 TEX_OUT = HERE.parent / "godot" / "assets" / "textures"
-CC0 = ["cliff_side", "coast_land_rocks_01", "sparse_grass", "painted_concrete", "rusty_painted_metal",
-       "distressed_painted_planks"]
-MAPS = {"diff": ("Diffuse", "diff"), "nor_gl": ("nor_gl",), "rough": ("Rough", "rough")}
+# set -> (resolution, maps). Exterior/legacy sets: 1k diffuse + GL normal + roughness (tri_pbr).
+# Stage 1b interior sets: 2k diffuse + GL normal + ARM (room_pbr). The 2k copies are generated, so they
+# are gitignored (.gitignore): regenerate with this script from assets/textures, whose sources are
+# re-fetchable from Poly Haven with tools/fetch_cc0.py (IDs and licence in assets/ASSET_LICENSES.md).
+CC0 = {
+    "cliff_side": ("1k", ("diff", "nor_gl", "rough")),
+    "coast_land_rocks_01": ("1k", ("diff", "nor_gl", "rough")),
+    "sparse_grass": ("1k", ("diff", "nor_gl", "rough")),
+    "painted_concrete": ("1k", ("diff", "nor_gl", "rough")),
+    "rusty_painted_metal": ("1k", ("diff", "nor_gl", "rough")),
+    "distressed_painted_planks": ("1k", ("diff", "nor_gl", "rough")),
+    "plastered_wall_02": ("2k", ("diff", "nor_gl", "arm")),
+    "concrete_floor_worn_001": ("2k", ("diff", "nor_gl", "arm")),
+    "oak_veneer_01": ("2k", ("diff", "nor_gl", "arm")),
+    "dark_wooden_planks": ("2k", ("diff", "nor_gl", "arm")),
+    "green_metal_rust": ("2k", ("diff", "nor_gl", "arm")),
+    "metal_plate_02": ("2k", ("diff", "nor_gl", "arm")),
+}
+MAPS = {"diff": ("Diffuse", "diff"), "nor_gl": ("nor_gl",), "rough": ("Rough", "rough"), "arm": ("arm",)}
 
 
 def latest(name):
@@ -37,14 +53,16 @@ def main(names):
         shutil.copy2(src, MODELS / f"{n}.glb")
         print(f"SYNC {src.name} -> godot/assets/models/{n}.glb")
     TEX_OUT.mkdir(parents=True, exist_ok=True)
-    for t in CC0:
+    for t, (res, keys) in CC0.items():
         d = WS / "assets" / "textures" / t
-        for key, tags in MAPS.items():
-            hits = [f for f in d.glob("*_1k.*") if any(f"_{tag}_" in f.name for tag in tags)]
-            if hits:
-                dst = TEX_OUT / f"{t}_{key}{hits[0].suffix}"
-                if not dst.exists() or dst.stat().st_mtime < hits[0].stat().st_mtime:
-                    shutil.copy2(hits[0], dst)
+        for key in keys:
+            tags = MAPS[key]
+            hits = [f for f in d.glob(f"*_{res}.*") if any(f"_{tag}_" in f.name for tag in tags)]
+            if not hits:
+                raise SystemExit(f"missing {t} {key} at {res} in {d} (fetch it with tools/fetch_cc0.py)")
+            dst = TEX_OUT / f"{t}_{key}{hits[0].suffix}"
+            if not dst.exists() or dst.stat().st_mtime < hits[0].stat().st_mtime:
+                shutil.copy2(hits[0], dst)
     n_set = 0
     for f in sorted(TEX_OUT.glob("*.png")) + sorted(TEX_OUT.glob("*.jpg")):
         n_set += import_params(f)

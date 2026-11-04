@@ -139,7 +139,7 @@ func _swap_materials(mi: MeshInstance3D) -> void:
 		if m == null:
 			continue
 		var nm := m.resource_name
-		var rep := LLMaterials.get_mat(nm)
+		var rep := LLMaterials.get_room_mat(nm)      # Stage 1b: interior palette looks (exterior keeps get_mat)
 		if rep:
 			mi.set_surface_override_material(i, rep)
 		elif m is BaseMaterial3D and nm in ["M_LL_Atlas", "M_LL_Chart", "M_LL_Rose", "M_LL_Rug"]:
@@ -198,7 +198,7 @@ func _base_energy(id: String) -> float:
 	if id == "desk":
 		return 2.6
 	if id.begins_with("wall"):
-		return 1.35
+		return 0.85
 	if id.begins_with("inst"):
 		return 0.8
 	if id == "cage":
@@ -257,6 +257,7 @@ func _make_window_lights() -> void:
 		sp.light_size = 0.25
 		sp.light_cull_mask = LAYER_INTERIOR
 		sp.light_volumetric_fog_energy = 0.0
+		sp.light_specular = 0.25       # lightning lit the varnish as white blobs (chair spindles)
 		sp.light_energy = 0.0
 		sp.visible = false
 		add_child(sp)
@@ -282,6 +283,7 @@ func _make_instrument_lights() -> void:
 		sp.light_energy = _base_energy(pair[0])
 		sp.light_volumetric_fog_energy = 0.0
 		sp.light_cull_mask = LAYER_INTERIOR
+		sp.light_specular = 0.0        # fill light for the gauges: no hot spot on the glossy console top
 		add_child(sp)
 		sp.global_position = p + inward * 0.45 + Vector3.UP * 0.35
 		sp.look_at(p, Vector3.UP)
@@ -312,7 +314,7 @@ func _make_probe() -> void:
 	probe.cull_mask = LAYER_INTERIOR
 	probe.ambient_mode = ReflectionProbe.AMBIENT_COLOR
 	probe.ambient_color = Color(0.15, 0.13, 0.11)      # warm: the room's own tungsten bounce
-	probe.ambient_color_energy = 0.8
+	probe.ambient_color_energy = 0.45
 	probe.update_mode = ReflectionProbe.UPDATE_ONCE
 	add_child(probe)
 	probe.global_position = Vector3(0, F + 1.55, 0)
@@ -372,7 +374,7 @@ func _update_windows() -> void:
 func _update_probe(level: float, room_on: bool) -> void:
 	if probe == null:
 		return
-	probe.ambient_color_energy = lerpf(0.2, 0.8, level)   # also replaces the fog in-scatter the haze cut removed
+	probe.ambient_color_energy = lerpf(0.12, 0.45, level)  # 1b: cream walls and palette albedo bounce far more
 	if probe_mode == "a":
 		probe.intensity = lerpf(0.25, 1.0, level)
 		return

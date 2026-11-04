@@ -1,5 +1,34 @@
 # Roadmap: THE LAST LIGHT (living stage tracker)
 
+## ⚠ Parallel sessions and file ownership (Daniel, 2026-11-04)
+**Update (1b checkpoint): Daniel handed `build.py` (all geometry) to the staged-polish session.** The geometry session's open items (optic drive, generator, stair door, storage, windows) are folded into Stage 1 iterations 2–3. Its Iteration A stays uncommitted, awaiting Daniel's review.
+
+Two sessions worked on the cabin in parallel. **Daniel decided to split the work by layer.**
+
+**Geometry: the "cabin repair" session (`CABIN_REPAIR.md`, Iterations A–D) owns:**
+- `blender/build.py`, `documents.py`, `textures.py`, `photo_render.py`, `pipeline.sh`;
+- the generated GLB and textures;
+- the geometry repairs: optic drive, generator, stair door, storage, windows.
+
+**Godot materials and lighting: the "staged polish" session (Stage 1 in `docs/ROADMAP.md`) owns:**
+- `godot/scripts/fp/materials.gd`;
+- `godot/shaders/room_pbr.gdshader` (new) and `rain_glass.gdshader`;
+- `blender/sync_assets.py`, `settings.gd`, `outside.gd`;
+- the lighting, probe and window-light functions in `station.gd`.
+
+**Shared files (keep edits narrow):**
+- `station.gd`: the material and texture list in `_swap_materials` belongs to geometry.
+- `capture_fp.gd`: each session adds its own views.
+
+**Names the lighting code depends on (keep them):** `GLS_window*`, `NDL_bearing`, `NDL_battery`, `NDL_temp`, `PT_brk_lights`, `LMP_cage`, `LIGHT_*`, `SM_CeilBeams`, `SM_WallLamps*`. New runtime interior meshes must use render layer 2 (`station.gd` `LAYER_INTERIOR`).
+
+**After a geometry change, run both** `tests/test_last_light_hooks.py` and `godot/tests/interaction_test.gd`.
+
+**Commits:** `4aff7b0` holds only Stage 1 steps 1.0 and 1a. The cabin-repair Iteration A is **still uncommitted** in the working tree, awaiting Daniel's review.
+
+The staged-polish session won't edit `build.py` (needed for bevels, smooth shading and metric UVs in 1b) until the geometry session's iterations land.
+
+
 Development runs as a **staged polish programme**. Each stage follows the same loop:
 
 1. inspect;
@@ -15,8 +44,8 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | | |
 |---|---|
 | **Stage** | 1, cabin lighting, materials and architecture |
-| **Iteration** | 1b, material richness (started 2026-11-04). 1.0 and 1a are done and reviewed |
-| **Next actionable task** | After Daniel's 1a feedback: iteration 1b, material richness (palette, bevels, smooth shading, metric UVs, wear mask, `room_pbr`, 2k sets, rain-glass rewrite) |
+| **Iteration** | 2, architecture (starting 2026-11-04). 1b is approved |
+| **Next actionable task** | Iteration 2 in `build.py`: walls and dado in geometry, windows, wainscot, ceiling and conduits, stair bulkhead and heavy door, lamps, floor, story anchors. Then bevels and smooth shading |
 
 ## Stages
 | # | Stage | Status |
@@ -66,6 +95,11 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 
   Every new object states what it adds: gameplay, realism, story or composition.
 - Local milestone commits only after approval. **Never push.**
+- **Machine load (Daniel, 2026-11-04):**
+  - logic tests run headless at background priority: `taskpolicy -b tools/godot --headless …`;
+  - **ask Daniel before opening any Godot window**;
+  - batch captures into one run per checkpoint, at Auto resolution;
+  - no benchmarks unless Daniel says the Mac is free.
 
 ## Stage 0: critical fixes and regression baseline (2026-11-04)
 **Done:**
@@ -141,6 +175,38 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
   - Evidence: `renders/last_light/s1a_vs_s0_desk.png`, `s1a_vs_s0_b.png`, `s1a2_sheet.png`, `s1a_probe_ab.png`, `s1a_ext.png`.
   - Performance at High (Auto resolution) regressed from about 19 to about 29 ms at the desk in noisy runs. SSAO and SSIL were moved to half size; the remaining cause is unresolved because the machine was throttling.
   - **Daniel's 1a decisions (2026-11-04):** continue to 1b; the light level is about right; faint indoor haze only (a negative-density `FogVolume` removes 75 % of the storm fog inside, with ambient raised to keep the approved level: desk mean 0.144 vs 0.134); all step 1.0 proposals approved.
+- **1b (2026-11-04), code done, not yet reviewed or committed:**
+  - **New `godot/shaders/room_pbr.gdshader`:**
+    - colour comes from the palette, the scan adds normalised detail only (grain colour for wood), with ARM maps;
+    - an interim cream-over-green dado with skirting and an oak rail line, on wall faces by height;
+    - hand-height paint chips and clearcoat;
+    - still world-triplanar.
+  - **`materials.gd`:**
+    - `PALETTE` (the agreed hexes) and interior-only `ROOM` looks via `get_room_mat()`, so the lighthouse exterior keeps its old looks;
+    - brass is part-diffuse (metallic 0.75, roughness 0.45);
+    - a `--noroom` bisect flag.
+  - **`sync_assets.py`:** per-set resolution; the 6 interior sets come in at 2k (diffuse, GL normal, ARM). The copies are verified byte-identical to their sources, licences are logged, and they're gitignored (Daniel's condition met).
+  - **Rain glass rewritten:**
+    - lit, premultiplied alpha, transparent where clear (so the beam and rain show through);
+    - drops refract the background;
+    - condensation band at the sill, cleared by drop trails;
+    - `render_priority` 1.
+  - **Seen so far:** one frame (`renders/last_light/s1b_t060_fp_desk.png`, before the brass and plate tweaks). It reads as a period station: cream and green dado, grey-green machinery, varnished oak, polished floor. Still to fix there: black brass at the top of the optic column, and tile-like plate seams on the console (both tuned since, but not yet seen).
+  - **Performance note:** the runs at about 1–5 fps with GPU fence timeouts were **machine load, not 1b**. An A/B with `--noroom` was just as slow, with the same primitive count.
+  - **Queued capture** (needs Daniel's OK):
+
+    ```
+    tools/godot --path projects/games/last_light/godot -- --capture=s1b --nohud --bot=expert --shots=60@fp_desk,60@fp_console,60@fp_power,60@fp_gen,60@fp_window,60@cu_console,60@cu_power,60@cu_optic,60@cu_window,60@fp_ceiling,60@fp_desk!dark,60@fp_desk!flash
+    ```
+- **1b verification (2026-11-04)**, with Daniel's OK for each window:
+  - **Captures:** `s1b`, `s1b2`, `s1b3`, `s1b4` (0 GPU fence errors; about 40 fps at Auto resolution once the Mac was free). Sheets: `s1b_checkpoint_a.png`, `s1b_checkpoint_b.png`, `s1b4_walls.png`.
+  - **Fixes found by looking:**
+    - the "boards" on the wall were the 96 flat facets *plus* `plastered_wall_02` being plasterboard with vertical joints. Fixed with radial normals on the round wall, and the walls now use `concrete_floor_worn_001` at low strength as painted render;
+    - fill-light specular hot spots: instrument lights `light_specular` 0, window lights 0.25;
+    - calmer varnish and enamel, rougher brass.
+  - **Brightness, a decision for Daniel:** desk mean 0.199 vs 0.144 approved in 1a; shadows (10th percentile) 0.046 vs 0.020. The rise comes from the correct palette albedo (cream walls, real floor and oak), not from extra light: ambient 0.8 → 0.45 and wall lamps 1.35 → 0.85 were already cut.
+  - **Daniel's 1b decisions (2026-11-04):** 1b approved; keep the brighter palette-driven look (desk mean about 0.20); `build.py` handed over (see the ownership note at the top).
+  - **Deferred to after the geometry session lands:** bevels, smooth shading, metric UVs and the vertex wear mask, because they need `build.py`. The VoxelGI spike stays optional.
 
 ## Stage 1: cabin (planned; starts after Stage 0 approval)
 1. **1.0 Review:** infrastructure logic, story anchors and the tier table, written into `REFERENCE_SPEC.md`.

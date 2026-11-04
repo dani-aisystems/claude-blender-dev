@@ -9,6 +9,7 @@ static func material() -> ShaderMaterial:
 	if _mat == null:
 		_mat = ShaderMaterial.new()
 		_mat.shader = load("res://shaders/rain_glass.gdshader")
+		_mat.render_priority = 1          # after the other transparents (Stage 1b)
 	return _mat
 
 

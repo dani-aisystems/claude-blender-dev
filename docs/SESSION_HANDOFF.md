@@ -1,6 +1,45 @@
 # Session handoff: 2026-11-04 (session 2, Stage 0)
 
+## ⚠ Parallel sessions and file ownership (Daniel, 2026-11-04)
+**Update (1b checkpoint): Daniel handed `build.py` (all geometry) to the staged-polish session.** The geometry session's open items (optic drive, generator, stair door, storage, windows) are folded into Stage 1 iterations 2–3. Its Iteration A stays uncommitted, awaiting Daniel's review.
+
+Two sessions worked on the cabin in parallel. **Daniel decided to split the work by layer.**
+
+**Geometry: the "cabin repair" session (`CABIN_REPAIR.md`, Iterations A–D) owns:**
+- `blender/build.py`, `documents.py`, `textures.py`, `photo_render.py`, `pipeline.sh`;
+- the generated GLB and textures;
+- the geometry repairs: optic drive, generator, stair door, storage, windows.
+
+**Godot materials and lighting: the "staged polish" session (Stage 1 in `docs/ROADMAP.md`) owns:**
+- `godot/scripts/fp/materials.gd`;
+- `godot/shaders/room_pbr.gdshader` (new) and `rain_glass.gdshader`;
+- `blender/sync_assets.py`, `settings.gd`, `outside.gd`;
+- the lighting, probe and window-light functions in `station.gd`.
+
+**Shared files (keep edits narrow):**
+- `station.gd`: the material and texture list in `_swap_materials` belongs to geometry.
+- `capture_fp.gd`: each session adds its own views.
+
+**Names the lighting code depends on (keep them):** `GLS_window*`, `NDL_bearing`, `NDL_battery`, `NDL_temp`, `PT_brk_lights`, `LMP_cage`, `LIGHT_*`, `SM_CeilBeams`, `SM_WallLamps*`. New runtime interior meshes must use render layer 2 (`station.gd` `LAYER_INTERIOR`).
+
+**After a geometry change, run both** `tests/test_last_light_hooks.py` and `godot/tests/interaction_test.gd`.
+
+**Commits:** `4aff7b0` holds only Stage 1 steps 1.0 and 1a. The cabin-repair Iteration A is **still uncommitted** in the working tree, awaiting Daniel's review.
+
+The staged-polish session won't edit `build.py` (needed for bevels, smooth shading and metric UVs in 1b) until the geometry session's iterations land.
+
+
 Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (current stage and iteration, decisions, feedback log, next task), and with `docs/PROJECT_STATE.md`.
+
+## Latest status (2026-11-04, afternoon)
+- **Done and reviewed:** Stage 0 (approved, commit `a7ffc25`), Stage 1 steps 1.0 and 1a (Daniel continued to 1b, commit `4aff7b0`).
+- **Stage 1b:** the code is done but not committed. The **visual check is on hold until Daniel says the Mac is free.** Next step and the queued capture command are in ROADMAP.md, Stage 1 log.
+- **Machine-load policy (Daniel):**
+  - logic tests run headless at background priority (`taskpolicy -b … --headless`); all pass for 1b;
+  - **ask before opening any Godot window**;
+  - batch captures per checkpoint, at Auto resolution;
+  - no benchmarks unless the Mac is free.
+- **A parallel geometry session owns `build.py`** (see the ownership section above). Its Iteration A is uncommitted in the working tree, awaiting Daniel.
 
 ## Update: iteration 0.2 (same day)
 Daniel asked for another iteration and selected every area: UI nits, the Retina fix, a play-issue sweep (controls, dialogue, visual and performance, menus, saves and audio), and more coverage. He gave no specific bug, so this was done as a self-run QA sweep. The full list is in ROADMAP.md, under "Iteration 0.2".

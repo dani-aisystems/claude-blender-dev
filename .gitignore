@@ -23,3 +23,13 @@ docs/handoff/
 # Godot (THE LAST LIGHT)
 projects/games/*/godot/.godot/
 projects/games/*/build/
+# THE LAST LIGHT: generated 2k interior texture copies (Daniel 2026-11-04: gitignore once reproducible).
+# Regenerate: tools/py projects/games/last_light/blender/sync_assets.py   (sources: assets/textures/,
+# re-fetchable with tools/fetch_cc0.py; IDs + CC0 licence in assets/ASSET_LICENSES.md). Verified
+# byte-identical to their sources (Stage 1b).
+projects/games/last_light/godot/assets/textures/plastered_wall_02_*
+projects/games/last_light/godot/assets/textures/concrete_floor_worn_001_*
+projects/games/last_light/godot/assets/textures/oak_veneer_01_*
+projects/games/last_light/godot/assets/textures/dark_wooden_planks_*
+projects/games/last_light/godot/assets/textures/green_metal_rust_*
+projects/games/last_light/godot/assets/textures/metal_plate_02_*

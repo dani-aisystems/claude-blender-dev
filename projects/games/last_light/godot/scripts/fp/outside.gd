@@ -119,7 +119,7 @@ func _environment() -> void:
 	env.ssao_enabled = not a.has("nossao") and Settings.q_ssao()
 	env.ssil_enabled = not a.has("nossil") and Settings.q_ssil()
 	env.ssil_radius = 2.0                      # the room is 6.5 m across: short-range bounce only
-	env.ssil_intensity = 1.5
+	env.ssil_intensity = 1.0
 	var half: bool = Settings.q_half_size() or a.has("halfao")   # --halfao: perf bisect
 	RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_LOW if half else RenderingServer.ENV_SSAO_QUALITY_MEDIUM, half, 0.5, 2, 50.0, 300.0)
 	RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_LOW if half else RenderingServer.ENV_SSIL_QUALITY_MEDIUM, half, 0.5, 4, 50.0, 300.0)

@@ -39,6 +39,88 @@ const PLAIN := {
 }
 
 
+# ------------------------------------------------------------------ Stage 1b: the watch-room palette
+## Daniel's direction (docs/ROADMAP.md): maintained-but-aged 1971 NLB station, period green + cream.
+## sRGB hex; the shader's source_color hints linearise them.
+const PALETTE := {
+	"cream": Color("#D6C9A6"), "dado": Color("#2E4537"), "machinery": Color("#66796B"),
+	"engine": Color("#55705A"), "frame_green": Color("#34493C"), "iron": Color("#2A2B28"),
+	"oak": Color("#7A4E2A"), "oak_dark": Color("#4A2E1A"), "floor": Color("#4A4743"),
+	"brass": Color("#B58A3C"), "skirting": Color("#1F221E"), "plaster_under": Color("#B9B4A8"),
+	"primer": Color("#8A8A82"),
+}
+const ROOM_SHADER := preload("res://shaders/room_pbr.gdshader")
+## Mean linear RGB of each 2k scan (measured from assets/textures/*_Diffuse_2k.png, 2026-11-04):
+## the room shader divides by it, so the palette sets the colour and the scan only adds detail.
+const SCAN_AVG := {
+	"plastered_wall_02": Vector3(0.4953, 0.4434, 0.3712), "concrete_floor_worn_001": Vector3(0.0926, 0.0946, 0.0893),
+	"oak_veneer_01": Vector3(0.3598, 0.21, 0.0971), "dark_wooden_planks": Vector3(0.0873, 0.0685, 0.0494),
+	"green_metal_rust": Vector3(0.0497, 0.074, 0.0342), "metal_plate_02": Vector3(0.0899, 0.0663, 0.0477),
+}
+## Interior-only looks (the lighthouse exterior shares some names and keeps GRADES).
+const ROOM := {
+	# Walls: painted render over masonry. (plastered_wall_02 turned out to be plasterboard with vertical
+	# panel joints in both diffuse and normal: they read as boards on the wall and lines on the ceiling.)
+	"M_LL_Concrete": ["concrete_floor_worn_001", {"scale": 0.45, "base": "cream", "detail_amt": 0.28, "rough_lo": 0.3, "rough_hi": 0.55,
+		"coat": 0.2, "coat_rough": 0.35, "normal_strength": 0.35, "dado": 1.0, "chips": 0.35, "under": "plaster_under", "cyl_map": 1.0}],
+	"M_LL_Floor": ["concrete_floor_worn_001", {"scale": 0.35, "base": "floor", "detail_amt": 0.8, "rough_lo": 0.25, "rough_hi": 0.6,
+		"coat": 0.45, "coat_rough": 0.25, "normal_strength": 0.6}],
+	"M_LL_SteelPaint": ["metal_plate_02", {"scale": 0.45, "base": "machinery", "detail_amt": 0.18, "rough_lo": 0.38, "rough_hi": 0.55,
+		"coat": 0.15, "coat_rough": 0.4, "chips": 0.25, "under": "primer"}],
+	"M_LL_EngineGreen": ["metal_plate_02", {"scale": 0.6, "base": "engine", "detail_amt": 0.22, "rough_lo": 0.32, "rough_hi": 0.55,
+		"coat": 0.25, "coat_rough": 0.3, "chips": 0.3, "under": "primer"}],
+	"M_LL_SteelRust": ["green_metal_rust", {"scale": 0.9, "base": "frame_green", "detail_amt": 0.3, "rough_lo": 0.35, "rough_hi": 0.55,
+		"coat": 0.2, "coat_rough": 0.3, "chips": 0.2, "under": "primer"}],
+	"M_LL_Iron": ["metal_plate_02", {"scale": 1.4, "base": "iron", "detail_amt": 0.5, "rough_lo": 0.35, "rough_hi": 0.6, "metallic_v": 0.3}],
+	"M_LL_Wood": ["oak_veneer_01", {"scale": 1.2, "base": "oak", "detail_amt": 1.0, "detail_color": 1.0, "rough_lo": 0.35, "rough_hi": 0.55,
+		"coat": 0.35, "coat_rough": 0.32}],
+	"M_LL_WoodDark": ["dark_wooden_planks", {"scale": 1.0, "base": "oak_dark", "detail_amt": 1.0, "detail_color": 1.0, "rough_lo": 0.35,
+		"rough_hi": 0.6, "coat": 0.3, "coat_rough": 0.35}],
+}
+
+
+## Room surfaces (station.gd): interior looks first, everything else falls back to get_mat().
+static func get_room_mat(name: String) -> Material:
+	if GameState.user_args.has("noroom"):      # perf bisect: the pre-1b looks
+		return get_mat(name)
+	var key := "room:" + name
+	if _cache.has(key):
+		return _cache[key]
+	var m: Material = null
+	if ROOM.has(name):
+		m = _room(ROOM[name][0], ROOM[name][1])
+	elif name == "M_LL_Brass":
+		var s := StandardMaterial3D.new()
+		s.albedo_color = PALETTE["brass"]
+		s.metallic = 0.75          # rougher, part-diffuse brass shows its own colour in a dim room
+		s.roughness = 0.45
+		s.metallic_specular = 0.6
+		m = s
+	else:
+		m = get_mat(name)
+	_cache[key] = m
+	return m
+
+
+static func _room(set_name: String, p: Dictionary) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = ROOM_SHADER
+	m.set_shader_parameter("albedo_tex", load(TEX % [set_name, "diff"]))
+	m.set_shader_parameter("normal_tex", load(TEX % [set_name, "nor_gl"]))
+	m.set_shader_parameter("arm_tex", load(TEX % [set_name, "arm"]))
+	m.set_shader_parameter("scan_avg", SCAN_AVG.get(set_name, Vector3(0.45, 0.45, 0.45)))
+	m.set_shader_parameter("base_color", PALETTE[p.get("base", "cream")])
+	m.set_shader_parameter("dado_color", PALETTE["dado"])
+	m.set_shader_parameter("skirt_color", PALETTE["skirting"])
+	m.set_shader_parameter("rail_color", PALETTE["oak"])
+	m.set_shader_parameter("under_color", PALETTE[p.get("under", "primer")])
+	for k in p:
+		if k in ["base", "under"]:
+			continue
+		m.set_shader_parameter(k, p[k])
+	return m
+
+
 static func get_mat(name: String) -> Material:
 	if _cache.has(name):
 		return _cache[name]
