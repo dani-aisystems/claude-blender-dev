@@ -30,8 +30,9 @@ North Point Light, Outer Hebrides, the night of 14–15 November 1971. The playe
 | Radio panel (Stage 2B): keyed vessel list (no rebuild), buttons don't keep focus after a click, one-time Tab and wheel tips (`Settings.tips`) | ✅ regress R6 | `scripts/fp/fp_ui.gd`, `settings.gd` |
 | Gamepad (Stage 2C): look, a device-view cursor, A/B/X/Y/LB/RB/Start, d-pad replies, device-aware glyphs (keyboard / Xbox / PlayStation), context-grouped bindings | ✅ regress R7 (injected pad events) / ⬜ real-pad feel | `scripts/core/input_setup.gd`, `player.gd`, `fp_ui.gd`, `dialogue_ui.gd` |
 | Data-driven interaction (`IA_*` volumes from the GLB, toggles, holds, cycles, documents, door) | ✅ | `scripts/fp/station.gd` (`DEVICES` table) |
+| Cabin pass (2026-11-05): the torch (E picks it up in a blackout, F/LT toggles a shadowed spot, saved); the chart and documents in a full-screen viewer (zoom, pan, transcription; layer 30, handled in `_input`); replies by keys or the wheel with mouse-look kept in free walk; the coat-pocket note | ✅ regress R8 / ⬜ feel | `player.gd`, `station.gd`, `game_fp.gd`, `story_presenter.gd`, `dialogue_ui.gd` |
 | Crosshair picking: a specific control beats its cabinet's info/focus volume; furniture doesn't occlude controls mounted on it | ✅ Stage 0 fix (before it, START, the breakers and the console knobs couldn't be targeted). Covered by `tests/interaction_test.gd` | `scripts/fp/player.gd::pick()` |
-| Mouse-capture policy: one place decides (free-walk only; not while paused, in device views, documents, logbook or open replies) | ✅ Stage 0 fix. Covered by `tests/regress_test.gd`, and windowed for the real mouse mode | `scripts/fp/game_fp.gd::mouse_should_capture()` |
+| Mouse-capture policy: one place decides (free walk only; not while paused, in device views, documents or the logbook). Cabin pass: open replies keep mouse-look, and `refresh_mouse` is the only writer (R8 checks it statically) | ✅ Stage 0 fix. Covered by `tests/regress_test.gd`, and windowed for the real mouse mode | `scripts/fp/game_fp.gd::mouse_should_capture()` |
 | Station rules: power, generator (valve/crank/charge/temperature/fuel), breakers and overload, light modes (OFF/AUTO/MANUAL), handwheel, jams, radio orders, fleet, channel piloting | ✅ (headless tests) | `scripts/core/keeper_sim.gd`, `fleet_ship.gd`, `keeper_config.gd` |
 | Radar PPI drawn in a SubViewport onto the desk CRT | ✅ (seen in captures) | `scripts/fp/radar.gd` |
 | Exterior: Gerstner ocean with foam, storm sky, volumetric beam, rain, lightning, island, reefs, jetty, ships riding the waves | 🟡 (seen in captures; island, reefs and ships are procedural Godot stand-ins) | `scripts/fp/outside.gd`, `ship_view2.gd`, `ocean_waves.gd`, `shaders/*` |
@@ -52,19 +53,19 @@ North Point Light, Outer Hebrides, the night of 14–15 November 1971. The playe
 | Asset | Status |
 |---|---|
 | `spec.py` (single source of truth); `layout.py` → `layout.json` (reefs, channels, routes, with clearance checks) | ✅ |
-| `build.py` → `ASSET_watch_room` (round room from R1, all devices with `PT_`/`NDL_`/`LMP_`/`IA_`/`FOCUS_` hooks, colliders) and `ASSET_lighthouse` | ✅ v006 `.blend`; GLB v004 validated (0 FAIL) and reimport-checked |
+| `build.py` → `ASSET_watch_room` (round room from R1, all devices with `PT_`/`NDL_`/`LMP_`/`IA_`/`FOCUS_` hooks, colliders) and `ASSET_lighthouse` | ✅ v035 `.blend`; GLB v033 validated (0 FAIL) and reimport-checked; cabin-pass contact scan 63 → 45 explained flags |
 | `textures.py` (gauge/label atlas, chart, compass rose, rug), `documents.py` (story documents) | ✅ |
 | `pipeline.sh`: build → validate → export → reimport → sync → Godot import | ✅ |
 | Island, reef rocks and ships as Blender models | ⬜ (procedural stand-ins in Godot) |
 | Character portraits | ⬜ (base meshes downloaded; see the handoff for measurements) |
 
-## 4. Test and verification status (last run 2026-11-05, Stage 2 end)
-All suites below re-run at the end of Stage 2: pytest 18/18, regress 87/87 windowed (no skips) and 84/84 headless, interaction 134/134 (6 warnings: documents open with no sound), qa_sweep 948/948, run_tests 95/95, sim_v2 no gate failures, story_test 0 failures. The rows below give the commands. **Run every suite under `timeout`**: a GDScript parse error makes a `-s` test hang idle.
+## 4. Test and verification status (last run 2026-11-05, cabin pass checkpoint 4)
+All suites below re-run on the cabin-pass build (v035): pytest 18/18, regress 105/105 windowed (no skips) and 101/101 headless, interaction 134/134 (7 warnings: documents, now including the chart, open with no sound), qa_sweep 948/948, run_tests 95/95, sim_v2 no gate failures, story_test 0 failures. The rows below give the commands. **Run every suite under `timeout`**: a GDScript parse error makes a `-s` test hang idle.
 | Check | Command | Result |
 |---|---|---|
 | Workspace pytest (now includes GLB hooks, import hints, normals, budgets) | `tools/py -m pytest -q` | ✅ 18 pass |
-| Regressions: Stage 0 R1–R4 (mouse after reply, reply/panel overlap, pause input, thought lines) plus Stage 2 R5 (interaction state), R6 (radio panel), R7 (gamepad and camera) | `… -s res://tests/regress_test.gd`. Run windowed through `tools/godot_bg` for the real mouse-mode checks | ✅ 87/87 windowed; 84/84 headless (mouse-mode checks skipped) |
-| Interaction checklist (radio, generator, power, console, door, desk and documents: walkable approach from spawn, prompt, part, state, sound trigger, console-view clicks, document open and close, save/load) | `… -s res://tests/interaction_test.gd` | ✅ 134 checks, 0 failures, 6 warnings (documents open with no sound → Stage 5) |
+| Regressions: Stage 0 R1–R4 (mouse after reply, reply/panel overlap, pause input, thought lines) plus Stage 2 R5 (interaction state), R6 (radio panel), R7 (gamepad and camera) | `… -s res://tests/regress_test.gd`. Run windowed through `tools/godot_bg` for the real mouse-mode checks | ✅ 105/105 windowed; 101/101 headless (mouse-mode checks skipped) |
+| Interaction checklist (radio, generator, power, console, door, desk and documents: walkable approach from spawn, prompt, part, state, sound trigger, console-view clicks, document open and close, save/load) | `… -s res://tests/interaction_test.gd` | ✅ 134 checks, 0 failures, 7 warnings (documents and the chart open with no sound → Stage 5) |
 | QA sweep: dialogue fit (546 lines, 142 replies, text size 1.0 and 1.5) and options apply live | `… -s res://tests/qa_sweep_test.gd -- --windowed` (headless skips the display checks) | ✅ 948/948 |
 | Audio objective QA (peak, RMS, DC, clipping, loop seams) | `tools/py projects/games/last_light/audio/analyze.py` | ✅ 37 files: no clipping, seamless loops. 2 minor flags (`click_button` DC, `horn_fishing` mastered hot) |
 | v1 unit tests | `tools/godot --headless --path projects/games/last_light/godot -s res://tests/run_tests.gd` | ✅ 95/95 |
@@ -129,3 +130,5 @@ All suites below re-run at the end of Stage 2: pytest 18/18, regress 87/87 windo
 8. ~~Duplicate licence line~~: fixed in Stage 0.
 9. Large files: `assets/textures` is 709 MB, `assets/models/human_base_meshes` 98 MB (zip plus extracted), `projects/games/last_light/build` 292 MB (gitignored). Free disk was 23 GB.
 10. Session-1 work is committed locally as `51cc8b9` (not pushed). The textures and base meshes are still untracked by design. Stage 0 changes are uncommitted until Daniel approves the stage.
+11. ~~Windowed regress R6/R7 failures~~: a test timing race (fixed frame waits inside the 0.45 s device-view ease), fixed with `_settle_focus()`; 105/105 windowed.
+12. **Cabin leftovers:** the coat collar reads a little like a domed cap; the generator START tag is partly hidden by the knob rim; an older conduit-clip shadow streak near the −48° wall lamp.

@@ -31,6 +31,16 @@ The staged-polish session won't edit `build.py` (needed for bevels, smooth shadi
 
 Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (current stage and iteration, decisions, feedback log, next task), and with `docs/PROJECT_STATE.md`.
 
+## Latest status (2026-11-05, cabin pass: Daniel's 8-photo brief, run before Stage 3)
+- **Where it stands:** checkpoints 1–3 approved and committed (`91faeb1`, `9e0eeef`, `11b92d2`); **checkpoint 4 (final QA) approved by Daniel and committed.** Full log, the per-photo table (issue → root cause → fix → files) and a 7-step manual playtest: ROADMAP "Cabin pass".
+- **Build:** v035 `.blend`, GLB v033, about 114k tris, 0 validation FAIL.
+- **Tests (v035, headless):** regress 101/101, interaction 134/134 (7 warnings: documents have no sound), qa_sweep 948/948, story 0, sim_v2 no gate failures, run_tests 95/95, pytest 18/18.
+- **Windowed regress 105/105** (no skips, twice). R6/R7 had failed windowed because the test waited a fixed 40 frames after a device-view enter or leave; at 120 Hz that can end inside the 0.45 s camera ease. `_settle_focus()` now waits for the ease itself. **When adding focus steps to tests, call it rather than a frame count.**
+- **The mouse has one owner:** only `game_fp.refresh_mouse()` → `player.capture_mouse()` may change `Input.mouse_mode`. regress R8 checks this statically. Don't add a second writer in UI code.
+- **Untracked on purpose:** `projects/games/last_light/cabin-photos/` (Daniel's photos) and `.blend` v028–v030, v032–v034 (Daniel: keep, don't delete).
+- **Capture tool:** `cu_*` views now mute the player so the HUD prompt can't describe a different view. Torch and `fleet2` states aren't restored: put those shots last.
+- **Stage 3** is still on hold: plan approved in principle, but Daniel has additions, so don't start 3A until he says go.
+
 ## Latest status (2026-11-05, Stage 1 iteration 5: cabin micro-detail)
 - **Iteration 5 is approved by Daniel and committed locally.** It covers groups A–E: the desk, furniture, personal items and architectural fasteners.
 - **Details:** the ROADMAP Stage 1 log, "Iteration 5". **Evidence:** `renders/last_light/s15f_vs_s15a_{a,b}.png` and `s15f_vs_s1_c.png`.

@@ -131,6 +131,7 @@ func _r5_interaction_state() -> void:
 	for view in ["radio", "console", "chart"]:
 		g.player.enter_focus(view)
 		await _frames(40)
+		await _settle_focus()
 		var ids := {}
 		var space: PhysicsDirectSpaceState3D = g.player.get_world_3d().direct_space_state
 		var vp: Vector2 = g.player.get_viewport().get_visible_rect().size
@@ -151,6 +152,7 @@ func _r5_interaction_state() -> void:
 				"radio view -> the chart is clickable and opens the chart inspection")
 		g.player.leave_focus()
 		await _frames(40)
+		await _settle_focus()
 	# g) pause while holding START stops the crank (the key-up is lost under the pause menu)
 	k.gen = KeeperSim.Gen.OFF
 	k.fuel_valve = true
@@ -192,6 +194,7 @@ func _r6_radio_panel() -> void:
 		g._route(g.sim.spawn_story_ship({"name": n, "kind": "fishing", "bearing": 20, "aim": 24, "hold": true, "protected": true}))
 	g.player.enter_focus("radio")
 	await _frames(40)
+	await _settle_focus()
 	g.ui._refresh_vessels()
 	await _frames(2)
 	var before := _vessel_buttons().map(func(b): return b.get_instance_id())
@@ -256,8 +259,10 @@ func _r6_radio_panel() -> void:
 	_check(tab_shown and not g.ui.tab_tip.visible, "Tab tip shows with two vessels and retires after two uses (shown=%s, now=%s)" % [tab_shown, g.ui.tab_tip.visible])
 	g.player.leave_focus()
 	await _frames(40)
+	await _settle_focus()
 	g.player.enter_focus("console")
 	await _frames(40)
+	await _settle_focus()
 	var sub0: String = g.station.prompt_info("mode", true)["sub"]
 	g.player._turn("mode", "next", "wheel")
 	g.player._turn("mode", "prev", "wheel")
@@ -268,6 +273,7 @@ func _r6_radio_panel() -> void:
 	settings.v["tips"] = saved_tips
 	g.player.leave_focus()
 	await _frames(40)
+	await _settle_focus()
 
 
 func _pad_button(b: JoyButton, down := true) -> void:
@@ -302,6 +308,17 @@ func _aim_at(id: String) -> void:
 	g.player._pitch = atan2(to.y, Vector2(to.x, to.z).length())
 	g.player._apply_look()
 	await _frames(6)
+
+
+## A device-view ease (0.45 s, time-based) blends the camera, and with it the crosshair ray, between the
+## views. A fixed frame count is not enough windowed: at a 120 Hz display 40 frames can end inside the ease
+## (cabin pass CP4: R6/R7 failed windowed with the camera 1.97 m off the eye). Wait for the ease itself.
+func _settle_focus() -> void:
+	var n := 0
+	while g.player._focus_t < 1.0 and n < 600:
+		await process_frame
+		n += 1
+	await physics_frame                         # one tick so hover and the body update from the settled camera
 
 
 func _ia_pos(id: String) -> Vector3:
@@ -385,6 +402,7 @@ func _r7_gamepad_and_camera() -> void:
 	# d) device view: the pad cursor picks the MODE knob, A turns it, LB turns it back, B steps back
 	g.player.enter_focus("console")
 	await _frames(40)
+	await _settle_focus()
 	_check(g.player.virtual_cursor.is_finite(), "entering a device view on the pad starts the pad cursor")
 	if DisplayServer.get_name() == "headless":
 		skips.append("R7 OS pointer hidden in a pad device view (headless)")
@@ -409,6 +427,7 @@ func _r7_gamepad_and_camera() -> void:
 	# e) radio view: the pad cursor presses an on-screen order button; RB picks the next vessel
 	g.player.enter_focus("radio")
 	await _frames(40)
+	await _settle_focus()
 	g.ui._refresh_vessels()
 	var sent := [0]
 	var counter := func(_id, _cmd): sent[0] += 1
@@ -426,6 +445,7 @@ func _r7_gamepad_and_camera() -> void:
 	_check(g.ui.sim.active_ships().size() < 2 or g.ui.selected_ship != s0, "RB selects the next vessel in the radio view")
 	g.player.leave_focus()
 	await _frames(30)
+	await _settle_focus()
 	# f) dialogue replies take pad focus; A picks the focused reply
 	var picked := [-1]
 	var on_pick := func(i): picked[0] = i
@@ -505,6 +525,7 @@ func _r8_cabin_reliability() -> void:
 	# b) free-walk replies keep mouse look: highlight with the wheel, answer with E
 	g.player.leave_focus()
 	await _frames(30)
+	await _settle_focus()
 	var picked := [-1]
 	var on_pick := func(i): picked[0] = i
 	dlg.choice_made.connect(on_pick)
@@ -601,12 +622,14 @@ func _r8_cabin_reliability() -> void:
 	for i in 4:
 		g.player.enter_focus("radio")
 		await _frames(30)
+		await _settle_focus()
 		_choices("radio")
 		await _frames(2)
 		_key(KEY_1)
 		await _frames(2)
 		g.player.leave_focus()
 		await _frames(30)
+		await _settle_focus()
 		if not g.mouse_should_capture():
 			bad.append("radio#%d" % i)
 		g._on_doc("chart")
@@ -622,6 +645,7 @@ func _r8_cabin_reliability() -> void:
 			bad.append("pause#%d" % i)
 		g.player.enter_focus("console")
 		await _frames(30)
+		await _settle_focus()
 		await _act("pause")                       # Esc steps back out of the view
 		await _frames(30)
 		if g.player.focused != "" or not g.mouse_should_capture():
@@ -675,6 +699,7 @@ func _r1_mouse() -> void:
 	g.ui.selected_ship = 999          # any id: sim.command answers "no answer" for unknown ships
 	g.player.enter_focus("radio")
 	await _frames(2)
+	await _settle_focus()
 	_choices("radio")
 	await _frames(2)
 	_check(dlg.has_open_choices(), "radio choices unlocked inside the radio view")
@@ -703,6 +728,7 @@ func _r1_mouse() -> void:
 	await _frames(2)
 	g.player.leave_focus()
 	await _frames(2)
+	await _settle_focus()
 	g.set_paused(true)
 	g.set_paused(false)
 	_check(g.mouse_should_capture(), "leaving the radio view with replies open gives mouse-look back (no stuck pointer)")
@@ -716,6 +742,7 @@ func _r2_overlap() -> void:
 	print("R2 choices vs radio command panel")
 	g.player.enter_focus("radio")
 	await _frames(2)
+	await _settle_focus()
 	_choices("radio")
 	await _frames(2)
 	var sizes := [Vector2i(1920, 1080), Vector2i(1280, 720), Vector2i(1920, 1200), Vector2i(1440, 1080), Vector2i(2560, 1080)]
@@ -746,6 +773,7 @@ func _r2_overlap() -> void:
 	dlg.close()
 	g.player.leave_focus()
 	await _frames(2)
+	await _settle_focus()
 
 
 func _r3_pause() -> void:

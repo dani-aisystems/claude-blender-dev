@@ -30,6 +30,7 @@ var results: Array = []
 var perf: Array = []
 var cam: Camera3D
 var _restore_state: Dictionary = {}
+var _player_muted := false      # cabin pass: a capture-camera view muted the player (its prompt is for another view)
 var _cursor_ia := ""            # focus_<view>~<ia>: the player's virtual cursor tracks that control
 var _cursor_game: Node = null
 
@@ -292,6 +293,10 @@ func _place(g, vname: String) -> void:
 	cam.fov = v[2]
 	cam.current = true
 	_cutaway(g, v[3])
+	if g.player.enabled:                    # the player keeps raycasting from where it stands, so its prompt
+		g.player.enabled = false            # would describe a different view than this camera shows
+		g.ui.clear_prompt()
+		_player_muted = true
 	_hud(g, not GameState.user_args.has("nohud"))
 
 
@@ -335,6 +340,9 @@ func _restore(g) -> void:
 		g.presenter.dialogue.visible = true
 		g.presenter._doc_open = ""
 		g.player.enabled = true
+	if _player_muted:
+		g.player.enabled = true
+		_player_muted = false
 	if cam:
 		cam.current = false
 	if g.player:

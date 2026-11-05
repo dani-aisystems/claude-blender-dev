@@ -50,7 +50,7 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 |---|---|
 | **Stage** | 2, first-person interactions and gameplay |
 | **Iteration** | **Stage 2 approved by Daniel 2026-11-05** (2A `52bcb6f`, 2B `1359e44`, 2C `7a715c2`, 2D the Stage 2 milestone commit). Stage 3 not started |
-| **Next actionable task** | **Stage 3 plan approved in principle by Daniel (2026-11-05), but "don't begin": he has additions.** The draft and his decisions are in `~/.claude/plans/the-last-light-stage3-draft.md`. Wait for his additions, fold them in, then start 3A (OFL font download first) |
+| **Next actionable task** | **Cabin pass (Daniel's 8-photo brief) complete:** CP1 `91faeb1`, CP2 `9e0eeef`, CP3 `11b92d2`, CP4 the cabin-pass final commit. Then: **Stage 3 plan approved in principle by Daniel (2026-11-05), but "don't begin": he has additions.** The draft and his decisions are in `~/.claude/plans/the-last-light-stage3-draft.md`. Wait for his additions, fold them in, then start 3A (OFL font download first) |
 
 ## Stages
 | # | Stage | Status |
@@ -511,6 +511,41 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
   - **Floor (Daniel):** rough 0.25–0.6 → 0.4–0.72, clearcoat 0.45 @ 0.25 → 0.16 @ 0.45. Still dark polished concrete, now a soft sheen.
   - **Regression caught in review:** deepening the generator control box (0.14 → 0.15 m) without moving its centre pushed its face 5 mm past the gauges and the GENERATOR plate (striped z-fight, plate hidden; `cp3_t068_cu_gen.png`). The centre moved to front − 0.075 so the face stays in the gauge plane; re-checked in `cp3c_t068_cu_gen.png`.
   - **Build:** v035 `.blend`, GLB v033. Evidence: `renders/last_light/cp3_sheet_{a,b}.png`, `cp3b_t070_cu_lamp.png`, `cp3c_t068_cu_gen.png`.
+
+
+- **Daniel (2026-11-05): checkpoint 3 approved; committed `11b92d2`.** The in-between `.blend` saves v028–v030 and v032–v034 stay untracked (not deleted).
+- **Checkpoint 4 (final QA and handoff). Approved by Daniel (2026-11-05) and committed:**
+  - **Suites on the final build (v035, GLB v033), headless:** regress 101/101, interaction 134/134 (7 known warnings: documents, now including the chart, open with no sound → Stage 5), qa_sweep 948/948, story 0 failures, sim_v2 no gate failures, run_tests 95/95, pytest 18/18.
+  - **Windowed regress: 105/105, no skips (twice, after a test-harness fix):**
+    - first run (Daniel at the Mac) and a re-run with the Mac idle both failed the same 12 R6/R7 checks, all passing headless, so live input was ruled out;
+    - a state dump at the start of R6/R7 plus a 30-frame wait made every check pass, which pointed at timing;
+    - **root cause (test, not game):** `leave_focus()` starts a time-based 0.45 s ease, and during it the camera, and so the crosshair ray, is blended toward the old device pose. The test waited a fixed 40 frames, which windowed on the 120 Hz display can end inside the ease, so R7 began with the camera 1.97 m off the eye (`hovered=radio`). R6 had the same problem entering the radio view;
+    - **fix:** `_settle_focus()` in `regress_test.gd` waits for the ease to finish (plus one physics tick) after all 17 focus enters and leaves. Headless stays 101/101.
+  - **Matched captures (one batched run, 26 frames, `renders/last_light/cp4_sheet_{a,b}.png`):** room overviews, every photo issue (extinguisher, lantern, coat and note, sill and tin, chart pose and viewer, the radio view, the optic, the generator, the wall lamp, the desk) and the torch in a blackout (`pp_torch-dark`, the beam on the chart and the generator).
+  - **Capture-tool fix:** close-up (`cu_*`) shots drew the prompt of wherever the last `pp_` pose left the player, because the player kept raycasting from its own body. Capture-camera views now mute the player (`_player_muted` in `capture_fp.gd`) and restore it afterwards. Checked in `cp4b_sheet.png`. The game itself was never affected: there the prompt and the view are the same camera.
+  - **Performance:** not benchmarked (Mac not confirmed free). The capture's PERF lines are unfocused-window numbers and not valid as a bench. Room is about 114k tris after the pass; a clean Medium/High bench belongs to Stage 6 or whenever Daniel says the Mac is free.
+- **Cabin pass summary (for the next session):**
+
+  | # | Issue (photo) | Root cause | Fix | Main files |
+  |---|---|---|---|---|
+  | 1 | Extinguisher read as "glowing eyes" (IMG_3134) | sphere-topped placeholder | period soda-acid unit, `build_extinguisher` | `build.py`, `documents.py` (`ext_label`) |
+  | 2 | Shelf lamp through the shelf (IMG_3135) | lamp floated 10 cm high, cap through the board above | storm lantern standing on the board | `build.py` |
+  | 3 | Torch upright, no use (IMG_3136) | decorative prop | lying on its side; E picks it up in a blackout, F/LT toggles a shadowed spot | `build.py`, `player.gd`, `station.gd`, `game_fp.gd`, `input_setup.gd` |
+  | 4 | No coat rack (IMG_3137) | missing | oak stand, oilskin, sou'wester, readable pocket note | `build.py`, `documents.py` |
+  | 5 | Red object, floating square (IMG_3138) | touch-up patch inside the window bay | patch moved to the pier and asserted; tartan tin | `build.py`, `spec.py` |
+  | 6 | Chart covered, not readable (IMG_3139) | props on the paper; chart was a focus view | props to the margins; full-screen zoom/pan inspection | `build.py`, `story_presenter.gd`, `station.gd` |
+  | 7 | Cursor stuck or free (IMG_3140) | three writers of `Input.mouse_mode`; replies freed the pointer away from the radio | one owner (`refresh_mouse`); key/wheel replies; viewer in `_input` | `game_fp.gd`, `dialogue_ui.gd`, `story_presenter.gd`, `player.gd` |
+  | 8 | Optic parts intersecting (IMG_3141) | governor, counter, motor and shaft misplaced | re-seated; BVH clearance check | `build.py` |
+
+  - **Known limitations left:** the coat collar reads a little like a domed cap; the START tag under the generator knob is partly hidden by the knob rim; an older conduit-clip shadow streak near the −48° lamp; 45 explained false-positive contact flags; documents have no open/close sound (Stage 5); the torch has no battery (by design, the brief allowed none).
+  - **Manual playtest for Daniel (feel is NOT TESTED by a human):**
+    1. walk to the radio, answer two replies with 1–4 and with the wheel + E; mouse-look should never stop in free walk;
+    2. walk away mid-conversation: the replies hide, and come back at the handset;
+    3. open the chart (E on the desk): wheel zoom at the pointer, drag to pan, T transcription, right click / E / Esc close; the HUD and subtitles must not draw over it;
+    4. switch the room lights off at the power panel: "Pick up the torch" on the top storage shelf; F on and off; the beam should feel like a hand torch, not a floodlight;
+    5. read the note in the coat pocket; check the coat and hat from the door side;
+    6. pause and resume (Esc) inside the radio view, the console and the chart, 4 times each: the pointer must always come back captured in free walk;
+    7. save in a blackout with the torch on, load: the torch is carried and on, and the shelf copy is gone.
 
 ## Stage 2 log
 - **Plan (2026-11-05), approved.** The full audit is at `~/.claude/plans/the-last-light-soft-hearth.md`.
