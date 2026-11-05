@@ -325,6 +325,7 @@ func _input(event: InputEvent) -> void:
 		InputSetup.pad_name = Input.get_joy_name(event.device)
 	if pad != InputSetup.pad_active:
 		InputSetup.pad_active = pad
+		refresh_mouse()                       # pad: the OS pointer hides in views and replies; mouse: it returns
 		if ui:
 			ui._refresh_vessels()             # the Tab tip shows the right glyph
 		if pad and presenter:

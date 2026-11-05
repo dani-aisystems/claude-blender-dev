@@ -19,12 +19,16 @@ North Point Light, Outer Hebrides, the night of 14–15 November 1971. The playe
 | 2026-11-04 | Portraits: **Blender 3D busts** from Blender Studio's CC0 Human Base Meshes, three expressions per character (approved; ⬜ not built yet). |
 | 2026-11-04 | 8 more 2k CC0 interior texture sets approved and downloaded (⬜ not yet wired into materials). |
 | 2026-11-04 (session 2) | **Staged polish programme.** Stages run 0 → 6, and each one needs Daniel's explicit approval. Cabin direction: maintained but aged 1971 NLB, cinematic but readable, period green and cream, full room remodel. Generator is an auxiliary standby set in the room. Optic drive is a motor plus clockwork standby. macOS only. All of it is recorded in `docs/ROADMAP.md`. |
+| 2026-11-05 | **Stage 2 (interactions):** quiet dot → ring crosshair; refuse START with a shut valve (with the reason); live gauge readings under the prompt; `hint_device` retired; full playable gamepad; camera-only interpolation (no global physics interpolation); a head-bob option, with movement numbers unchanged until Daniel's playtest; tips remembered per machine; the OS pointer hides while the pad drives a view. Details: ROADMAP Stage 2 log. |
 
 ## 3. Implemented
 ### Game (Godot, `projects/games/last_light/godot/`)
 | Area | Status | Where |
 |---|---|---|
-| First-person controller (walk, look, capsule collision, eased device views) | ✅ | `scripts/fp/player.gd` |
+| First-person controller (walk, look, capsule collision, eased device views). Stage 2C: the camera is drawn at the body position interpolated between physics ticks (look applied at once), mouse look is independent of window size, and there is a Head bob option | ✅ (feel NOT TESTED by a human) | `scripts/fp/player.gd` |
+| Interaction language (Stage 2A): quiet dot → warm ring (usable) / dashed grey ring (unavailable) with the reason; a ring cursor and prompt in device views; refusals shown once; no dead prompts; view switching radio ↔ chart; the door prompt follows the story | ✅ regress R5 | `station.gd::availability/prompt_info`, `player.gd::_actionable`, `fp_ui.gd` |
+| Radio panel (Stage 2B): keyed vessel list (no rebuild), buttons don't keep focus after a click, one-time Tab and wheel tips (`Settings.tips`) | ✅ regress R6 | `scripts/fp/fp_ui.gd`, `settings.gd` |
+| Gamepad (Stage 2C): look, a device-view cursor, A/B/X/Y/LB/RB/Start, d-pad replies, device-aware glyphs (keyboard / Xbox / PlayStation), context-grouped bindings | ✅ regress R7 (injected pad events) / ⬜ real-pad feel | `scripts/core/input_setup.gd`, `player.gd`, `fp_ui.gd`, `dialogue_ui.gd` |
 | Data-driven interaction (`IA_*` volumes from the GLB, toggles, holds, cycles, documents, door) | ✅ | `scripts/fp/station.gd` (`DEVICES` table) |
 | Crosshair picking: a specific control beats its cabinet's info/focus volume; furniture doesn't occlude controls mounted on it | ✅ Stage 0 fix (before it, START, the breakers and the console knobs couldn't be targeted). Covered by `tests/interaction_test.gd` | `scripts/fp/player.gd::pick()` |
 | Mouse-capture policy: one place decides (free-walk only; not while paused, in device views, documents, logbook or open replies) | ✅ Stage 0 fix. Covered by `tests/regress_test.gd`, and windowed for the real mouse mode | `scripts/fp/game_fp.gd::mouse_should_capture()` |
@@ -54,12 +58,12 @@ North Point Light, Outer Hebrides, the night of 14–15 November 1971. The playe
 | Island, reef rocks and ships as Blender models | ⬜ (procedural stand-ins in Godot) |
 | Character portraits | ⬜ (base meshes downloaded; see the handoff for measurements) |
 
-## 4. Test and verification status (last run 2026-11-05, Stage 1 end, build v021 / GLB v019)
-All suites below re-run at the end of Stage 1: pytest 18/18, regress 38/38 (headless), interaction 134/134 (6 warnings: documents open with no sound), qa_sweep 945/945 (headless), run_tests 95/95, sim_v2 no gate failures, story_test 0 failures. The rows below give the commands.
+## 4. Test and verification status (last run 2026-11-05, Stage 2 end)
+All suites below re-run at the end of Stage 2: pytest 18/18, regress 87/87 windowed (no skips) and 84/84 headless, interaction 134/134 (6 warnings: documents open with no sound), qa_sweep 948/948, run_tests 95/95, sim_v2 no gate failures, story_test 0 failures. The rows below give the commands. **Run every suite under `timeout`**: a GDScript parse error makes a `-s` test hang idle.
 | Check | Command | Result |
 |---|---|---|
 | Workspace pytest (now includes GLB hooks, import hints, normals, budgets) | `tools/py -m pytest -q` | ✅ 18 pass |
-| Stage 0 regressions (mouse after reply, reply/panel overlap at 5 aspect ratios, pause input, radio-order keys) | `… -s res://tests/regress_test.gd`. Run without `--headless` for the real mouse-mode checks | ✅ 40/40 windowed; 38/38 headless (mouse-mode checks skipped) |
+| Regressions: Stage 0 R1–R4 (mouse after reply, reply/panel overlap, pause input, thought lines) plus Stage 2 R5 (interaction state), R6 (radio panel), R7 (gamepad and camera) | `… -s res://tests/regress_test.gd`. Run windowed through `tools/godot_bg` for the real mouse-mode checks | ✅ 87/87 windowed; 84/84 headless (mouse-mode checks skipped) |
 | Interaction checklist (radio, generator, power, console, door, desk and documents: walkable approach from spawn, prompt, part, state, sound trigger, console-view clicks, document open and close, save/load) | `… -s res://tests/interaction_test.gd` | ✅ 134 checks, 0 failures, 6 warnings (documents open with no sound → Stage 5) |
 | QA sweep: dialogue fit (546 lines, 142 replies, text size 1.0 and 1.5) and options apply live | `… -s res://tests/qa_sweep_test.gd -- --windowed` (headless skips the display checks) | ✅ 948/948 |
 | Audio objective QA (peak, RMS, DC, clipping, loop seams) | `tools/py projects/games/last_light/audio/analyze.py` | ✅ 37 files: no clipping, seamless loops. 2 minor flags (`click_button` DC, `horn_fishing` mastered hot) |

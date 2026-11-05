@@ -215,7 +215,7 @@ func _refresh_choices() -> void:
 		var idx: int = c["index"]
 		b.pressed.connect(func(): _pick(idx))
 		choice_box.add_child(b)
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN if InputSetup.pad_active else Input.MOUSE_MODE_VISIBLE
 	_freed_mouse = true
 	_layout_choices()
 	if InputSetup.pad_active:

@@ -287,6 +287,18 @@ func _tap(b: JoyButton) -> void:
 	await _frames(2)
 
 
+## Stand 1.2 m from a control (towards the room centre) and look at it, as a player would.
+func _aim_at(id: String) -> void:
+	var p := _ia_pos(id)
+	var inward := Vector3(-p.x, 0, -p.z).normalized()
+	g.player.global_position = Vector3(p.x + inward.x * 1.2, g.player.global_position.y, p.z + inward.z * 1.2)
+	var to: Vector3 = p - (g.player.global_position + Vector3(0, g.player.EYE, 0))
+	g.player._yaw = atan2(-to.x, -to.z)
+	g.player._pitch = atan2(to.y, Vector2(to.x, to.z).length())
+	g.player._apply_look()
+	await _frames(6)
+
+
 func _ia_pos(id: String) -> Vector3:
 	for b in g.station.get_children():
 		if b is StaticBody3D and String(b.get_meta("ia", "")) == id:
@@ -346,10 +358,31 @@ func _r7_gamepad_and_camera() -> void:
 	# camera follows the body exactly after a placement (no interpolation smear)
 	var cam_err: float = g.player.camera.global_position.distance_to(g.player.global_position + Vector3(0, g.player.EYE + g.player._bob_y, 0))
 	_check(cam_err < 0.01, "camera sits at the eye right after a placement (%.3f m)" % cam_err)
+	# generator: hold pad A on START cranks, letting go stops (hold-to-crank, valve open)
+	g.sim.gen = KeeperSim.Gen.OFF
+	g.sim.fuel_valve = true
+	g.sim.start_held = false
+	await _aim_at("start")
+	_pad_button(JOY_BUTTON_A, true)
+	await _frames(4)
+	var cranking: bool = g.sim.start_held and g.sim.gen == KeeperSim.Gen.CRANKING
+	_pad_button(JOY_BUTTON_A, false)
+	await _frames(4)
+	_check(cranking and not g.sim.start_held, "pad: hold A on START cranks, release stops (hovered=%s)" % g.player.hovered)
+	g.sim.gen = KeeperSim.Gen.OFF
+	# stair door: pad A gives the chapter-gated line (ch1)
+	g.presenter.hint.text = ""
+	await _aim_at("door")
+	await _tap(JOY_BUTTON_A)
+	_check(g.presenter.hint.text != "", "pad: A on the stair door gives the bolted-door line (hovered=%s)" % g.player.hovered)
 	# d) device view: the pad cursor picks the MODE knob, A turns it, LB turns it back, B steps back
 	g.player.enter_focus("console")
 	await _frames(40)
 	_check(g.player.virtual_cursor.is_finite(), "entering a device view on the pad starts the pad cursor")
+	if DisplayServer.get_name() == "headless":
+		skips.append("R7 OS pointer hidden in a pad device view (headless)")
+	else:
+		_check(Input.mouse_mode == Input.MOUSE_MODE_HIDDEN, "pad device view hides the OS pointer (mode %d)" % Input.mouse_mode)
 	g.player.virtual_cursor = g.player.camera.unproject_position(_ia_pos("mode"))
 	await _frames(3)
 	var m0: int = g.sim.mode

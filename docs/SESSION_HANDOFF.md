@@ -38,18 +38,27 @@ Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (cur
 - **This session's files were** Blender/`tex`, `materials.gd`, the `station.gd` `_swap_materials` and PT_handset lines, the four desk views in `capture_fp.gd`, and its ROADMAP/REFERENCE_SPEC entries. Stage 2 (a parallel session) stages its own hunks only.
 - **Bench done:** Medium +0–4 % median, inside budget rules; High desk +11 % median, at the threshold. See the ROADMAP for the suggested Stage 6 trim.
 
-## Latest status (2026-11-05, Stage 2 started)
-- **The Stage 2 plan is approved.** The plan is at `~/.claude/plans/the-last-light-soft-hearth.md`; the audit and decisions are in the ROADMAP "Stage 2 log".
-- **Branding** committed locally as `0f18df3`.
-- **The 6 leftover `watch_room_T_LL_{Barometer,Calendar,Diagram}` files** deleted (Daniel's OK).
-- **A parallel session is doing "Stage 1 iteration 5"** (desk micro-detail; uncommitted). Files are split between the sessions; see the ROADMAP top note. **Never stage its files.**
-- **The "before" capture is done:** `renders/last_light/s2a_before_*`, from a scratch worktree (since removed).
-- **Iteration 2A is done** (uncommitted) and its checkpoint has been presented. Details are in the ROADMAP Stage 2 log.
-- **Next:**
-  1. Daniel's verdict on 2A;
-  2. if approved, commit the Stage 2 hunks only. `station.gd` and `capture_fp.gd` also hold iteration 5 hunks, so stage them via a patch (`git diff` → edit → `git apply --cached`), never `git add` of the whole file;
-  3. then iteration 2B.
-- **Gotcha:** a parse error makes a headless `-s` test hang idle. Always run the suites under `timeout`.
+## Latest status (2026-11-05, Stage 2 approved by Daniel)
+- **Next: plan Stage 3 only** (dialogue, characters and story pacing). Inspect, propose and agree with Daniel; **no implementation** before he approves.
+- **Commits (local, never pushed):** branding `0f18df3`; 2A `52bcb6f`; 2B `1359e44`; 2C `7a715c2`; 2D plus docs in the Stage 2 milestone commit.
+- **Plan:** `~/.claude/plans/the-last-light-soft-hearth.md`. Audit, decisions and per-iteration logs: ROADMAP "Stage 2 log".
+- **Tests at the stage end:**
+  - regress 87/87 windowed (no skips), 84/84 headless;
+  - interaction 134/134;
+  - qa_sweep 948/948;
+  - story 0 failures;
+  - sim_v2 no gate failures;
+  - run_tests 95/95;
+  - pytest 18/18.
+- **NOT TESTED (needs Daniel):** walking and look feel on his 120 Hz display; pad feel (he has no controller right now); the Options screen rows on screen.
+- **If Daniel asks for another iteration:** stay in Stage 2; the iteration-5 session's work is committed (`81d9818`), so the tree has only Stage 2 changes.
+- **How Stage 2 commits were made:** shared files were staged by reverse-applying the other session's hunks onto a temp copy (`git diff -U1` → keep only their hunks → `patch -R` → `git hash-object -w` → `git update-index --cacheinfo`). **Not** `git apply --unidiff-zero`, which mis-placed hunks.
+- **Gotchas:**
+  - a parse error makes a headless `-s` test hang idle; always run the suites under `timeout`;
+  - `-s` test scripts can't name autoloads at compile time; use `root.get_node("Settings")`.
+
+## Earlier status (2026-11-05, Stage 2 started)
+- The plan was approved, branding was committed, the 6 leftover textures were deleted, and the "before" capture was taken from a worktree of `39fc0e7` (`renders/last_light/s2a_before_*`).
 
 ## Latest status (2026-11-05, later)
 - **Stage 1 approved** and committed locally. Next: plan Stage 2 with Daniel (no implementation before he agrees the plan).

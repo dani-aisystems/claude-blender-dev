@@ -49,15 +49,15 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | | |
 |---|---|
 | **Stage** | 2, first-person interactions and gameplay |
-| **Iteration** | 2A `52bcb6f` and 2B `1359e44` approved and committed. **2C (gamepad and feel) done, checkpoint presented**, awaiting Daniel. The plan is at `~/.claude/plans/the-last-light-soft-hearth.md`; branding `0f18df3` |
-| **Next actionable task** | Daniel's 2C verdict. If approved: commit the Stage 2 hunks only, then 2D (full workstation pass, windowed regress for the real mouse-mode checks, stage report) |
+| **Iteration** | **Stage 2 approved by Daniel 2026-11-05** (2A `52bcb6f`, 2B `1359e44`, 2C `7a715c2`, 2D the Stage 2 milestone commit). Stage 3 not started |
+| **Next actionable task** | **Plan Stage 3** (dialogue, characters and story pacing): inspect and propose only, as Daniel asked. No implementation before he approves the plan |
 
 ## Stages
 | # | Stage | Status |
 |---|---|---|
 | 0 | Critical fixes and regression baseline | ✅ **approved by Daniel 2026-11-04** (iteration 0.2) |
 | 1 | Cabin lighting, materials and architecture | ✅ **approved by Daniel 2026-11-05** (iterations 1.0, 1a, 1b, 2, 3, 3b, 4, 1p) |
-| 2 | First-person interactions and gameplay | 🟡 plan approved 2026-11-05; iteration 2A next |
+| 2 | First-person interactions and gameplay | ✅ **approved by Daniel 2026-11-05** (iterations 2A–2D) |
 | 3 | Dialogue, characters and story pacing | ⬜ |
 | 4 | Outside world and major story events | ⬜ |
 | 5 | Sound and cinematic presentation | ⬜ |
@@ -521,7 +521,22 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
     - pytest 18/18.
   - **Evidence:** `renders/last_light/s2b_*`; sheet `s2b_vs_s2a.png` (the 2A frames are the "before"; the bot's story timing drifted, so the objective text differs).
 - **Iteration 2B approved by Daniel (2026-11-05); committed `1359e44`.** Tips stay per machine. He has no controller right now, so pad feel is NOT TESTED by a human.
-- **Iteration 2C (2026-11-05), gamepad and feel. Done; checkpoint presented, awaiting Daniel.**
+- **Daniel (2026-11-05): Stage 2 approved.** Next: plan Stage 3 only (inspect and propose; no implementation).
+- **Iteration 2D (2026-11-05), integration and QA. Done; part of the Stage 2 milestone commit.**
+  - **Daniel's 2C decisions:** keep camera-only interpolation; hide the OS pointer while the pad drives a view.
+  - **Pointer:** `player.capture_mouse()` uses `MOUSE_MODE_HIDDEN` when the pad is active, otherwise unchanged. `dialogue_ui` hides it for pad replies. A mouse movement brings it back (`game_fp._input` → `refresh_mouse`).
+  - **R7 additions:** pad A hold-to-crank on START, pad A on the stair door, and the hidden pointer (windowed only).
+  - **Tests:**
+    - regress **87/87 windowed with no skips** (R1 real mouse capture after a reply, VISIBLE in device views, HIDDEN for the pad) and 84/84 headless;
+    - interaction 134/134 (6 known warnings);
+    - qa_sweep 948/948;
+    - story 0 failures;
+    - sim_v2 no gate failures;
+    - run_tests 95/95;
+    - pytest 18/18.
+  - **Stage-end capture:** `s2f_*`, the same shot list as `s2a_before_*` (`39fc0e7`). Sheets: `s2f_vs_before_prompts.png` and `s2f_vs_before_views.png`. The room differs only by the iteration 5 desk props (`81d9818`).
+  - **NOT TESTED (Daniel):** walking and look feel on the 120 Hz display; real-pad feel (no controller); the Options rows on screen; audio (still never listened to; Stage 5). No benchmark this stage.
+- **Iteration 2C (2026-11-05), gamepad and feel. Approved by Daniel; committed `7a715c2`.**
   - **`input_setup.gd`:** bindings by context:
     - `PAD_FP`: A interact, B back, X transcript, Y logbook, LB/RB turn, L3 sprint, Start pause, left stick move, right stick look;
     - `PAD_V1`: boost moved from A to RT;
