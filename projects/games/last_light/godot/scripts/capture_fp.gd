@@ -91,7 +91,7 @@ func view(name_: String) -> Array:
 		"cu_power": return eye(-80, 1.4, -80, 3.0, 1.6, 1.2) + [62.0, false, 0.03]       # charger / distribution / cells
 		"cu_window": return eye(0, 1.4, 0, 3.42, 1.65, 1.75) + [55.0, false, 0.03]       # bay 0 glass
 		"cu_door": return eye(170, 0.2, 170, 2.0, 1.65, 1.1) + [55.0, false, 0.03]
-		"cu_shelf": return eye(128, 1.55, 128, 3.0, 1.6, 1.15) + [55.0, false, 0.03]   # storage shelf, old-log box      # stair door (knock scene)
+		"cu_shelf": return eye(128, 1.55, 128, 3.0, 1.6, 1.15) + [55.0, false, 0.03]     # storage shelf, old-log box
 		# --- Cabin repair (Iteration A): one matched close-up per defect in Daniel's screenshot brief ---
 		"cu_gauges": return eye(80, 2.15, 82, 2.85, 1.42, 1.17) + [34.0, false, 0.02]    # console hood dials (IMG_3117)
 		"cu_selectors": return eye(84, 1.95, 86, 2.6, 1.42, 0.9) + [36.0, false, 0.02]   # mode / intensity knobs
@@ -99,8 +99,12 @@ func view(name_: String) -> Array:
 		"cu_photo": return eye(-105, 2.35, -105, 3.2, 1.78, 1.85) + [30.0, false, 0.02]  # keepers' photo (IMG_3122)
 		"cu_logbook": return eye(-12, 1.75, -13, 2.5, 1.5, 0.79) + [42.0, false, 0.02]   # open station log (IMG_3119)
 		"cu_radio": return eye(-4, 1.75, -6, 2.75, 1.38, 0.95) + [50.0, false, 0.02]     # transceiver + mic (IMG_3118)
-		"cu_shelf": return eye(140, 1.1, 140, 3.0, 1.55, 0.78) + [58.0, false, 0.02]     # storage rack (IMG_3116)
 		"cu_gen": return eye(-140, 0.7, -140, 3.0, 1.6, 0.8) + [62.0, false, 0.02]       # generator cage (IMG_3123)
+		# --- Stage 1 iteration 5: desk micro-detail (mug, pencils, logbook, chart, books, chair) ---
+		"cu_desk_l": return eye(-20, 1.85, -11, 2.5, 1.25, 0.82) + [45.0, false, 0.02]   # mug, pencil pot, logbook
+		"cu_desk_r": return eye(28, 2.1, 16, 2.71, 1.4, 0.85) + [45.0, false, 0.02]      # books, binoculars, forecast
+		"cu_chart": return eye(3, 1.95, 2.3, 2.48, 1.6, 0.78) + [50.0, false, 0.02]      # chart, rule, dividers
+		"cu_chair": return eye(34, 1.08, 1.7, 1.73, 1.5, 0.6) + [55.0, false, 0.02]      # chair + desk front, standing
 		# plan: the near plane clips everything above F+2.65 (beams, pipes, ceiling) for a clean top view
 		"plan": return [Vector3(0, F + 12.5, 0.001), Vector3(0, F, 0), 30.0, true, 12.5 - 2.65]
 		"iso": return [Vector3(-6.5, F + 8.5, 7.0), Vector3(0.2, F + 0.6, -0.4), 40.0, true, 0.03]

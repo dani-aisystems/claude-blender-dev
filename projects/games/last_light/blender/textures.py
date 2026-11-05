@@ -289,8 +289,41 @@ def build_chart(spec):
     d.text((410, 120), "NORTH POINT", font=font("Georgia Bold.ttf", 72), fill=(60, 40, 25), anchor="mm")
     d.text((410, 190), "and approaches  ·  soundings in metres", font=font("Georgia Italic.ttf", 34), fill=(80, 60, 40), anchor="mm")
     d.rectangle([0, 0, W - 1, H - 1], outline=(90, 70, 50), width=12)
+    keeper_marks(img, spec, P)
     img = aged(img, 40, 7)
     return img
+
+
+def keeper_marks(img, spec, P):
+    """Stage 1 iteration 5: the keeper's own work on the chart, in pencil, plus tea rings. Nothing here
+    may show tonight's events (the chart is on screen from the first beat of ch1): clearing bearings
+    for the guts, yesterday's 2100 fix, an old line half rubbed out."""
+    W, H = img.size
+    d = ImageDraw.Draw(img, "RGBA")
+    pen = (78, 78, 84, 150)
+    hand = font("Bradley Hand Bold.ttf", 30)
+    for brg, txt in ((-24.0, "clear 336°"), (22.0, "clear 022°")):          # clearing bearings off the reefs
+        a = math.radians(brg)
+        d.line([P(30 * math.sin(a), -30 * math.cos(a)), P(205 * math.sin(a), -205 * math.cos(a))], fill=pen, width=2)
+        lx, lz = 120 * math.sin(a) + (14 if brg > 0 else -14), -120 * math.cos(a)
+        d.text(P(lx, lz), txt, font=hand, fill=pen, anchor="lm" if brg > 0 else "rm")
+    fx, fz = 120 * math.sin(math.radians(10)), -120 * math.cos(math.radians(10))   # yesterday's fix
+    x, y = P(fx, fz)
+    d.line([x - 12, y - 12, x + 12, y + 12], fill=pen, width=3)
+    d.line([x - 12, y + 12, x + 12, y - 12], fill=pen, width=3)
+    d.ellipse([x - 22, y - 22, x + 22, y + 22], outline=pen, width=2)
+    d.text((x + 30, y - 4), "13/11  2100", font=hand, fill=pen, anchor="lm")
+    a0, a1 = P(-150, -60), P(-40, -130)                                     # an old line, rubbed out
+    d.line([a0, a1], fill=(78, 78, 84, 40), width=3)
+    mx, my = (a0[0] + a1[0]) / 2, (a0[1] + a1[1]) / 2
+    d.ellipse([mx - 120, my - 50, mx + 120, my + 50], fill=(240, 232, 210, 40))
+    # tea rings (the mug, 80 mm = ~205 px at 2560 px/m): broken arcs, darkest where the tea dried at the rim
+    for k, (u, v) in enumerate(spec["desk_chart"]["ring_uv"]):
+        cx, cy, r = u * W, (1 - v) * H, 101
+        a = 95 if k == 0 else 55
+        for j in range(3):
+            d.arc([cx - r - j, cy - r - j, cx + r + j, cy + r + j], 30 + 70 * k, 330 + 70 * k, fill=(130, 88, 50, a - 25 * j), width=3)
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(160, 120, 80, 14 if k == 0 else 9))
 
 
 def compass_rose():

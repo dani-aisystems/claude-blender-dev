@@ -100,6 +100,13 @@ def textured_material(name, image_path):
     nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
     nt.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
     bsdf.inputs["Roughness"].default_value = 0.6
+    rough_path = Path(image_path).with_name(Path(image_path).stem + "_rough.png")
+    if rough_path.exists():          # Stage 1 iteration 5: per-texel roughness (glTF packs it as metallicRoughness)
+        rt = nt.nodes.new("ShaderNodeTexImage")
+        rt.image = bpy.data.images.load(str(rough_path), check_existing=True)
+        rt.image.colorspace_settings.name = "Non-Color"
+        nt.links.new(rt.outputs["Color"], bsdf.inputs["Roughness"])
+        bsdf.inputs["Metallic"].default_value = 0.0
     return mat
 
 
@@ -157,9 +164,9 @@ BEVEL = {"on": True, "max": 0.006}
 STAIR_DEPTH = 0.62                    # stair bulkhead depth into the room (Stage 1 iteration 3)    # Stage 1 iteration 2: small chamfers so edges catch the light
 
 
-def box(bm, loc, size, b3=None, bevel=None):
+def box(bm, loc, size, b3=None, bevel=None, segs=1):
     """Box; every box thicker than 12 mm gets a small chamfer (min(6 mm, 20 % of its thinnest side)).
-    bevel=0 disables it (colliders); a number forces that width."""
+    bevel=0 disables it (colliders); a number forces that width; segs > 1 rounds the edge."""
     mat = m4(Vector(loc), b3) @ Matrix.Diagonal((*size, 1.0))
     verts = bmesh.ops.create_cube(bm, size=1.0, matrix=mat)["verts"]
     thin = min(abs(v) for v in size)
@@ -168,7 +175,7 @@ def box(bm, loc, size, b3=None, bevel=None):
         return verts
     faces = list({f for v in verts for f in v.link_faces})
     edges = list({e for v in verts for e in v.link_edges})
-    out = bmesh.ops.bevel(bm, geom=edges, offset=w, offset_type="OFFSET", segments=1, profile=0.5,
+    out = bmesh.ops.bevel(bm, geom=edges, offset=w, offset_type="OFFSET", segments=segs, profile=0.5,
                           affect="EDGES", clamp_overlap=True)
     keep = [f for f in faces if f.is_valid] + list(out.get("faces", []))
     return list({v for f in keep for v in f.verts})
@@ -412,6 +419,132 @@ def tag(verts, index):
             f.material_index = index
 
 
+# ------------------------------------------------------------------ small-prop helpers (Stage 1 iteration 5)
+# The room is at its 32-material cap: small props are one material (M_LL_Props, documents.py atlas) whose
+# colours come from flat swatches and whose roughness comes from T_LL_Props_rough.png.
+
+PA = S["props_atlas"]
+DC = S["desk_chart"]
+
+
+def sw_uv(name):
+    sw, A = PA["swatch"], PA["size"]
+    i = list(PA["swatches"]).index(name)
+    x = sw["x0"] + (i % sw["cols"]) * sw["px"] + sw["px"] / 2
+    y = sw["y0"] + (i // sw["cols"]) * sw["px"] + sw["px"] / 2
+    return (x / A, 1 - y / A)
+
+
+def region_uv(name, u, v):
+    """(u, v) in 0..1 inside an atlas region (v = 0 at the region's bottom edge) -> mesh UV."""
+    x0, y0, x1, y1 = PA["regions"][name]
+    A = PA["size"]
+    return ((x0 + u * (x1 - x0)) / A, 1 - (y1 - v * (y1 - y0)) / A)
+
+
+def region_rect(name, u0=0.0, v0=0.0, u1=1.0, v1=1.0):
+    a, b = region_uv(name, u0, v0), region_uv(name, u1, v1)
+    return (a[0], a[1], b[0], b[1])
+
+
+def solid(B, swatch, fn, prefix="SM_Room"):
+    """Run fn(bm) to add CLOSED geometry to the props bucket, fix its winding (textured buckets skip the
+    flush-time recalc) and paint every face with one swatch."""
+    bm = B.bm("M_LL_Props", prefix)
+    vs = made(bm, lambda: fn(bm))
+    faces = list({f for v in vs for f in v.link_faces})
+    bmesh.ops.recalc_face_normals(bm, faces=faces)
+    uvl, uv = B.uv(bm), sw_uv(swatch)
+    for f in faces:
+        for lp in f.loops:
+            lp[uvl].uv = uv
+    return vs
+
+
+def lathe_uv(bm, uvl, center, b3, prof, segs, uvf):
+    """Open solid of revolution about local Z with a UV wrap: prof = [(r, z, v)], u = angle / 2 pi.
+    segs + 1 columns so the seam keeps its UVs. Outward winding when the profile runs outside-up."""
+    rings = []
+    for rr, zz, _ in prof:
+        rings.append([bm.verts.new(Vector(center) + b3 @ Vector((rr * math.cos(2 * math.pi * i / segs),
+                                                                   rr * math.sin(2 * math.pi * i / segs), zz)))
+                      for i in range(segs + 1)])
+    faces = []
+    for k in range(len(prof) - 1):
+        a, b2 = rings[k], rings[k + 1]
+        for i in range(segs):
+            f = bm.faces.new((a[i], a[i + 1], b2[i + 1], b2[i]))
+            for lp, (ii, kk) in zip(f.loops, ((i, k), (i + 1, k), (i + 1, k + 1), (i, k + 1))):
+                lp[uvl].uv = uvf(ii / segs, prof[kk][2])
+            faces.append(f)
+    return faces
+
+
+def frames(pts, n0=None):
+    """Parallel-transport frames (T, N, B) along a polyline."""
+    pts = [Vector(p) for p in pts]
+    T = [(pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized() for i in range(len(pts))]
+    ref = Vector(n0) if n0 is not None else (Vector((0, 0, 1)) if abs(T[0].z) < 0.9 else Vector((1, 0, 0)))
+    N = (ref - T[0] * ref.dot(T[0])).normalized()
+    out = []
+    for i, t in enumerate(T):
+        if i:
+            N = (N - t * N.dot(t)).normalized()
+        out.append((t, N, t.cross(N)))
+    return pts, out
+
+
+def sweep(bm, pts, r, segs=8, ry=None, n0=None, caps=True):
+    """Closed tube along a polyline (elliptical when ry is given: r along N, ry along B)."""
+    pts, fr = frames(pts, n0)
+    ry = r if ry is None else ry
+    rings = []
+    for p, (t, N, Bv) in zip(pts, fr):
+        rings.append([bm.verts.new(p + N * (r * math.cos(2 * math.pi * j / segs)) + Bv * (ry * math.sin(2 * math.pi * j / segs)))
+                      for j in range(segs)])
+    for a, b2 in zip(rings, rings[1:]):
+        for j in range(segs):
+            k = (j + 1) % segs
+            bm.faces.new((a[j], a[k], b2[k], b2[j]))
+    if caps:
+        bm.faces.new(list(reversed(rings[0])))
+        bm.faces.new(rings[-1])
+
+
+def bezier(p0, p1, p2, p3, n):
+    p0, p1, p2, p3 = (Vector(p) for p in (p0, p1, p2, p3))
+    return [p0 * (1 - t) ** 3 + p1 * 3 * t * (1 - t) ** 2 + p2 * 3 * t * t * (1 - t) + p3 * t ** 3
+            for t in (i / (n - 1) for i in range(n))]
+
+
+def resample(pts, step):
+    pts = [Vector(p) for p in pts]
+    out, acc = [pts[0]], 0.0
+    for a, b in zip(pts, pts[1:]):
+        seg = (b - a).length
+        while acc + seg >= step:
+            t = (step - acc) / seg
+            a = a + (b - a) * t
+            seg = (b - a).length
+            out.append(a.copy())
+            acc = 0.0
+        acc += seg
+    if (out[-1] - pts[-1]).length > 1e-6:
+        out.append(pts[-1])
+    return out
+
+
+def coil(path, radius, pitch, per_turn=8, n0=(0, 0, 1)):
+    """Helix wound around a polyline: a coiled telephone-style cord."""
+    pts, fr = frames(resample(path, pitch / per_turn), n0)
+    return [p + N * (radius * math.cos(2 * math.pi * i / per_turn)) + Bv * (radius * math.sin(2 * math.pi * i / per_turn))
+            for i, (p, (t, N, Bv)) in enumerate(zip(pts, fr))]
+
+
+def rot_about(axis, deg):
+    return Matrix.Rotation(math.radians(deg), 3, Vector(axis))
+
+
 def needle_fn(length, width=0.006):
     """Tapered pointer with a counterweight tail and a raised hub. Local Z layers (part sits 4 mm above
     the dial face): blade 5-8 mm, hub 3-11 mm, so needle + hub stay below the gauge glass (Iteration A)."""
@@ -510,6 +643,15 @@ def toggle_frame(fb3):
 
 def drop(B, bearing, along, z_top, z_bottom, dist, r=0.02):
     seg_cyl(B.bm("M_LL_Iron", "SM_RoomPipes"), dp(bearing, along, z_top, dist), dp(bearing, along, z_bottom, dist), r)
+    # Stage 1 iteration 5: saddle clips back to the wall (the drops floated in front of it)
+    wall = math.sqrt(max(R_IN ** 2 - along ** 2, 0.0))
+    gap = wall - dist
+    if 0.0 < gap < 0.12:
+        n = max(2, int(abs(z_top - z_bottom) / 0.55) + 1)
+        for k in range(n):
+            z = z_bottom + (z_top - z_bottom) * (k + 0.5) / n
+            box(B.bm("M_LL_Iron", "SM_RoomPipes"), dp(bearing, along, z, (dist + wall) / 2 + r * 0.25),
+                (r * 2.6, gap + r * 0.5, 0.028), wb(bearing), bevel=0.0)
 
 
 # ------------------------------------------------------------------ room shell
@@ -586,6 +728,20 @@ def build_shell(B):
         for k in range(5):
             sb_ = c + (k - 2) * (R["bay_half_deg"] * 2 / 4) * 0.94
             box(B.bm("M_LL_Wood", "SM_Wainscot"), dp(sb_, 0, (0.17 + 0.74) / 2, R_IN - 0.045), (0.07, 0.02, 0.57), wb(sb_))
+        # Stage 1 iteration 5: glazing beads round each pane (room side) and two hinges per casement
+        mx, tz = fr * 0.375, z0 + hh * 0.55
+        bw = 0.014
+        for (xa, xb) in ((-chord / 2 + fr, -mx), (mx, chord / 2 - fr)):
+            for (za, zb) in ((z0 + fr, tz - fr * 0.325), (tz + fr * 0.325, z1 - fr)):
+                xm, zm = (xa + xb) / 2, (za + zb) / 2
+                for zz in (za + bw / 2, zb - bw / 2):
+                    box(steel, at(xm, zz, 0.008), (xb - xa, 0.012, bw), bs, bevel=0.0)
+                for xx in (xa + bw / 2, xb - bw / 2):
+                    box(steel, at(xx, zm, 0.008), (bw, 0.012, zb - za - 2 * bw), bs, bevel=0.0)
+        for sx in (-1, 1):
+            for hz_ in (z0 + 0.22, z1 - 0.22):
+                cyl(steel, at(sx * (chord / 2 - fr - 0.006), hz_, 0.082), 0.011, 0.011, 0.07, 10)
+                box(steel, at(sx * (chord / 2 - fr - 0.03), hz_, 0.081), (0.04, 0.004, 0.06), bs, bevel=0.0)
         # brass casement fittings: a lever handle on the centre mullion and a stay on the bottom rail
         brass = B.bm("M_LL_Brass", "SM_WinBrass")
         hp = at(0.0, z0 + hh * 0.42, 0.075)
@@ -649,20 +805,32 @@ def build_desk(B):
     w, d, top = 2.2, 0.85, 0.78
     back = back_dist(w)
     c = back - d / 2
-    box(B.bm("M_LL_Wood"), dp(b, 0, top - 0.025, c), (w, d, 0.05), bs)
+    # Stage 1 iteration 5: rounded (bullnose) oak top; drawer fronts with 6 mm reveals instead of 3 cm gaps,
+    # brass bar pulls on posts, a lock on each top drawer, a black kick strip (was: flat brass slabs)
+    box(B.bm("M_LL_Wood"), dp(b, 0, top - 0.025, c), (w, d, 0.05), bs, bevel=0.012, segs=3)
     box(B.bm("M_LL_WoodDark"), dp(b, 0, top - 0.06, c - d / 2 + 0.02), (w - 0.04, 0.03, 0.04), bs)
+    front = c - (d - 0.06) / 2
     for s in (-1, 1):
         px = s * (w / 2 - 0.27)
         box(B.bm("M_LL_SteelPaint"), dp(b, px, (top - 0.05) / 2, c), (0.5, d - 0.06, top - 0.05), bs)
+        box(B.bm("M_LL_Bakelite", "SM_Props"), dp(b, px, 0.04, front - 0.004), (0.5, 0.012, 0.08), bs, bevel=0.0)
+        pitch = (top - 0.05 - 0.085) / 3
         for k in range(3):
-            z = 0.12 + k * 0.22
-            box(B.bm("M_LL_SteelPaint"), dp(b, px, z + 0.08, c - d / 2 + 0.03), (0.46, 0.02, 0.19), bs)
-            box(B.bm("M_LL_Brass"), dp(b, px, z + 0.14, c - d / 2 + 0.015), (0.12, 0.02, 0.018), bs)
+            zc_ = 0.085 + pitch * (k + 0.5)
+            box(B.bm("M_LL_SteelPaint"), dp(b, px, zc_, front - 0.008), (0.47, 0.016, pitch - 0.006), bs, bevel=0.003)
+            brass = B.bm("M_LL_Brass", "SM_Props")
+            pz = zc_ + pitch * 0.18
+            for sx in (-1, 1):
+                seg_cyl(brass, dp(b, px + sx * 0.05, pz, front - 0.016), dp(b, px + sx * 0.05, pz, front - 0.038), 0.005, 10)
+                cyl(brass, dp(b, px + sx * 0.05, pz, front - 0.0165), 0.009, 0.009, 0.002, 12, basis_z(o))
+            seg_cyl(brass, dp(b, px - 0.065, pz, front - 0.04), dp(b, px + 0.065, pz, front - 0.04), 0.0055, 12)
+            if k == 2:
+                cyl(brass, dp(b, px, zc_ - pitch * 0.2, front - 0.017), 0.011, 0.011, 0.002, 16, basis_z(o))
+                box(B.bm("M_LL_Bakelite", "SM_Props"), dp(b, px, zc_ - pitch * 0.2 - 0.002, front - 0.0182), (0.003, 0.0006, 0.009), bs, bevel=0.0)
     B.collider("desk", dp(b, 0, 0.42, c), (w + 0.04, d + 0.04, 0.84), bs)
     B.empty("IA_drawer", dp(b, -(w / 2 - 0.27), 0.2, c - d / 2 - 0.02), (0.24, 0.06, 0.11), bs)
     # teleprinter forecast sheet beside the radar
     fs = basis_z(u, r * math.cos(-0.25) + o * math.sin(-0.25))
-    box(B.bm("M_LL_Paper"), dp(b, 0.82, top + 0.003, c - 0.25), (0.21, 0.28, 0.002), fs)
     B.empty("IA_forecast", dp(b, 0.82, top + 0.03, c - 0.25), (0.12, 0.15, 0.04), fs)
     # transceiver (left of centre, R3)
     steel = B.bm("M_LL_SteelPaint")
@@ -684,12 +852,7 @@ def build_desk(B):
     for s in (-1, 1):
         seg_cyl(B.bm("M_LL_Brass"), fc + fb3.col[0] * (s * 0.3) + fb3.col[1] * 0.1 + fb3.col[2] * 0.02,
                 fc + fb3.col[0] * (s * 0.3) - fb3.col[1] * 0.1 + fb3.col[2] * 0.02, 0.008)
-
-    def mic(bm, uv):
-        cyl(bm, (0, 0, 0.012), 0.06, 0.07, 0.024, 20)
-        seg_cyl(bm, (0, 0, 0.02), (0, 0, 0.2), 0.008)
-        cyl(bm, (0, 0, 0.24), 0.03, 0.03, 0.08, 14, basis_z(Vector((0, 1, 0))))
-    B.part("PT_handset", "M_LL_Bakelite", dp(b, -0.02, top, back - 0.45), Matrix.Identity(3), mic)
+    # the desk microphone (PT_handset = its press-to-talk bar) is in build_desk_detail
     # radar (right of centre, R1)
     rd = back - 0.24
     box(steel, dp(b, 0.42, top + 0.22, rd), (0.44, 0.44, 0.44), bs)
@@ -727,7 +890,7 @@ def build_desk(B):
     B.empty("LIGHT_desk", head + shade_dir * 0.14, (0.05, 0.05, 0.05), basis_z(-shade_dir), kind="SINGLE_ARROW")
     # chart, open logbook, compass, binoculars, books, mug, pencil cup
     top_b3 = basis(r, o, u)
-    quad_uv(B.bm("M_LL_Chart"), B.uv(B.bm("M_LL_Chart")), dp(b, 0.1, top + 0.002, c - 0.12), top_b3, 0.8, 0.6, (0, 0, 1, 1))
+    # the chart sheet itself is built by build_desk_detail (folded, rotated, corners lifted)
     # Station log (IMG_3119): open NLB ledger with the real 13/14 Nov entries (documents.py -> T_LL_Logbook).
     # Before: two blank paper boxes, and basis_z(u, ~r) turned the book 90 degrees (spine across the reader).
     lr = (r * math.cos(0.12) + o * math.sin(0.12)).normalized()
@@ -736,31 +899,14 @@ def build_desk(B):
     logbook(B, lbc, lb3)
     B.empty("IA_logbook", lbc + u * 0.05, (0.3, 0.12, 0.06), lb3)
     B.empty("IA_chart", dp(b, 0.1, top + 0.05, c - 0.12), (0.42, 0.32, 0.06), top_b3)
-    cc = dp(b, 0.45, top + 0.02, c - 0.2)
+    cc = dp(b, 0.45, top + 0.0215, c - 0.2)        # stands on the chart (iteration 5: the sheet is 1.2 mm up)
     cyl(B.bm("M_LL_Brass"), cc, 0.07, 0.07, 0.04, 24)
     disc_uv(B.bm("M_LL_Atlas"), B.uv(B.bm("M_LL_Atlas")), cc + u * 0.021, Matrix.Identity(3), 0.06, 32, CELLS["bearing"])
-    for s in (-1, 1):
-        cyl(B.bm("M_LL_Bakelite"), dp(b, 0.85 + s * 0.045, top + 0.04, back - 0.3), 0.032, 0.038, 0.15, 14, basis_z(-o))
-    for k, (hgt, col) in enumerate(((0.26, "M_LL_Leather"), (0.24, "M_LL_WoodDark"), (0.27, "M_LL_Leather"), (0.22, "M_LL_SteelPaint"))):
-        box(B.bm(col, "SM_RoomBooks"), dp(b, 0.66 + k * 0.045, top + hgt / 2, back - 0.12), (0.04, 0.18, hgt), bs)
-    mug = dp(b, -0.25, top + 0.05, c - 0.3)
-    cyl(B.bm("M_LL_Ceramic"), mug, 0.042, 0.04, 0.1, 18)
-    torus(B.bm("M_LL_Ceramic"), mug + r * 0.05, 0.028, 0.008, 12, 6, basis(r, u, -o))
-    pc2 = dp(b, -0.75, top + 0.06, back - 0.42)
-    cyl(B.bm("M_LL_SteelRust"), pc2, 0.035, 0.035, 0.12, 14)
-    for k in range(5):
-        seg_cyl(B.bm("M_LL_Wood"), pc2 + r * (0.01 * (k - 2)) + u * 0.02, pc2 + r * (0.03 * (k - 2)) + u * 0.14 - o * (0.01 * k), 0.004, 6)
+    build_desk_detail(B)     # Stage 1 iteration 5: mug, pencil pot, books, binoculars, mic, cables, papers, pipe
     # chair + rug (R1/R3)
     chair_d = c - d / 2 - 0.45
-    ch = B.bm("M_LL_Wood")
     seat = dp(b, 0.05, 0.46, chair_d)
-    box(ch, seat, (0.44, 0.42, 0.04), bs)
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            box(ch, seat + r * (sx * 0.19) + o * (sy * 0.18) - u * 0.23, (0.035, 0.035, 0.46), bs)
-    for k in range(5):
-        box(ch, seat + r * (-0.16 + k * 0.08) - o * 0.19 + u * 0.24, (0.025, 0.025, 0.44), bs)
-    box(ch, seat - o * 0.19 + u * 0.46, (0.44, 0.04, 0.06), bs)
+    build_chair(B, seat, rot_about(u, 8.0) @ bs)       # Stage 1 iteration 5: turned spindle chair, pushed back askew
     B.collider("chair", seat - u * 0.05, (0.48, 0.48, 0.9), bs)
     quad_uv(B.bm("M_LL_Rug"), B.uv(B.bm("M_LL_Rug")), dp(b, 0.0, 0.006, chair_d + 0.05), basis(r, o, u), 2.1, 1.45, (0, 0, 1, 1))
     B.empty("IA_radio", dp(b, -0.2, top + 0.2, back - 0.25), (0.42, 0.3, 0.26), bs)
@@ -770,6 +916,402 @@ def build_desk(B):
     B.empty("FOCUS_chart", dp(b, 0.1, 1.55, c - 0.62), (0.05, 0.05, 0.05), kind="SPHERE")
     B.empty("FOCUS_chart_at", dp(b, 0.1, top, c - 0.05), (0.05, 0.05, 0.05), kind="SPHERE")
     drop(B, b, -1.06, 2.78, top, back - 0.02)
+
+
+# ------------------------------------------------------------------ desk micro-detail (Stage 1 iteration 5)
+# Real sizes: Falcon-type enamel mug 80 x 80 mm; hex pencil 7 mm across flats; Captain Field's parallel rule
+# ~380 x 45 mm blades; 7x50 porro binoculars; desk mic with a press-to-talk bar and a coiled cord.
+
+def pencil(B, base, axis, L, body, sharpened=True, r=0.004, eraser=False):
+    """Hex pencil from its blunt end `base` along `axis`: lacquered body, sharpened wood cone, graphite."""
+    ax = Vector(axis).normalized()
+    b3 = basis_z(ax)
+    cone, tip = (0.017, 0.004) if sharpened else (0.0, 0.0)
+    body_len = L - cone - tip
+    solid(B, body, lambda bm: cyl(bm, Vector(base) + ax * (body_len / 2), r, r, body_len, 6, b3))
+    if eraser:
+        ferrule = Vector(base) - ax * 0.006
+        cyl(B.bm("M_LL_Brass", "SM_Props"), ferrule, r * 1.02, r * 1.02, 0.012, 12, b3)
+        solid(B, "eraser", lambda bm: cyl(bm, ferrule - ax * 0.009, r * 0.95, r * 0.9, 0.007, 12, b3))
+    if sharpened:
+        c0 = Vector(base) + ax * body_len
+        solid(B, "wood_raw", lambda bm: cyl(bm, c0 + ax * (cone / 2), r * 0.9, 0.0011, cone, 12, b3))
+        solid(B, "graphite", lambda bm: cyl(bm, c0 + ax * (cone + tip / 2), 0.0011, 0.0002, tip, 8, b3))
+
+
+def fountain_pen(B, tip, axis):
+    """Uncapped fountain pen lying with its nib at `tip`: brass nib, black section, brass band, barrel."""
+    ax = Vector(axis).normalized()
+    b3 = basis_z(ax)
+    flat = b3 @ Matrix.Diagonal((1.0, 0.35, 1.0))
+    p = Vector(tip)
+    cyl(B.bm("M_LL_Brass", "SM_Props"), p - ax * 0.007, 0.0005, 0.0045, 0.014, 8, flat)          # nib
+    solid(B, "lacquer_black", lambda bm: cyl(bm, p - ax * 0.023, 0.0046, 0.0052, 0.018, 16, b3))  # section
+    cyl(B.bm("M_LL_Brass", "SM_Props"), p - ax * 0.033, 0.0059, 0.0059, 0.002, 16, b3)            # band
+    solid(B, "lacquer_black", lambda bm: cyl(bm, p - ax * 0.0765, 0.0058, 0.0058, 0.085, 16, b3))
+    solid(B, "lacquer_black", lambda bm: cyl(bm, p - ax * 0.122, 0.0058, 0.0035, 0.006, 16, b3))
+
+
+def pen_cap(B, open_end, axis, clip_dir):
+    ax = Vector(axis).normalized()
+    b3 = basis_z(ax)
+    p = Vector(open_end)
+    solid(B, "lacquer_black", lambda bm: cyl(bm, p + ax * 0.031, 0.0066, 0.0066, 0.062, 16, b3))
+    solid(B, "lacquer_black", lambda bm: cyl(bm, p + ax * 0.065, 0.0066, 0.004, 0.006, 16, b3))
+    brass = B.bm("M_LL_Brass", "SM_Props")
+    cyl(brass, p + ax * 0.002, 0.0069, 0.0069, 0.004, 16, b3)                                   # cap band
+    cd = Vector(clip_dir).normalized()
+    box(brass, p + ax * 0.04 + cd * 0.0074, (0.0035, 0.042, 0.0012), basis(ax.cross(cd), ax, cd), bevel=0.0)
+    sphere(brass, p + ax * 0.02 + cd * 0.0078, 0.0019, 8, 6)
+
+
+def build_chart_sheet(B, cc, cb3):
+    """The chart as paper: a 40 x 30 grid with a centre fold ridge, a softer cross fold and two lifted near
+    corners; a 0.8 mm edge band. Returns hz(x, y), the sheet height above the desk (objects sit on it)."""
+    w, h = DC["w"], DC["h"]
+
+    def hz(x, y):
+        z = 0.0012 + 0.0016 * math.exp(-(x / 0.02) ** 2) + 0.0009 * math.exp(-(y / 0.02) ** 2)
+        for (qx, qy, lift) in ((-w / 2, -h / 2, 0.007), (w / 2, -h / 2, 0.012)):
+            d = math.hypot(x - qx, y - qy)
+            if d < 0.1:
+                z += lift * (1 - d / 0.1) ** 2
+        return z
+    nx, ny = 40, 30
+    bm = B.bm("M_LL_Chart")
+    uvl = B.uv(bm)
+    P = lambda x, y, dz=0.0: cc + cb3 @ Vector((x, y, hz(x, y) + dz))
+    g = [[bm.verts.new(P(-w / 2 + w * i / nx, -h / 2 + h * j / ny)) for j in range(ny + 1)] for i in range(nx + 1)]
+    for i in range(nx):
+        for j in range(ny):
+            f = bm.faces.new((g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]))
+            for lp, (a, b2) in zip(f.loops, ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1))):
+                lp[uvl].uv = (a / nx, b2 / ny)
+    # edge band: perimeter walked anticlockwise from above, quads (top_p, bot_p, bot_q, top_q) face outward
+    per = ([(-w / 2 + w * i / nx, -h / 2) for i in range(nx)] + [(w / 2, -h / 2 + h * j / ny) for j in range(ny)]
+           + [(w / 2 - w * i / nx, h / 2) for i in range(nx)] + [(-w / 2, h / 2 - h * j / ny) for j in range(ny)])
+    pm = B.bm("M_LL_Props")
+    puv, uv = B.uv(pm), sw_uv("paper_white")
+    for k in range(len(per)):
+        (x0, y0), (x1, y1) = per[k], per[(k + 1) % len(per)]
+        vs = [pm.verts.new(P(x0, y0)), pm.verts.new(P(x0, y0, -0.0008)), pm.verts.new(P(x1, y1, -0.0008)), pm.verts.new(P(x1, y1))]
+        f = pm.faces.new(vs)
+        for lp in f.loops:
+            lp[puv].uv = uv
+    return hz
+
+
+def build_chair(B, seat, cb):
+    """Spindle-back office chair (seat centre `seat`, frame cb: x across, y toward the desk, z up): turned and
+    splayed legs, H-stretchers, a rounded saddle seat, tapered spindles, a bowed top rail; the keeper's
+    navy gansey thrown over the back (T_LL_Props knit). Before: square boxes throughout."""
+    ch = B.bm("M_LL_Wood", "SM_Chair")
+    P = lambda x, y, z: seat + cb @ Vector((x, y, z))
+    box(ch, P(0, 0, 0.0), (0.44, 0.42, 0.036), cb, bevel=0.012, segs=3)
+    turned = [(0.0, 0.0), (0.0155, 0.0), (0.0165, 0.02), (0.0135, 0.05), (0.0115, 0.2), (0.0155, 0.225), (0.0175, 0.245),
+              (0.0155, 0.265), (0.0125, 0.285), (0.016, 0.44), (0.0, 0.44)]
+    feet = {}
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            top_ = P(sx * 0.18, sy * 0.165, -0.018)
+            foot = P(sx * 0.205, sy * 0.19, -0.46)
+            ax = top_ - foot
+            sc = ax.length / 0.44
+            lathe(ch, foot, basis_z(ax) @ Matrix.Diagonal((1.0, 1.0, sc)), turned, 14)
+            feet[(sx, sy)] = (foot, ax)
+    at = lambda sx, sy, t: feet[(sx, sy)][0] + feet[(sx, sy)][1] * t
+    for sx in (-1, 1):                                                   # side stretchers
+        seg_cyl(ch, at(sx, -1, 0.3), at(sx, 1, 0.3), 0.0095, 10)
+    seg_cyl(ch, (at(-1, -1, 0.3) + at(-1, 1, 0.3)) / 2, (at(1, -1, 0.3) + at(1, 1, 0.3)) / 2, 0.0095, 10)   # H bar
+    bow = lambda x: -0.19 - 0.028 * (1 - (x / 0.215) ** 2)
+    for sx in (-1, 1):                                                   # back posts
+        seg_cyl(ch, P(sx * 0.195, -0.185, 0.0), P(sx * 0.205, bow(sx * 0.205) + 0.004, 0.44), 0.014, 12)
+    for k in range(5):
+        x = -0.12 + k * 0.06
+        b0, b1 = P(x, -0.185, 0.01), P(x, bow(x), 0.43)
+        cyl(ch, (b0 + b1) / 2, 0.0095, 0.0075, (b1 - b0).length, 10, basis_z(b1 - b0))
+    rail = [P(x, bow(x), 0.455) for x in [-0.215 + 0.43 * i / 10 for i in range(11)]]
+    sweep(ch, rail, 0.032, 10, ry=0.012, n0=cb.col[2])
+    # the gansey over the top rail: short drop on the sitter's side, long drop behind, sagging edges, folds
+    path = [(0.045, -0.12), (0.04, -0.06), (0.032, 0.0), (0.02, 0.03), (0.0, 0.044), (-0.022, 0.03), (-0.036, 0.0),
+            (-0.05, -0.08), (-0.06, -0.16), (-0.062, -0.24), (-0.056, -0.3)]
+    nx = 14
+    pm = B.bm("M_LL_Props")
+    uvl = B.uv(pm)
+    g = []
+    for i in range(nx + 1):
+        x = -0.19 + 0.38 * i / nx
+        col = []
+        for j, (yy, zz) in enumerate(path):
+            hang = min(1.0, abs(zz) / 0.1) if zz < 0 else 0.0
+            sag = -0.035 * (x / 0.19) ** 2 * hang
+            fold = 0.007 * math.sin(x * 38 + j * 0.9) * hang
+            col.append(pm.verts.new(P(x, bow(x) + yy + fold, 0.455 + zz + sag)))
+        g.append(col)
+    for i in range(nx):
+        for j in range(len(path) - 1):
+            f = pm.faces.new((g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]))
+            for lp, (a, b2) in zip(f.loops, ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1))):
+                lp[uvl].uv = region_uv("knit", a / nx, b2 / (len(path) - 1))
+    for sx in (-1, 1):                                                   # sleeves hanging behind
+        sl = bezier(P(sx * 0.17, bow(sx * 0.17) - 0.05, 0.42), P(sx * 0.19, bow(sx * 0.19) - 0.07, 0.3),
+                    P(sx * 0.15, bow(sx * 0.15) - 0.075, 0.2), P(sx * 0.13, bow(sx * 0.13) - 0.07, 0.11), 9)   # hang straight, no X
+        solid(B, "knit_navy", lambda bm, sl=sl: sweep(bm, sl, 0.034, 10, ry=0.02, n0=cb.col[1]))
+
+
+def build_desk_detail(B):
+    """Stage 1 iteration 5: the desk's small objects rebuilt to stand up to the radio focus view, plus the
+    keeper's traces (cold tea, pipe, pencil work, reading glasses, a stores note). Story-neutral: nothing
+    here anticipates tonight's events."""
+    b = R["desk"]
+    r, o, u = wall_frame(b)
+    bs = wb(b)
+    w, d, top = 2.2, 0.85, 0.78
+    back = back_dist(w)
+    c = back - d / 2
+    D = lambda along, z, dist: dp(b, along, top + z, dist)
+    # ---- chart: rotated a few degrees, folded, two corners lifted; the keeper's tools on it
+    cc = D(0.1, 0.0, c - 0.12)
+    cb3 = rot_about(u, DC["rot_deg"]) @ basis(r, o, u)
+    hz = build_chart_sheet(B, cc, cb3)
+    CP = lambda x, y, dz=0.0: cc + cb3 @ Vector((x, y, hz(x, y) + dz))
+    uv_xy = lambda uv: ((uv[0] - 0.5) * DC["w"], (uv[1] - 0.5) * DC["h"])
+    # Captain Field's parallel rule: two black blades, brass links, brass knobs; slightly opened
+    rb3 = cb3 @ rot_about((0, 0, 1), 12.0)
+    rc = CP(0.07, -0.2, 0.0016)             # 10 cm clear of the compass, inside the chart's near edge
+    for k, (sy, sx) in enumerate(((-0.0232, 0.0), (0.0232, 0.012))):      # closed: the blades meet
+        blade = rc + rb3 @ Vector((sx, sy, 0.00275))
+        solid(B, "vulcanite", lambda bm, blade=blade: box(bm, blade, (0.38, 0.045, 0.0055), rb3, bevel=0.0018))
+        edge = blade + rb3 @ Vector((0.0, (-1 if k == 0 else 1) * 0.0175, 0.0029))     # engraved scale along the outer edge
+        solid(B, "paper_white", lambda bm, edge=edge: box(bm, edge, (0.35, 0.004, 0.0003), rb3, bevel=0.0))
+        cyl(B.bm("M_LL_Brass", "SM_Props"), blade + rb3 @ Vector((0.04 if k else -0.04, 0.0, 0.0075)), 0.0072, 0.006, 0.01, 16, rb3)
+    for lx in (-0.13, 0.13):
+        a0, a1 = rc + rb3 @ Vector((lx, -0.0232, 0.0063)), rc + rb3 @ Vector((lx + 0.012, 0.0232, 0.0063))
+        dd = a1 - a0
+        box(B.bm("M_LL_Brass", "SM_Props"), (a0 + a1) / 2, (0.012, dd.length + 0.014, 0.0015),
+            basis(dd.cross(rb3.col[2]).normalized(), dd.normalized(), rb3.col[2]), bevel=0.0)
+        for e in (a0, a1):
+            cyl(B.bm("M_LL_Brass", "SM_Props"), e + rb3.col[2] * 0.0011, 0.0034, 0.0034, 0.0012, 10, rb3)
+    # brass dividers lying open beside the rule
+    hinge = CP(0.15, 0.0, 0.003)
+    for tip in ((0.02, -0.06), (0.03, 0.035)):
+        tp = CP(tip[0], tip[1], 0.0015)
+        dv = tp - hinge
+        cyl(B.bm("M_LL_Brass", "SM_Props"), hinge + dv * 0.42, 0.0026, 0.0018, dv.length * 0.84, 10, basis_z(dv))
+        cyl(B.bm("M_LL_Iron", "SM_Props"), hinge + dv * 0.92, 0.0012, 0.0002, dv.length * 0.16, 8, basis_z(dv))
+    cyl(B.bm("M_LL_Brass", "SM_Props"), hinge + cb3.col[2] * 0.001, 0.0085, 0.0085, 0.006, 20, cb3)
+    seg_cyl(B.bm("M_LL_Brass", "SM_Props"), hinge, CP(0.178, 0.008, 0.004), 0.0028, 8)
+    # a green pencil stub left on the chart (the bearing work)
+    s0, s1 = CP(0.115, -0.105, 0.0042), CP(0.205, -0.078, 0.0042)
+    pencil(B, s0, s1 - s0, (s1 - s0).length, "pencil_green")
+    # ---- the enamel mug: cold tea at ~55 %, beside its newest ring
+    mx, my = uv_xy(DC["mug_uv"])
+    mb3 = cb3 @ rot_about((0, 0, 1), 35.0)
+    mc = CP(mx, my, 0.0001)
+    mv = PA["mug_v"]
+    prof = [(0.0, 0.0, 0.0), (0.034, 0.0, 0.04), (0.0385, 0.003, 0.07), (0.0395, 0.010, 0.10), (0.040, 0.075, 0.66),
+            (0.0408, 0.079, mv["rim_v0"]), (0.0418, 0.0815, 0.76), (0.0412, 0.084, 0.80), (0.0395, 0.0832, mv["rim_v1"]),
+            (0.0388, 0.079, mv["inner_top"]), (0.0388, 0.006, mv["inner_bottom"]), (0.0, 0.005, 1.0)]
+    pm = B.bm("M_LL_Props")
+    lathe_uv(pm, B.uv(pm), mc, mb3, prof, 40, lambda uu, vv: region_uv("mug", uu, vv))
+    hp = [mc + mb3 @ Vector((0.0435 + 0.023 * math.cos(math.radians(a)), 0.0, 0.045 + 0.025 * math.sin(math.radians(a))))
+          for a in range(100, -101, -20)]
+    solid(B, "enamel_white", lambda bm: sweep(bm, hp, 0.0058, 8, ry=0.0021, n0=mb3.col[1]))
+    solid(B, "tea", lambda bm: cyl(bm, mc + mb3.col[2] * mv["tide_z"][-1], 0.0387, 0.0387, 0.001, 40, mb3))
+    # ---- brass shell-case pencil pot with five things in it, each leaning on the rim at its own angle
+    pc2 = D(-0.75, 0.0, back - 0.42)
+    lathe(B.bm("M_LL_Brass", "SM_Props"), pc2, Matrix.Identity(3),
+          [(0.0, 0.0), (0.034, 0.0), (0.034, 0.006), (0.031, 0.008), (0.0325, 0.011), (0.0325, 0.108), (0.0336, 0.11),
+           (0.0314, 0.11), (0.0314, 0.009), (0.0, 0.009)], 32)
+    items = [(25, 0.016, 0.178, "pencil_yellow"), (105, 0.008, 0.165, "chinagraph"), (170, 0.018, 0.168, "pencil_green"),
+             (245, 0.012, 0.142, "ballpoint"), (320, 0.006, 0.152, "rule")]
+    for ang, off, L, kind in items:
+        a = math.radians(ang)
+        dirh = r * math.cos(a) + o * math.sin(a)
+        b0 = pc2 - dirh * off + u * 0.01
+        rim = pc2 + dirh * 0.027 + u * 0.11
+        ax = (rim - b0).normalized()
+        if kind.startswith("pencil"):
+            pencil(B, b0, ax, L, kind, eraser=(kind == "pencil_yellow"))
+        elif kind == "chinagraph":
+            b3 = basis_z(ax)
+            solid(B, "chinagraph_red", lambda bm: cyl(bm, b0 + ax * (L - 0.01) / 2, 0.0045, 0.0045, L - 0.01, 12, b3))
+            solid(B, "chinagraph_red", lambda bm: cyl(bm, b0 + ax * (L - 0.005), 0.0042, 0.0016, 0.01, 12, b3))
+        elif kind == "ballpoint":
+            b3 = basis_z(ax)
+            solid(B, "ballpoint", lambda bm: cyl(bm, b0 + ax * (L - 0.022) / 2, 0.0042, 0.0042, L - 0.022, 6, b3))
+            solid(B, "cap_blue", lambda bm: cyl(bm, b0 + ax * (L - 0.011), 0.0047, 0.0043, 0.022, 12, b3))
+            box(B.bm("M_LL_Iron", "SM_Props"), b0 + ax * (L - 0.02) + basis_z(ax).col[0] * 0.0052,
+                (0.0012, 0.003, 0.028), basis(basis_z(ax).col[0], basis_z(ax).col[1], ax), bevel=0.0)
+        else:      # six-inch steel rule
+            side = ax.cross(u).normalized()
+            box(B.bm("M_LL_Iron", "SM_Props"), b0 + ax * L / 2, (0.0125, 0.0009, L), basis(side, ax.cross(side), ax), bevel=0.0)
+    # ---- logbook: uncapped pen in the gutter, its cap on the right page, reading glasses folded on the left
+    lr = (r * math.cos(0.12) + o * math.sin(0.12)).normalized()
+    lb3 = basis(lr, u.cross(lr), u)
+    lbc = D(-0.6, 0.0, c - 0.16)
+    pw = 0.28
+    page_z = lambda x: 0.006 + 0.012 * math.sin(min(1.0, abs(x) / pw * 1.25) * math.pi / 2) - 0.002 * abs(x) / pw   # = logbook zt (top sheet)
+    LP = lambda x, y, dz=0.0: lbc + lb3 @ Vector((x, y, page_z(x) + dz))
+    fountain_pen(B, LP(0.02, 0.07, 0.0064), lb3 @ Vector((-0.05, 1.0, 0.0)))
+    cap_o = LP(0.17, -0.07, 0.0068)
+    pen_cap(B, cap_o, lb3 @ Vector((-0.3, 1.0, 0.0)), lb3.col[2])
+    gc = LP(-0.165, 0.035, 0.0)
+    gb3 = lb3 @ rot_about((0, 0, 1), -8.0)
+    for s in (-1, 1):
+        # each rim rests on the highest page point under it (the pages rise toward the fore-edge)
+        rx_ = -0.165 + s * 0.026
+        lift = max(page_z(rx_ + k * 0.0045) for k in range(-5, 6)) - page_z(-0.165) + 0.0018
+        rim_c = gc + gb3 @ Vector((s * 0.026, 0.0, lift))
+        solid(B, "tortoise", lambda bm, rim_c=rim_c: torus(bm, rim_c, 0.0205, 0.0016, 24, 6, gb3))
+        cyl(B.bm("M_LL_Glass", "SM_PropsGlass"), rim_c, 0.0198, 0.0198, 0.0012, 24, gb3)
+        hinge_p = gc + gb3 @ Vector((s * 0.048, 0.004, lift + 0.0008))
+        tip_p = gc + gb3 @ Vector((-s * 0.032, 0.008 + (0.004 if s > 0 else 0.0), lift + 0.0032 + (0.0012 if s > 0 else 0.0)))
+        solid(B, "tortoise", lambda bm, a=hinge_p, e=tip_p: sweep(bm, [a, e, e + (e - a).normalized() * 0.012 - gb3.col[2] * 0.0025],
+                                                             0.0012, 6, ry=0.0022, n0=gb3.col[2]))
+    bl = max(page_z(-0.165 + k * 0.004) for k in range(-3, 4)) - page_z(-0.165) + 0.0018
+    bridge = [gc + gb3 @ Vector((x, 0.0, bl + 0.004 * (1 - (x / 0.0062) ** 2))) for x in (-0.0062, -0.003, 0.0, 0.003, 0.0062)]
+    solid(B, "tortoise", lambda bm: sweep(bm, bridge, 0.0014, 6))
+    # ---- desk microphone: cast base, chrome stem and yoke, grey head; PT_handset is the press-to-talk bar
+    mic = D(-0.02, 0.0013, back - 0.45)
+    solid(B, "hammertone", lambda bm: lathe(bm, mic, Matrix.Identity(3), [(0.0, 0.0), (0.056, 0.0), (0.058, 0.004), (0.054, 0.014),
+                                                                         (0.042, 0.022), (0.012, 0.026), (0.0, 0.026)], 32))
+    solid(B, "chrome", lambda bm: cyl(bm, mic + u * 0.03, 0.009, 0.009, 0.008, 16))
+    solid(B, "chrome", lambda bm: cyl(bm, mic + u * 0.078, 0.0055, 0.0055, 0.096, 12))
+    solid(B, "chrome", lambda bm: box(bm, mic + u * 0.126, (0.074, 0.009, 0.006), bs, bevel=0.0))
+    for s in (-1, 1):
+        solid(B, "chrome", lambda bm, s=s: box(bm, mic + r * (s * 0.0345) + u * 0.151, (0.005, 0.011, 0.054), bs, bevel=0.0))
+        solid(B, "chrome", lambda bm, s=s: cyl(bm, mic + r * (s * 0.038) + u * 0.155, 0.0065, 0.0065, 0.005, 12, basis_z(r)))
+    hax = (-o * math.cos(math.radians(14)) + u * math.sin(math.radians(14))).normalized()
+    hc = mic + u * 0.155
+    pill = [(0.0, -0.034), (0.017, -0.033), (0.026, -0.025), (0.0285, -0.01), (0.0285, 0.01), (0.026, 0.025), (0.017, 0.033), (0.0, 0.034)]
+    solid(B, "hammertone", lambda bm: lathe(bm, hc, basis_z(hax), pill, 28))
+    solid(B, "iron_chip", lambda bm: cyl(bm, hc + hax * 0.0335, 0.0175, 0.0175, 0.0012, 24, basis_z(hax)))
+    solid(B, "chrome", lambda bm: torus(bm, hc, 0.0289, 0.0022, 28, 6, basis_z(hax)))
+    B.part("PT_handset", "M_LL_Bakelite", mic - o * 0.044 + u * 0.022, Matrix.Identity(3),
+           lambda bm, uv: box(bm, (0, 0, 0), (0.048, 0.014, 0.007), bevel=0.0015))
+    # coiled cord over the chart to the radio's front socket, then a short straight lead and a plug
+    fb3, fc = face_frame(b, -0.38, top + 0.14, back - 0.2 - 0.17 - 0.002)
+    sock = fc + fb3.col[0] * 0.24 - fb3.col[1] * 0.11
+    zc = lambda along, dist: hz(*((cb3.transposed() @ (D(along, 0, dist) - cc))[:2])) + 0.0068
+    path = bezier(D(-0.062, zc(-0.062, 2.60), 2.60), D(-0.13, zc(-0.13, 2.50), 2.50),
+                  D(-0.235, zc(-0.235, 2.56), 2.56), D(-0.165, zc(-0.165, 2.628), 2.628), 24)
+    turns = coil(path, 0.0052, 0.0062, 8)
+    solid(B, "rubber", lambda bm: sweep(bm, turns, 0.0016, 5))
+    lead = bezier(path[-1], path[-1] + (path[-1] - path[-2]).normalized() * 0.01, sock - fb3.col[2] * 0.03 - u * 0.02, sock + fb3.col[2] * 0.022, 10)
+    solid(B, "rubber", lambda bm: sweep(bm, lead, 0.0019, 6))
+    solid(B, "rubber", lambda bm: cyl(bm, sock + fb3.col[2] * 0.012, 0.0065, 0.0058, 0.022, 12, fb3))
+    solid(B, "chrome", lambda bm: torus(bm, sock + fb3.col[2] * 0.001, 0.009, 0.0016, 16, 5, fb3))
+    # ---- radio case: bezel, screws, the coastguard card tucked behind the bezel
+    steel = B.bm("M_LL_SteelPaint")
+    for (x, y, sx, sy) in ((0, 0.135, 0.56, 0.01), (0, -0.135, 0.56, 0.01), (-0.275, 0, 0.01, 0.28), (0.275, 0, 0.01, 0.28)):
+        box(steel, fc + fb3 @ Vector((x, y, 0.004)), (sx, sy, 0.008), fb3, bevel=0.0)
+    for x, y in ((-0.265, 0.128), (0.265, 0.128), (-0.265, -0.128), (0.265, -0.128), (-0.274, 0.0), (0.274, 0.0)):
+        cyl(B.bm("M_LL_Iron", "SM_Props"), fc + fb3 @ Vector((x, y, 0.0088)), 0.0038, 0.0034, 0.0016, 10, fb3)
+    kb3 = fb3 @ rot_about((0, 0, 1), 5.0)
+    quad_uv(pm, B.uv(pm), fc + fb3 @ Vector((-0.212, 0.122, 0.0042)), kb3, 0.1, 0.0667, region_rect("sked"))
+    # radar case: cooling louvres on its right side
+    rd = back - 0.24
+    for k in range(7):
+        box(B.bm("M_LL_Bakelite", "SM_RadioVent"), D(0.6415, 0.31 + k * 0.018, rd + 0.02), (0.003, 0.24, 0.006), bs, bevel=0.0)
+    # ---- cables: radio power + coax, radar and lamp flex run along the back edge to a junction box
+    jb = D(-1.05, 0.065, back - 0.035)
+    box(steel, jb, (0.09, 0.06, 0.12), bs)
+    for k in range(3):
+        cyl(B.bm("M_LL_Iron", "SM_Props"), jb + r * (0.046) + u * (-0.035 + k * 0.03), 0.007, 0.006, 0.01, 10, basis_z(r))
+    runs = (("cable_grey", 0.0035, (-0.3, 0.06, 3.0), 3.0045, -0.035),
+            ("rubber", 0.0045, (-0.46, 0.12, 3.0), 3.0195, -0.005),
+            ("cable_grey", 0.0035, (0.42, 0.1, 3.002), 3.0115, 0.025))
+    for sw_, cr, (a0, z0, d0), dd, jz in runs:
+        start = D(a0, z0, d0)
+        down = D(a0 - 0.04, cr, dd)
+        end = jb + r * 0.05 + u * jz
+        p = bezier(start, start + o * 0.012, down + o * 0.0 + u * 0.03, down, 8)
+        p += [D(x, cr, dd) for x in [a0 - 0.08 - 0.1 * i for i in range(int((a0 - 0.08 + 0.95) / 0.1) + 1)]]
+        p += bezier(D(-0.95, cr, dd), D(-0.99, cr, dd), end + r * 0.03, end, 6)[1:]
+        solid(B, sw_, lambda bm, p=p, cr=cr: sweep(bm, p, cr, 6))
+    lamp = D(-0.92, 0.0, back - 0.18)
+    flex = bezier(lamp + o * 0.08 + u * 0.008, lamp + o * 0.12 + u * 0.004, jb + r * 0.08 - u * 0.05, jb + r * 0.046 + u * 0.025, 10)
+    solid(B, "flex_brown", lambda bm: sweep(bm, flex, 0.003, 6))
+    solid(B, "lacquer_black", lambda bm: cyl(bm, lamp - o * 0.055 + u * 0.033, 0.009, 0.008, 0.008, 14))   # lamp switch
+    # ---- reference books standing against the radar case (the case is their bookend); the almanac leans
+    x_r = 0.64
+    for k, (t, hgt, cloth, lean) in enumerate(((0.042, 0.26, "cloth_navy", 0), (0.038, 0.245, "cloth_green", 0),
+                                               (0.03, 0.23, "cloth_red", 0), (0.035, 0.215, "cloth_black", 14.0))):
+        bd = 0.18
+        th = math.radians(lean)
+        if lean:
+            cx = x_r + t / 2 * math.cos(th) + hgt * math.sin(th) + 0.001
+            base = D(cx, t / 2 * math.sin(th), back - 0.12)
+        else:
+            cx = x_r + t / 2 + 0.001
+            base = D(cx, 0.0, back - 0.12)
+        kb = bs @ rot_about((0, 1, 0), -lean)
+        Pb = lambda x, y, z, base=base, kb=kb: base + kb @ Vector((x, y, z))
+        for s in (-1, 1):
+            solid(B, cloth, lambda bm, s=s, Pb=Pb, t=t, hgt=hgt, kb=kb: box(bm, Pb(s * (t / 2 - 0.0015), 0.0, hgt / 2), (0.003, bd, hgt), kb, bevel=0.0))
+        solid(B, cloth, lambda bm, Pb=Pb, t=t, hgt=hgt, kb=kb: box(bm, Pb(0.0, -bd / 2 + 0.002, hgt / 2), (t, 0.004, hgt), kb, bevel=0.0))
+        solid(B, "page_cream", lambda bm, Pb=Pb, t=t, hgt=hgt, kb=kb: box(bm, Pb(0.0, 0.002, hgt / 2), (t - 0.006, bd - 0.008, hgt - 0.008), kb, bevel=0.0))
+        sb3 = basis(kb.col[0], kb.col[2], -kb.col[1])
+        quad_uv(pm, B.uv(pm), Pb(0.0, -bd / 2 - 0.0003, hgt / 2), sb3, t, hgt, region_rect("spines", k / 4, 0.0, (k + 1) / 4, 1.0))
+        x_r = cx + t / 2 if not lean else x_r
+    # ---- 7x50 binoculars lying on the desk, strap trailing
+    nb3 = bs @ rot_about((0, 0, 1), 25.0)
+    nc = D(0.88, 0.0, back - 0.31)
+    Np = lambda x, y, z: nc + nb3 @ Vector((x, y, z))
+    yb3 = basis_z(nb3.col[1])
+    for s in (-1, 1):
+        solid(B, "rubber", lambda bm, s=s: cyl(bm, Np(s * 0.058, 0.035, 0.031), 0.031, 0.031, 0.085, 24, yb3))
+        solid(B, "hammertone", lambda bm, s=s: box(bm, Np(s * 0.045, -0.025, 0.031), (0.05, 0.045, 0.056), nb3, bevel=0.008))
+        solid(B, "rubber", lambda bm, s=s: cyl(bm, Np(s * 0.034, -0.068, 0.034), 0.019, 0.019, 0.04, 20, yb3))
+        solid(B, "rubber", lambda bm, s=s: cyl(bm, Np(s * 0.034, -0.094, 0.034), 0.0205, 0.0195, 0.012, 20, yb3))
+        cyl(B.bm("M_LL_Iron", "SM_Props"), Np(s * 0.058, 0.079, 0.031), 0.0318, 0.0318, 0.006, 24, yb3)
+        cyl(B.bm("M_LL_Glass", "SM_PropsGlass"), Np(s * 0.058, 0.0815, 0.031), 0.026, 0.026, 0.001, 24, yb3)
+    solid(B, "hammertone", lambda bm: cyl(bm, Np(0.0, -0.032, 0.05), 0.009, 0.009, 0.075, 14, yb3))
+    cyl(B.bm("M_LL_Iron", "SM_Props"), Np(0.0, -0.052, 0.058), 0.012, 0.012, 0.016, 18, basis_z(nb3.col[0]))
+    strap = bezier(Np(-0.06, -0.075, 0.04), Np(-0.15, -0.14, 0.0016), Np(0.07, -0.25, 0.0016), Np(0.062, -0.075, 0.04), 18)
+    solid(B, "flex_brown", lambda bm: sweep(bm, strap, 0.0014, 6, ry=0.007, n0=(0, 0, 1)))
+    # ---- teleprinter forecast: torn top edge, the roll's curl lifting it (IA_forecast unchanged)
+    fw, fh = 0.22, 0.198
+    fb = rot_about(u, -14.0) @ bs
+    fcc = D(0.82, 0.0, c - 0.25)
+    nfx, nfy = 10, 9
+    fz = lambda y: 0.0006 + 0.006 * max(0.0, (y / (fh / 2) - 0.35) / 0.65) ** 2
+    jag = [0.0 if i in (0, nfx) else (0.0018 if i % 2 else -0.0012) for i in range(nfx + 1)]
+    g = [[pm.verts.new(fcc + fb @ Vector((-fw / 2 + fw * i / nfx, -fh / 2 + fh * j / nfy + (jag[i] if j == nfy else 0.0),
+                                          fz(-fh / 2 + fh * j / nfy)))) for j in range(nfy + 1)] for i in range(nfx + 1)]
+    for i in range(nfx):
+        for j in range(nfy):
+            f = pm.faces.new((g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]))
+            for lp, (a, b2) in zip(f.loops, ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1))):
+                lp[B.uv(pm)].uv = region_uv("forecast", a / nfx, b2 / nfy)
+    # ---- the stores note, half under the radio (text upright for the keeper)
+    nb = rot_about(u, 12.0) @ bs
+    quad_uv(pm, B.uv(pm), D(-0.52, 0.0005, 2.62), nb, 0.203, 0.33, region_rect("note"))
+    # ---- pipe resting in a brass ashtray, a little ash and a spent match
+    at = D(0.615, 0.0, c - 0.27)
+    lathe(B.bm("M_LL_Brass", "SM_Props"), at, Matrix.Identity(3),
+          [(0.0, 0.0), (0.05, 0.0), (0.055, 0.018), (0.051, 0.018), (0.046, 0.004), (0.0, 0.004)], 32)
+    solid(B, "ash_grey", lambda bm: cyl(bm, at + u * 0.0048, 0.028, 0.032, 0.0016, 14))
+    for k, (dx, dy) in enumerate(((0.012, 0.006), (-0.01, 0.012), (0.004, -0.014))):
+        solid(B, "ash_dark", lambda bm, dx=dx, dy=dy: sphere(bm, at + r * dx + o * dy + u * 0.0058, 0.0035, 8, 5))
+    m0, m1 = at + r * -0.02 + o * -0.02 + u * 0.0052, at + r * 0.025 + o * -0.008 + u * 0.0062
+    solid(B, "wood_raw", lambda bm: seg_cyl(bm, m0, m1, 0.0012, 4))
+    solid(B, "ash_dark", lambda bm: sphere(bm, m1, 0.0021, 6, 4))
+    bowl = at + r * 0.008 + o * 0.012 + u * 0.004
+    solid(B, "briar", lambda bm: lathe(bm, bowl, Matrix.Identity(3), [(0.0, 0.0), (0.014, 0.0), (0.0175, 0.012), (0.018, 0.03),
+                                                                      (0.017, 0.042), (0.012, 0.042), (0.011, 0.012), (0.0, 0.012)], 24))
+    solid(B, "tobacco", lambda bm: cyl(bm, bowl + u * 0.036, 0.0112, 0.0112, 0.002, 16))
+    sdir = (-r * 0.75 - o * 0.66).normalized()
+    sh0, sh1 = bowl + u * 0.012 + sdir * 0.014, bowl + u * 0.016 + sdir * 0.05
+    solid(B, "briar", lambda bm: seg_cyl(bm, sh0, sh1, 0.0065, 14))
+    st1 = bowl + u * 0.041 + sdir * 0.118          # rests on the rim, mouthpiece lifted
+    solid(B, "vulcanite", lambda bm: cyl(bm, (sh1 + st1) / 2, 0.0058, 0.0032, (st1 - sh1).length, 14, basis_z(sh1 - st1)))
+    # ---- tobacco tin by the logbook
+    tb3 = bs @ rot_about((0, 0, 1), 75.0)
+    tc = D(-0.995, 0.0, 2.30)
+    solid(B, "tin_red", lambda bm: box(bm, tc + u * 0.01, (0.11, 0.075, 0.02), tb3, bevel=0.003))
+    quad_uv(pm, B.uv(pm), tc + u * 0.0201, tb3, 0.104, 0.069, region_rect("tin"))
 
 
 # ------------------------------------------------------------------ power (R1/R2: west wall)
@@ -1346,8 +1888,14 @@ def logbook(B, c, b3, pw=0.28, pd=0.196):
     toward the fore-edge) whose top sheet carries the log texture; a red ribbon marker."""
     P = lambda x, y, z: c + b3 @ Vector((x, y, z))
     lea = B.bm("M_LL_Leather", "SM_RoomLog")
+    # Stage 1 iteration 5: quarter-bound ledger - cloth boards, leather spine and corner protectors
     for s in (-1, 1):
-        box(lea, P(s * (pw / 2 + 0.006), 0, 0.0025), (pw + 0.012, pd + 0.014, 0.004), b3)
+        solid(B, "cloth_red", lambda bm, s=s: box(bm, P(s * (pw / 2 + 0.006), 0, 0.0025), (pw + 0.012, pd + 0.014, 0.004), b3, bevel=0.0))
+        for sy in (-1, 1):
+            X, Y, L = s * (pw + 0.012), sy * (pd / 2 + 0.007), 0.032
+            pts = [(X, Y), (X - s * L, Y), (X, Y - sy * L)]
+            hexa(lea, [P(x, y, 0.0004) for x, y in pts] + [P(pts[0][0], pts[0][1], 0.0004)] +
+                 [P(x, y, 0.0048) for x, y in pts] + [P(pts[0][0], pts[0][1], 0.0048)])
     cyl(lea, P(0, 0, 0.004), 0.011, 0.011, pd + 0.014, 12, b3 @ basis_z(Vector((0, 1, 0))))
     paper = B.bm("M_LL_Paper", "SM_RoomLog")
     tex = B.bm("M_LL_Logbook")
@@ -1370,6 +1918,27 @@ def logbook(B, c, b3, pw=0.28, pd=0.196):
             for loop, uvv in zip(f.loops, ((ua, 0.0), (ub, 0.0), (ub, 1.0), (ua, 1.0))):
                 loop[uvl].uv = uvv
     box(B.bm("M_LL_Red", "SM_RoomLog"), P(0.012, -pd / 2 - 0.02, 0.0045), (0.007, 0.05, 0.0008), b3)   # ribbon
+    # printed page edges on the reader's side and the fore-edges (the paper slabs alone read as one block)
+    pm = B.bm("M_LL_Props")
+    puv = B.uv(pm)
+    for s in (-1, 1):
+        for i in range(N):
+            t0, t1 = i / N, (i + 1) / N
+            x0, x1 = s * pw * t0, s * pw * t1
+            h0, h1 = zt(t0) - 0.0008, zt(t1) - 0.0008
+            q = [(x0, 0.004, t0), (x1, 0.004, t1), (x1, h1, t1), (x0, h0, t0)]
+            if s < 0:
+                q = [q[1], q[0], q[3], q[2]]
+            f = pm.faces.new([pm.verts.new(P(x, -pd / 2 - 0.0003, z)) for x, z, _ in q])
+            for lp, (x, z, t) in zip(f.loops, q):
+                lp[puv].uv = region_uv("page_edge", t, (z - 0.004) / 0.012)
+        xe, he = s * (pw + 0.0003), zt(1.0) - 0.0008
+        q = [(-pd / 2, 0.004), (pd / 2, 0.004), (pd / 2, he), (-pd / 2, he)]
+        if s < 0:
+            q = [q[1], q[0], q[3], q[2]]
+        f = pm.faces.new([pm.verts.new(P(xe, y, z)) for y, z in q])
+        for lp, (y, z) in zip(f.loops, q):
+            lp[puv].uv = region_uv("page_edge", y / pd + 0.5, (z - 0.004) / 0.012)
 
 
 def well_glass(B, i, base, r, o, u):
@@ -1452,6 +2021,9 @@ def build_props(B):
     box(B.bm("M_LL_WoodDark", "SM_Props"), dc + do_ * 0.006, (0.47, 0.35, 0.012), db3)
     quad_uv(pm, B.uv(pm), dc - do_ * 0.001, db3, 0.42, 0.305, px(720, 0, 1820, 800))
     box(B.bm("M_LL_Glass", "SM_PropsGlass"), dc - do_ * 0.004, (0.43, 0.315, 0.002), db3, bevel=0.0)
+    for sx in (-1, 1):                                  # mirror-plate screws (iteration 5: it floated on the wall)
+        for sy in (-1, 1):
+            cyl(B.bm("M_LL_Brass", "SM_Props"), dc + dr * (sx * 0.222) + du * (sy * 0.162) - do_ * 0.0005, 0.006, 0.0055, 0.003, 10, basis_z(-do_))
     # (R/S) aneroid barometer, falling tonight: on the pier between the centre and east windows
     bb = 18.0
     br, bo, bu = wall_frame(bb)
@@ -1463,6 +2035,8 @@ def build_props(B):
     nd = br * math.sin(na) + bu * math.cos(na)
     seg_cyl(B.bm("M_LL_Iron", "SM_Props"), bc - bo * 0.013 - nd * 0.02, bc - bo * 0.013 + nd * 0.09, 0.0025, 6)
     cyl(B.bm("M_LL_Brass", "SM_Props"), bc - bo * 0.014, 0.01, 0.01, 0.006, 12, bb3)
+    torus(B.bm("M_LL_Brass", "SM_Props"), bc + bu * 0.14 + bo * 0.004, 0.016, 0.0025, 16, 6, basis_z(br))   # hanging ring
+    cyl(B.bm("M_LL_Iron", "SM_Props"), bc + bu * 0.152 - bo * 0.002, 0.004, 0.004, 0.012, 8, basis_z(-bo))  # its screw
     # (S) Admiralty Tide Tables on the top storage shelf, the half bottle of Grant's hidden behind them
     sb_ = R["storage"]
     sbs = wb(sb_)
@@ -1516,6 +2090,26 @@ def build_props(B):
     mug = dp(kb + 4.5, 0, 0.95, R_IN - 0.04)
     cyl(B.bm("M_LL_Ceramic", "SM_Props"), mug + Vector((0, 0, 0.045)), 0.035, 0.035, 0.09, 16)
     torus(B.bm("M_LL_Ceramic", "SM_Props"), mug + Vector((0, 0, 0.05)) + kr * 0.04, 0.022, 0.006, 12, 5, basis_z(ko))
+    # Stage 1 iteration 5 (D): a rubber torch standing on the top shelf by the stair door (taken down the stair)
+    tb = dp(sb_, 0.45, 1.4925, sc - 0.1)
+    solid(B, "rubber", lambda bm: cyl(bm, tb + Vector((0, 0, 0.075)), 0.021, 0.021, 0.15, 16))
+    solid(B, "rubber", lambda bm: cyl(bm, tb + Vector((0, 0, 0.17)), 0.022, 0.032, 0.04, 16))
+    solid(B, "chrome", lambda bm: cyl(bm, tb + Vector((0, 0, 0.192)), 0.033, 0.033, 0.005, 16))
+    cyl(B.bm("M_LL_Glass", "SM_PropsGlass"), tb + Vector((0, 0, 0.1945)), 0.028, 0.028, 0.001, 16)
+    solid(B, "chrome", lambda bm: box(bm, tb + Vector((0, 0, 0.11)) - wall_frame(sb_)[1] * 0.021, (0.008, 0.004, 0.022), wb(sb_), bevel=0.0))
+    # (C) a shortbread tin on the west sill beside the kettle, its lid ajar
+    bt = dp(-30.0, 0, 0.95, R_IN - 0.04)
+    solid(B, "tin_red", lambda bm: cyl(bm, bt + Vector((0, 0, 0.035)), 0.085, 0.085, 0.07, 32))
+    for zb in (0.006, 0.064):
+        solid(B, "tin_gold", lambda bm, zb=zb: cyl(bm, bt + Vector((0, 0, zb)), 0.0858, 0.0858, 0.006, 32))
+    for k in range(3):
+        solid(B, "wood_raw", lambda bm, k=k: box(bm, bt + Vector((0, 0, 0.062)) + wall_frame(-30.0)[0] * (-0.03 + k * 0.026),
+                                                 (0.022, 0.07, 0.014), wb(-30.0) @ rot_about((0, 0, 1), 8.0 * (k - 1)), bevel=0.0))
+    lr_, lo_, _ = wall_frame(-30.0)
+    lid_b3 = rot_about(lr_, -9.0) @ Matrix.Identity(3)
+    lid_c = bt + Vector((0, 0, 0.074)) - lo_ * 0.045 + Vector((0, 0, 0.006))
+    solid(B, "tin_red", lambda bm: cyl(bm, lid_c, 0.088, 0.088, 0.012, 32, lid_b3))
+    solid(B, "tin_gold", lambda bm: cyl(bm, lid_c + lid_b3.col[2] * 0.0062, 0.07, 0.07, 0.0008, 32, lid_b3))
     # (R) touched-up paint at hand height, a slightly different cream (maintained, not new)
     for tb, tz, tw, th in ((-96.0, 1.45, 0.2, 0.14), (101.0, 1.3, 0.16, 0.12), (152.0, 1.55, 0.22, 0.16), (-30.0, 1.25, 0.12, 0.1)):
         tr, to, tu = wall_frame(tb)

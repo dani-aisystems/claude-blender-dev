@@ -159,6 +159,8 @@ func _swap_materials(mi: MeshInstance3D) -> void:
 			var bm := (m as BaseMaterial3D).duplicate()
 			# Iteration A: the framed print is semi-gloss photo paper; the ledger is matte rag paper
 			bm.roughness = {"M_LL_Atlas": 0.35, "M_LL_Photo": 0.5, "M_LL_Logbook": 0.88, "M_LL_Props": 0.6}.get(nm, 0.8)
+			if bm.roughness_texture != null:      # Stage 1 iteration 5: T_LL_Props_rough carries per-texel roughness
+				bm.roughness = 1.0
 			bm.metallic = 0.0
 			bm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 			mi.set_surface_override_material(i, bm)
@@ -622,7 +624,8 @@ func _process_body(delta: float) -> void:
 		k.set_start(false)
 	_set_press("PT_start", 0.012 if k.start_held else 0.0, delta)
 	_set_angle("PT_stair_door", deg_to_rad(-105.0) if door_open else 0.0, delta, 1.2)
-	_set_press("PT_handset", -0.03 if k.tx_t > 0.0 else 0.0, delta)
+	# Stage 1 iteration 5: PT_handset is the desk mic's press-to-talk bar (it was the whole mic, which sank 3 cm into the desk)
+	_set_press("PT_handset", -0.004 if k.tx_t > 0.0 else 0.0, delta)
 	# lamps
 	var blink := fmod(_t, 0.6) < 0.3
 	_lamp("gen_run", 3.0 if k.gen == KeeperSim.Gen.RUNNING else (2.0 if k.gen == KeeperSim.Gen.CRANKING and blink else 0.0))

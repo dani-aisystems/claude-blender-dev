@@ -92,4 +92,44 @@ SPEC = {
             "VHF  CH 16", "VOLUME", "CHANNEL", "DANGER  415 V",
         ],
     },
+    # The chart on the desk (Stage 1 iteration 5): textures.py prints the tea rings, build.py stands the mug
+    # beside the newest one. UV origin bottom-left of T_LL_Chart (0.8 x 0.6 m, 2048 x 1536 px).
+    "desk_chart": {"w": 0.8, "h": 0.6, "rot_deg": 3.0, "mug_uv": [0.155, 0.285],
+                   "ring_uv": [[0.135, 0.262], [0.80, 0.15]]},
+    # T_LL_Props (2048 px): one material for every small prop (documents.py paints it, build.py maps it).
+    # Stage 1 iteration 5: the room is at its 32-material cap, so small-prop colour comes from flat swatches
+    # here and roughness from T_LL_Props_rough.png (same layout). Rects are image px [x0, y0, x1, y1].
+    "props_atlas": {
+        "size": 2048,
+        "regions": {
+            "calendar": [0, 0, 700, 1000], "diagram": [720, 0, 1820, 800], "barometer": [0, 1024, 1024, 2048],
+            "mug": [1024, 800, 2048, 1056],          # enamel mug wrap: u = angle, v = the lathe profile (mug_v)
+            "forecast": [1024, 1056, 1424, 1416],    # teleprinter sheet (documents.forecast, 1000 x 900)
+            "sked": [1440, 1056, 1740, 1256],        # handwritten card tucked in the radio bezel
+            "tin": [1760, 1056, 2016, 1232],         # tobacco tin lid
+            "spines": [1440, 1264, 1680, 1664],      # 4 book spines, 60 px each
+            "note": [1700, 1264, 1968, 1700],        # foolscap stores note under the radio
+            "page_edge": [1024, 1608, 1424, 1640],   # ledger / book page-block striations
+            "knit": [1024, 1660, 1424, 2048],        # the keeper's jumper (gansey rib)
+        },
+        "swatch": {"x0": 1824, "y0": 0, "px": 32, "cols": 7},
+        # name: [sRGB, roughness]
+        "swatches": {
+            "enamel_white": [[236, 234, 226], 0.16], "enamel_blue": [[30, 54, 104], 0.18], "iron_chip": [[38, 34, 32], 0.7],
+            "tea": [[46, 24, 10], 0.08], "pencil_yellow": [[200, 156, 40], 0.4], "pencil_green": [[34, 70, 46], 0.4],
+            "chinagraph_red": [[158, 34, 26], 0.55], "wood_raw": [[208, 170, 122], 0.85], "graphite": [[48, 48, 52], 0.35],
+            "eraser": [[184, 102, 94], 0.9], "lacquer_black": [[14, 13, 13], 0.14], "ballpoint": [[200, 190, 156], 0.22],
+            "cap_blue": [[28, 56, 132], 0.35], "briar": [[92, 48, 22], 0.35], "vulcanite": [[18, 16, 14], 0.25],
+            "ash_grey": [[132, 128, 120], 0.95], "ash_dark": [[56, 53, 50], 0.95], "rubber": [[22, 22, 22], 0.75],
+            "flex_brown": [[72, 48, 30], 0.9], "cable_grey": [[58, 60, 58], 0.65], "page_cream": [[222, 210, 182], 0.9],
+            "chrome": [[176, 178, 182], 0.18], "knit_navy": [[60, 70, 98], 0.98], "lead": [[88, 90, 94], 0.6],
+            "tin_red": [[118, 30, 28], 0.3], "tin_gold": [[164, 124, 54], 0.3], "felt_green": [[40, 58, 40], 0.97],
+            "cloth_red": [[104, 30, 26], 0.8], "cloth_navy": [[30, 40, 70], 0.8], "cloth_green": [[38, 58, 44], 0.8],
+            "cloth_black": [[26, 25, 24], 0.8], "tortoise": [[72, 40, 20], 0.3], "hammertone": [[70, 74, 72], 0.45],
+            "paper_white": [[226, 220, 202], 0.88], "tobacco": [[96, 62, 30], 0.95],
+        },
+        # mug lathe bands (v, bottom of the wrap = 0): outer white to rim_v0, blue rim to rim_v1, inner wall to 0.97
+        "mug_v": {"rim_v0": 0.70, "rim_v1": 0.85, "inner_top": 0.86, "inner_bottom": 0.97,
+                  "inner_z": [0.079, 0.006], "tide_z": [0.072, 0.060, 0.046]},
+    },
 }

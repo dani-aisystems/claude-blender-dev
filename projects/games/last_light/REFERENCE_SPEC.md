@@ -129,6 +129,24 @@ Reserve these with non-interactive `ANCHOR_*` empties (Godot ignores them) and c
 | Oilskins and sou'wester on a hook by the stair | P2 | Composition: a lived-in room that mirrors the Visitor's look | 4 |
 | Kettle on an electric ring, mug rings | P3 | Composition: the keeper's night | 4 |
 | Barometer | P2 | Realism: the storm builds | 4 |
+| White enamel mug (blue rolled rim, chips, cold tea at ~55 %, older tide lines) and two tea rings on the chart, one on the ledger margin | P1 | Realism and story: the keeper's long night (Daniel: tea, enamel) | 5 |
+| Brass shell-case pencil pot: two hex pencils, red chinagraph, ballpoint, steel rule; a green stub left on the chart | P1 | Realism: chart work | 5 |
+| Chart as paper: rotated 3°, folds, two lifted corners, edge band; pencil clearing bearings (336°, 022°), "13/11 2100" fix, a rubbed-out line | P1 | Realism and gameplay (it stays readable). Nothing on it shows tonight's events | 5 |
+| Captain Field's parallel rule and brass dividers on the chart | P1 | Realism: how bearings were laid off in 1971 | 5 |
+| Ledger: cloth boards, leather corners, printed page edges; uncapped fountain pen in the gutter, cap on the page; folded reading glasses | P1 | Story: an entry was just written | 5 |
+| Desk microphone (cast base, chrome yoke, press-to-talk bar = `PT_handset`) with a coiled cord to the radio's front socket | P0 | Realism and gameplay: the bar dips 4 mm while transmitting (it was the whole mic, sinking 3 cm) | 5 |
+| Radio bezel and screws; handwritten coastguard card tucked in the bezel; radar side louvres | P0 | Realism | 5 |
+| Cables (radio power and coax, radar, lamp flex) along the desk's back edge to a junction box under the conduit drop | P1 | Realism: the equipment is connected to the power chain | 5 |
+| Reference books with titled spines (List of Lights, West Coast pilot, NLB instructions, 1971 almanac); the almanac leans | P2 | Realism and composition | 5 |
+| 7x50 porro binoculars with strap | P2 | Realism | 5 |
+| Teleprinter forecast as a real torn, curling sheet (the readable forecast text); a foolscap stores note half under the radio | P2 | Realism and story (routine, no plot facts) | 5 |
+| Pipe in a brass ashtray (ash, spent match); "Skerry Flake" tobacco tin (made-up brand) | P2 | Story: a person lives here (Daniel: yes to the pipe set) | 5 |
+
+**Period references checked (Stage 1 iteration 5, 2026-11-05):**
+- Falcon-type enamel mugs: 8 cm high, 8 cm across, 350 ml, rolled rim ([Falcon](https://falconenamelware.com/products/enamel-mug)).
+- Captain Field's improved parallel rules: 15–18 in, blackened brass or ebony; a 1939 example is 460 × 75 mm ([Science Museum Group](https://collection.sciencemuseumgroup.org.uk/objects/co202955/capt-fields-improved-raf-navigators-parallel-rule-by-dargue-brothers-ltd-1939), [Royal Museums Greenwich](https://rmg.co.uk/collections/objects/rmgc-object-42814)).
+- Period desk microphones: a press-to-talk bar on a weighted base; coiled cords on 1960s radio handsets ([Turner 254C listing](https://surplussales.com/items/51-radio-frequency-stuff/1931-rf-fingerstock/107240-model-254c-desk-microphone)).
+- Keepers: the duty keeper wrote the daily log, and the day was spent on upkeep and stores checks such as oil, paraffin and water ([lighthousekeepers.co.uk](https://lighthousekeepers.co.uk/resources/duties.html), [Sumburgh Head](https://www.sumburghhead.com/light-keepers)). That is the source of the stores note's contents.
 
 ## Comparison views kept for every iteration
 | View | Matches |

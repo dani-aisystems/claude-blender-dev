@@ -301,6 +301,12 @@ def logbook_spread(left, right):
         a = int(110 * (1 - i / 60) ** 2)
         d.line([W // 2 - i, 0, W // 2 - i, H], fill=(60, 45, 30, a))
         d.line([W // 2 + i, 0, W // 2 + i, H], fill=(60, 45, 30, a))
+    # Stage 1 iteration 5: an old tea ring in the left page's lower margin (the mug, 80 mm = ~290 px across;
+    # a broken arc, darker at the rim where the tea dried)
+    cx, cy, r = 190, 610, 145
+    for k in range(3):
+        d.arc([cx - r - k, cy - r - k, cx + r + k, cy + r + k], 200, 520, fill=(120, 80, 45, 70 - 20 * k), width=3)
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(150, 110, 70, 10))
     return out
 
 
@@ -396,6 +402,183 @@ def barometer_dial():
     return img
 
 
+# ------------------------------------------------------------------ small-prop atlas (Stage 1 iteration 5)
+
+def load_props_atlas():
+    import importlib.util
+    s = importlib.util.spec_from_file_location("ll_spec", HERE / "spec.py")
+    m = importlib.util.module_from_spec(s)
+    s.loader.exec_module(m)
+    return m.SPEC["props_atlas"]
+
+
+def _chip(d, rd, cx, cy, r, seed):
+    """Enamel chip: an irregular patch of dark iron with a faint rust halo (albedo d, roughness rd)."""
+    rnd = random.Random(seed)
+    pts = []
+    for i in range(11):
+        a = 2 * math.pi * i / 11
+        rr = r * (0.55 + 0.6 * rnd.random())
+        pts.append((cx + rr * math.cos(a) * 1.3, cy + rr * math.sin(a)))
+    halo = [(cx + (x - cx) * 1.35, cy + (y - cy) * 1.35) for x, y in pts]
+    d.polygon(halo, fill=(130, 84, 52, 70))
+    d.polygon(pts, fill=(38, 34, 32, 255))
+    rd.polygon(pts, fill=180)
+
+
+def mug_wrap(w, h, mv, seed=31):
+    """White enamel mug with a blue rolled rim (UK camp/works mug, Falcon-type 8 x 8 cm). Rows follow
+    build.py's lathe profile: v = 0 (outer base) at the bottom row, v = 1 (inside the bottom) at the top."""
+    img = Image.new("RGB", (w, h), (236, 234, 226))
+    noise = Image.effect_noise((w // 2, h // 2), 10).resize((w, h), Image.BICUBIC).convert("RGB")
+    img = Image.blend(img, noise, 0.03)
+    rough = Image.new("L", (w, h), int(0.16 * 255))
+    d = ImageDraw.Draw(img, "RGBA")
+    rd = ImageDraw.Draw(rough)
+    row = lambda v: h - v * h
+    d.rectangle([0, row(mv["rim_v1"]), w, row(mv["rim_v0"])], fill=(30, 54, 104, 255))
+    rd.rectangle([0, row(mv["rim_v1"]), w, row(mv["rim_v0"])], fill=int(0.18 * 255))
+    for i in range(14):                                   # handling grime toward the base
+        v = 0.12 * (1 - i / 14)
+        d.line([0, row(v), w, row(v)], fill=(120, 112, 98, 4 + i), width=int(h * 0.01) + 1)
+    z0, z1 = mv["inner_z"]
+    it, ib = mv["inner_top"], mv["inner_bottom"]
+    vz = lambda z: it + (z0 - z) / (z0 - z1) * (ib - it)  # inner-wall z -> v
+    d.rectangle([0, row(1.0), w, row(ib)], fill=(110, 70, 40, 255))   # stained inside bottom
+    rd.rectangle([0, row(1.0), w, row(ib)], fill=int(0.3 * 255))
+    newest = mv["tide_z"][-1]
+    d.rectangle([0, row(ib), w, row(vz(newest))], fill=(150, 110, 75, 170))
+    for k, z in enumerate(mv["tide_z"]):                  # tide lines from earlier, fuller mugs
+        y = row(vz(z))
+        a = 90 if z == newest else 50 - 12 * k
+        d.line([0, y, w, y], fill=(120, 80, 48, a), width=2)
+        d.rectangle([0, y, w, y + 3], fill=(150, 112, 78, a // 3))
+    for k, (u, v, r) in enumerate(((0.70, 0.78, 9), (0.79, 0.46, 7), (0.56, 0.05, 6), (0.33, 0.60, 4), (0.90, 0.80, 5))):
+        _chip(d, rd, u * w, row(v), r, seed + k)
+    return img, rough
+
+
+def sked_card(w, h):
+    img = paper(w, h, 44, (226, 218, 196), 0)
+    d = ImageDraw.Draw(img, "RGBA")
+    y = 14
+    for line, size in (("STORNOWAY C.G.", 30), ("Ch 16  /  2182 kc/s", 26), ("Radio check 2100", 26), ("& as required.", 26)):
+        jitter_text(d, (16, y), line, CALLUM(size), INK, seed=y)
+        y += size + 14
+    d.rectangle([0, 0, w - 1, h - 1], outline=(150, 135, 110), width=2)
+    for x in range(0, w, 3):                              # thumb-grime along the bottom edge
+        d.point((x, h - 4 - (x * 7) % 5), fill=(90, 70, 50, 60))
+    return img
+
+
+def tin_lid(w, h):
+    """A made-up tobacco brand (no real trade dress)."""
+    img = Image.new("RGB", (w, h), (118, 30, 28))
+    d = ImageDraw.Draw(img, "RGBA")
+    d.rounded_rectangle([6, 6, w - 7, h - 7], radius=18, outline=(164, 124, 54), width=5)
+    d.rounded_rectangle([16, 16, w - 17, h - 17], radius=12, outline=(164, 124, 54), width=2)
+    d.text((w / 2, h * 0.38), "SKERRY", font=PRINTB(44), fill=(196, 160, 84), anchor="mm")
+    d.text((w / 2, h * 0.62), "FLAKE", font=PRINTB(34), fill=(196, 160, 84), anchor="mm")
+    d.text((w / 2, h * 0.82), "ready rubbed  ·  1 oz", font=PRINT(16), fill=(196, 160, 84), anchor="mm")
+    rnd = random.Random(8)
+    for _ in range(60):                                   # worn edges show the tinplate
+        x, y = rnd.choice([(rnd.randint(0, w), rnd.choice([rnd.randint(0, 10), h - rnd.randint(1, 10)])),
+                           (rnd.choice([rnd.randint(0, 10), w - rnd.randint(1, 10)]), rnd.randint(0, h))])
+        d.line([x, y, x + rnd.randint(-8, 8), y + rnd.randint(-3, 3)], fill=(190, 186, 176, 160), width=1)
+    return img
+
+
+def spines(w, h):
+    """Four 60 px spines: Admiralty List of Lights, the West Coast pilot, the NLB keepers' instructions,
+    and a 1971 almanac (generic titles; no publisher's trade dress)."""
+    img = Image.new("RGB", (w, h), (30, 30, 30))
+    books = (((30, 40, 70), "ADMIRALTY LIST OF LIGHTS  VOL. A"), ((38, 58, 44), "WEST COAST OF SCOTLAND PILOT"),
+             ((104, 30, 26), "N.L.B.  INSTRUCTIONS TO LIGHTKEEPERS"), ((26, 25, 24), "NAUTICAL ALMANAC  1971"))
+    for k, (col, title) in enumerate(books):
+        sp = Image.new("RGB", (h, 60), col)
+        sd = ImageDraw.Draw(sp, "RGBA")
+        sd.text((h / 2, 30), title, font=PRINTB(19), fill=(196, 164, 92), anchor="mm")
+        for x in (14, 20, h - 20, h - 14):
+            sd.line([x, 6, x, 54], fill=(196, 164, 92, 200), width=2)
+        noise = Image.effect_noise((h // 2, 30), 22).resize((h, 60)).convert("RGB")
+        sp = Image.blend(sp, noise, 0.08)
+        sd = ImageDraw.Draw(sp, "RGBA")
+        for x in range(0, 12):                            # rubbed head and tail
+            sd.line([x, 0, x, 60], fill=(200, 190, 170, 70 - 5 * x))
+            sd.line([h - 1 - x, 0, h - 1 - x, 60], fill=(200, 190, 170, 70 - 5 * x))
+        img.paste(sp.rotate(-90, expand=True), (k * 60, 0))   # English spines read top to bottom
+    return img
+
+
+def stores_note(w, h):
+    img = paper(w, h, 46, (226, 220, 202), 1)
+    d = ImageDraw.Draw(img, "RGBA")
+    for y in range(70, h, 26):                            # ruled foolscap
+        d.line([0, y, w, y], fill=(120, 140, 170, 90), width=1)
+    d.line([34, 0, 34, h], fill=(170, 80, 80, 90), width=1)
+    lines = ["Stores - wk 46", "Gas oil  2 drums", "Bulbs 1000W  x 2", "Mantles (spare) x 6", "Paraffin  5 gal",
+             "Batts - S.G. low", "  cells 7, 9", "Wick trimmer"]
+    y = 44
+    for i, line in enumerate(lines):
+        jitter_text(d, (42, y), line, CALLUM(24), PENCIL if i else INK, seed=i)
+        y += 26 * (2 if i == 0 else 1) - (0 if i else 0)
+    return img
+
+
+def page_edge(w, h):
+    img = Image.new("RGB", (w, h), (222, 210, 182))
+    d = ImageDraw.Draw(img, "RGBA")
+    rnd = random.Random(12)
+    for y in range(h):
+        if rnd.random() < 0.45:
+            d.line([0, y, w, y], fill=(150, 135, 105, rnd.randint(30, 90)))
+    for x in range(0, w, 7):                              # thumbed fore-edge
+        d.line([x, 0, x + 2, h], fill=(120, 100, 70, rnd.randint(0, 25)))
+    return img
+
+
+def knit(w, h):
+    """Navy wool gansey rib."""
+    img = Image.new("RGB", (w, h), (56, 66, 94))       # iteration 5: (30, 36, 54) read as black under one lamp
+    d = ImageDraw.Draw(img, "RGBA")
+    for x in range(0, w, 10):
+        for y in range(0, h, 8):
+            d.line([x, y, x + 5, y + 7], fill=(84, 96, 128, 200), width=2)
+            d.line([x + 10, y, x + 5, y + 7], fill=(72, 84, 114, 200), width=2)
+        d.line([x, 0, x, h], fill=(30, 36, 52, 160), width=1)
+    noise = Image.effect_noise((w, h), 30).convert("RGB")
+    return Image.blend(img, noise, 0.06)
+
+
+def props_extras(props, pa):
+    """Paint the iteration-5 regions into the props atlas and return its roughness map (same layout)."""
+    rg = pa["regions"]
+    rough = Image.new("L", props.size, int(0.8 * 255))
+    rdr = ImageDraw.Draw(rough)
+    for name, r in (("calendar", 0.85), ("diagram", 0.85), ("barometer", 0.45), ("forecast", 0.85), ("sked", 0.82),
+                    ("tin", 0.32), ("spines", 0.75), ("note", 0.86), ("page_edge", 0.9), ("knit", 1.0)):
+        rdr.rectangle(rg[name], fill=int(r * 255))
+    box = lambda n: rg[n]
+    size = lambda n: (rg[n][2] - rg[n][0], rg[n][3] - rg[n][1])
+    mug, mug_r = mug_wrap(*size("mug"), pa["mug_v"])
+    props.paste(mug, box("mug")[:2])
+    rough.paste(mug_r, box("mug")[:2])
+    props.paste(forecast().resize(size("forecast"), Image.LANCZOS), box("forecast")[:2])
+    props.paste(sked_card(*size("sked")), box("sked")[:2])
+    props.paste(tin_lid(*size("tin")), box("tin")[:2])
+    props.paste(spines(*size("spines")), box("spines")[:2])
+    props.paste(stores_note(*size("note")), box("note")[:2])
+    props.paste(page_edge(*size("page_edge")), box("page_edge")[:2])
+    props.paste(knit(*size("knit")), box("knit")[:2])
+    sw = pa["swatch"]
+    for i, (name, (rgb, r)) in enumerate(pa["swatches"].items()):
+        x = sw["x0"] + (i % sw["cols"]) * sw["px"]
+        y = sw["y0"] + (i // sw["cols"]) * sw["px"]
+        ImageDraw.Draw(props).rectangle([x, y, x + sw["px"] - 1, y + sw["px"] - 1], fill=tuple(rgb))
+        rdr.rectangle([x, y, x + sw["px"] - 1, y + sw["px"] - 1], fill=int(r * 255))
+    return rough
+
+
 def main():
     C = CALLUM
     rows71 = [
@@ -459,7 +642,9 @@ def main():
     props.paste(calendar(), (0, 0))
     props.paste(wiring_diagram(), (720, 0))
     props.paste(barometer_dial(), (0, 1024))
+    rough = props_extras(props, load_props_atlas())       # Stage 1 iteration 5: small-prop regions + swatches
     props.save(TEX / "T_LL_Props.png", optimize=True)
+    rough.save(TEX / "T_LL_Props_rough.png", optimize=True)
     (OUT / "docs.json").write_text(json.dumps(DOCS, indent=1))
     print("DOCS_RESULT", json.dumps(sorted(DOCS)))
 

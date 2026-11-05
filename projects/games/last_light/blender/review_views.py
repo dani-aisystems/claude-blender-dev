@@ -63,6 +63,12 @@ VIEWS = {
     "cu_window": (*eye(0, 1.4, 0, 3.42, 1.65, 1.75), lens_for_vfov(55), False),
     "cu_door": (*eye(170, 0.2, 170, 2.0, 1.65, 1.1), lens_for_vfov(55), False),
     "cu_shelf": (*eye(128, 1.55, 128, 3.0, 1.6, 1.15), lens_for_vfov(55), False),
+    "cu_desk_l": (*eye(-20, 1.85, -11, 2.5, 1.25, 0.82), lens_for_vfov(45), False),
+    "cu_desk_r": (*eye(28, 2.1, 16, 2.71, 1.4, 0.85), lens_for_vfov(45), False),
+    "cu_chart": (*eye(3, 1.95, 2.3, 2.48, 1.6, 0.78), lens_for_vfov(50), False),
+    "cu_chair": (*eye(34, 1.08, 1.7, 1.73, 1.5, 0.6), lens_for_vfov(55), False),
+    "cu_radio": (*eye(-4, 1.75, -6, 2.75, 1.38, 0.95), lens_for_vfov(50), False),
+    "cu_logbook": (*eye(-12, 1.75, -13, 2.5, 1.5, 0.79), lens_for_vfov(42), False),
     "ext": ((24, -38, 12), (0, 0, 17), 40, False),
 }
 

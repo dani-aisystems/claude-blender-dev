@@ -335,6 +335,99 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
   - **Daniel (2026-11-05): Stage 1 approved.** The remaining gap (Medium about 1 ms over 16.7 ms, High 1–3 ms over 25 ms) is **tracked for Stage 6** final optimisation. Untested trims: softer shadow filtering, SSIL off on Medium, 6 shadowed lamps on High, plus the exterior costs (ocean, rain, fog).
   - **Ruled out:** the radar SubViewport. A 7 ms reading appeared only when the window was occluded; with the window visible the frame was unchanged at 28.0 ms.
   - **Stale files (deleted 2026-11-05 with Daniel's OK):** `blender/tex/T_LL_Calendar.png`, `T_LL_Diagram.png` and `T_LL_Barometer.png`. They were superseded by the atlas and nothing references them.
+- **Iteration 5 (2026-11-05), cabin micro-detail. Plan approved** (`~/.claude/plans/pasted-content-id-17d5-stage-virtual-thompson.md`; the 16-row audit is there).
+  - **Daniel's decisions:**
+    - tea in a white enamel mug;
+    - the pipe set: yes;
+    - checkpoints mid (after the desk) and final;
+    - `godot_bg` captures pre-approved; no bench without his OK.
+  - **Runs in parallel with Stage 2;** the file split is in the top note.
+  - **Groups A+B (the desk)** ended in the mid checkpoint. **Daniel (2026-11-05): continue to C–E**, a "worn satin" desk varnish, and ask about the bench at the end.
+  - **Groups C–E are done** (details below). **Daniel (2026-11-05): iteration 5 approved and committed locally**; the floor's satin pass is deferred ("leave it for now").
+  - **Method (the room is at its 32-material cap):**
+    - small props are one material (`M_LL_Props`) coloured from flat swatches in the `T_LL_Props` atlas (`spec.py` `props_atlas`, painted by `documents.py`);
+    - **new `T_LL_Props_rough.png`** carries per-texel roughness (glTF metallicRoughness; `station.gd` sets the multiplier to 1.0);
+    - new `build.py` helpers: `solid`, `lathe_uv`, `sweep`, `coil`, `bezier`, `pencil`, `fountain_pen`, `pen_cap`, `build_chart_sheet`, `build_desk_detail`.
+  - **Built:**
+    - enamel mug (Falcon-type, 80 × 84 mm, blue rolled rim, chips, cold tea, older tide lines) beside its newest ring;
+    - tea rings printed on the chart and the ledger margin;
+    - the chart as folded paper (3° skew, two lifted corners, edge band) with keeper pencil work (clearing bearings, yesterday's 2100 fix, a rubbed-out line; nothing about tonight);
+    - Captain Field's parallel rule, brass dividers, a pencil stub;
+    - brass shell-case pot with hex pencils, chinagraph, ballpoint and steel rule;
+    - ledger with cloth boards, leather corners and printed page edges, an uncapped fountain pen and its cap, folded reading glasses;
+    - desk mic (cast base, chrome yoke) with a coiled cord to the radio socket;
+    - radio bezel and screws, the coastguard card tucked in the bezel, radar louvres;
+    - cables to a junction box; lamp switch and flex;
+    - titled book spines (the radar case is the bookend; the almanac leans);
+    - 7x50 binoculars with strap;
+    - torn, curling teleprinter forecast (readable text); foolscap stores note half under the radio;
+    - pipe in a brass ashtray; "Skerry Flake" tin (made-up brand).
+  - **Interaction change:** `PT_handset` is now the mic's press-to-talk bar. Its press is 4 mm (it was the whole mic, sinking 3 cm into the desk). Agreed with the Stage 2 session; the hunk is owned by this iteration.
+  - **Fixes found by looking:**
+    - the reading glasses showed dashed rims, because the page height was 0.8 mm low (the top sheet is `zt`): fixed;
+    - the parallel rule read as two loose slabs: closed the blades, added the scale strips, kept it 10 cm clear of the compass;
+    - the stalled capture was the Stage 2 session's `fp_ui.gd` parse error (since fixed).
+  - **Build:** v024 `.blend`, GLB v022. Room 98.1k tris (+14.8k), 182 mesh nodes (was 187), 32 materials, validation 0 FAIL, reimport OK.
+  - **Tests (headless):**
+
+    | Suite | Result |
+    |---|---|
+    | pytest | 18/18 |
+    | interaction | 134/134, 6 known warnings (`PT_handset` moved: PASS) |
+    | story | 0 failures |
+    | regress | 60/60 |
+    | run_tests | 95/95 |
+    | sim_v2 | no gate failures |
+    | qa_sweep | 948/948 |
+  - **Captures:** `s15a_*` (before, v021) and `s15m_*` (after); sheets `renders/last_light/s15m_vs_s15a_{a,b}.png`.
+    - Draw calls went down in 8 of 9 shots (e.g. fp_desk 552 → 524).
+    - Primitives went up about 0.1M (+10–12 %).
+    - cu_radio draw calls rose 434 → 570, unexplained so far.
+    - No bench (Mac not confirmed free).
+  - **C: furniture.**
+    - **Varnish (`materials.gd` `M_LL_Wood`):** rough 0.35–0.55 → 0.5–0.72; coat 0.35 → 0.1 at roughness 0.5; normal 0.5. The white grazing streaks are gone. This affects every `M_LL_Wood` surface.
+    - **Desk:** rounded oak top; drawer fronts with 6 mm reveals (they had 3 cm gaps); brass bar pulls on posts; locks on the top drawers; black kick strips.
+    - **`build_chair`:** turned, splayed legs; H-stretchers; rounded seat; tapered spindles; bowed top rail; turned 8° (the collider is unchanged); the keeper's navy gansey over the back.
+    - **Fix found by looking:** the gansey first read as a black cloth with an X (navy too dark, crossed sleeves). Lightened to #384260 and the sleeves hang straight.
+    - `box(segs=)` added for rounded edges.
+  - **D: personal items.**
+    - A rubber torch on the storage rack's top shelf by the stair door.
+    - A shortbread tin with its lid ajar on the west sill beside the kettle. The plan said "desk corner"; the desk had no room left, and the sill reads as part of the keeper's tea corner.
+  - **E: architectural detail.**
+    - Glazing beads round every pane and two hinges per casement.
+    - Saddle clips on every vertical conduit drop, reaching the wall (`drop()`).
+    - Mirror-plate screws on the wiring diagram; a hanging ring and screw on the barometer.
+    - **Not done:** the sill condensation stain (it needs a decal or alpha, which the material cap and the no-alpha rule exclude).
+  - **Final build:** v026 `.blend`, GLB v024. Room 104,060 tris (+20.7k against 83.3k), 183 mesh nodes, 32 materials, validation 0 FAIL, reimport OK.
+  - **Final tests (headless):**
+
+    | Suite | Result |
+    |---|---|
+    | pytest | 18/18 |
+    | interaction | 134/134, 6 known warnings |
+    | story | 0 failures |
+    | regress | 66/66 (includes Stage 2's new checks) |
+    | run_tests | 95/95 |
+    | sim_v2 | no gate failures |
+    | qa_sweep | 948/948 |
+  - **Final captures:** `s15f_*`. Sheets:
+    - `s15f_vs_s15a_{a,b}.png`, matched against the v021 baseline;
+    - `s15f_vs_s1_c.png`, the window, stair, power and shelf views against `s1f`, `s1p` and `s14`.
+  - **Render counts against `s15a`:**
+    - draw calls down in every matched shot (fp_desk 552 → 534; cu_chair 634 → 495);
+    - primitives +0.18–0.26M (+17–21 %);
+    - the cu_radio 570 at the mid checkpoint was transient (final: 426).
+  - **Bench (Daniel: Mac free), `s15f_q{1,2}_bench.json` against `s1p`:** median / p95 in ms; same flags (`godot_bg`, novsync, 30 s, worst case).
+
+    | Preset | fp_desk | fp_window | fp_gen |
+    |---|---|---|---|
+    | Medium | 18.0 / 21.0 (+3 % / +11 %) | 18.6 / 21.6 (+4 % / +11 %) | 16.6 / 19.0 (0 % / +1 %) |
+    | High | 29.0 / 33.6 (**+11 %** / +10 %) | 28.0 / 34.7 (+4 % / +13 %) | 26.7 / 33.6 (−6 % / +7 %) |
+
+    - Medium is inside the investigate thresholds (+10 % median, +15 % p95).
+    - High fp_desk is 1 % over the median threshold. Run noise is about ±5 % (the unchanged fp_gen view moved −6 %).
+    - The likely cost is the desk lamp's shadow pass over the new small props. Suggested trim for Stage 6: a no-shadow bucket for P3 props (cables, pencils, screws, pens).
+    - The first Medium run overlapped a Stage 2 capture and was re-run clean.
 
 ## Stage 2 log
 - **Plan (2026-11-05), approved.** The full audit is at `~/.claude/plans/the-last-light-soft-hearth.md`.

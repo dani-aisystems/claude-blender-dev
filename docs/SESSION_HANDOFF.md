@@ -31,6 +31,13 @@ The staged-polish session won't edit `build.py` (needed for bevels, smooth shadi
 
 Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (current stage and iteration, decisions, feedback log, next task), and with `docs/PROJECT_STATE.md`.
 
+## Latest status (2026-11-05, Stage 1 iteration 5: cabin micro-detail)
+- **Iteration 5 is approved by Daniel and committed locally.** It covers groups A–E: the desk, furniture, personal items and architectural fasteners.
+- **Details:** the ROADMAP Stage 1 log, "Iteration 5". **Evidence:** `renders/last_light/s15f_vs_s15a_{a,b}.png` and `s15f_vs_s1_c.png`.
+- **Build:** v026 `.blend`, GLB v024, 104k tris, 32 materials. All suites pass.
+- **This session's files were** Blender/`tex`, `materials.gd`, the `station.gd` `_swap_materials` and PT_handset lines, the four desk views in `capture_fp.gd`, and its ROADMAP/REFERENCE_SPEC entries. Stage 2 (a parallel session) stages its own hunks only.
+- **Bench done:** Medium +0–4 % median, inside budget rules; High desk +11 % median, at the threshold. See the ROADMAP for the suggested Stage 6 trim.
+
 ## Latest status (2026-11-05, Stage 2 started)
 - **The Stage 2 plan is approved.** The plan is at `~/.claude/plans/the-last-light-soft-hearth.md`; the audit and decisions are in the ROADMAP "Stage 2 log".
 - **Branding** committed locally as `0f18df3`.

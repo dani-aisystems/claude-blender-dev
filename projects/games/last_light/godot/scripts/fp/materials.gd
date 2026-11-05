@@ -76,8 +76,10 @@ const ROOM := {
 	"M_LL_SteelRust": ["green_metal_rust", {"scale": 0.9, "base": "frame_green", "detail_amt": 0.3, "rough_lo": 0.35, "rough_hi": 0.55,
 		"coat": 0.2, "coat_rough": 0.3, "chips": 0.2, "under": "primer"}],
 	"M_LL_Iron": ["metal_plate_02", {"scale": 1.4, "base": "iron", "detail_amt": 0.5, "rough_lo": 0.35, "rough_hi": 0.6, "metallic_v": 0.3}],
-	"M_LL_Wood": ["oak_veneer_01", {"scale": 1.2, "base": "oak", "detail_amt": 1.0, "detail_color": 1.0, "rough_lo": 0.35, "rough_hi": 0.55,
-		"coat": 0.35, "coat_rough": 0.32}],
+	# Stage 1 iteration 5 (Daniel: "worn satin"): was rough 0.35-0.55, coat 0.35 @ 0.32, full normal -> a plastic
+	# gloss with white grain streaks at grazing angles on the desk top. 20-year-old varnish: satin, soft coat.
+	"M_LL_Wood": ["oak_veneer_01", {"scale": 1.2, "base": "oak", "detail_amt": 1.0, "detail_color": 1.0, "rough_lo": 0.5, "rough_hi": 0.72,
+		"coat": 0.1, "coat_rough": 0.5, "normal_strength": 0.5}],
 	"M_LL_WoodDark": ["dark_wooden_planks", {"scale": 1.0, "base": "oak_dark", "detail_amt": 1.0, "detail_color": 1.0, "rough_lo": 0.35,
 		"rough_hi": 0.6, "coat": 0.3, "coat_rough": 0.35}],
 }
