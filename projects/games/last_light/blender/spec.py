@@ -68,7 +68,7 @@ SPEC = {
         # Daniel 2026-11-04 (Stage 1 iteration 3): stair door moved 10 deg left of R1's 180 so the housing
         # clears the generator cage (was 4 cm) and the archive (3 cm); storage, extinguisher and one lamp follow
         "stair": 170.0, "storage": 128.0, "extinguisher": 106.0, "console": 78.0, "optic_drive": 45.0,
-        "wall_lamps": [-48.0, 62.0, 148.0, -160.0],
+        "wall_lamps": [-48.0, 62.0, 148.0, -160.0],   # -48 is on the bay's splayed lintel (moving it to -54 put it on the frame, cp3)
     },
     "lantern": {
         "base_z": 23.3, "glass_z": [23.95, 25.85], "radius": 2.05, "sides": 12,

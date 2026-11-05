@@ -67,8 +67,10 @@ const ROOM := {
 	# panel joints in both diffuse and normal: they read as boards on the wall and lines on the ceiling.)
 	"M_LL_Concrete": ["concrete_floor_worn_001", {"scale": 0.45, "base": "cream", "detail_amt": 0.28, "rough_lo": 0.3, "rough_hi": 0.55,
 		"coat": 0.2, "coat_rough": 0.35, "normal_strength": 0.35, "dado": 1.0, "chips": 0.35, "under": "plaster_under", "cyl_map": 1.0}],
-	"M_LL_Floor": ["concrete_floor_worn_001", {"scale": 0.35, "base": "floor", "detail_amt": 0.8, "rough_lo": 0.25, "rough_hi": 0.6,
-		"coat": 0.45, "coat_rough": 0.25, "normal_strength": 0.6}],
+	# cabin pass (Daniel): still dark polished concrete, but a soft sheen, not a wet mirror (the 0.45 clearcoat
+	# at 0.25 threw hard streaks under the torch and the desk lamp). Was rough 0.25-0.6, coat 0.45 @ 0.25.
+	"M_LL_Floor": ["concrete_floor_worn_001", {"scale": 0.35, "base": "floor", "detail_amt": 0.8, "rough_lo": 0.4, "rough_hi": 0.72,
+		"coat": 0.16, "coat_rough": 0.45, "normal_strength": 0.6}],
 	"M_LL_SteelPaint": ["metal_plate_02", {"scale": 0.45, "base": "machinery", "detail_amt": 0.18, "rough_lo": 0.38, "rough_hi": 0.55,
 		"coat": 0.15, "coat_rough": 0.4, "chips": 0.25, "under": "primer"}],
 	"M_LL_EngineGreen": ["metal_plate_02", {"scale": 0.6, "base": "engine", "detail_amt": 0.22, "rough_lo": 0.32, "rough_hi": 0.55,

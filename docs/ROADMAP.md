@@ -492,6 +492,26 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
   - **Suites:** regress 101/101, interaction 134/134 (7 known warnings), qa_sweep 948/948, story 0 failures, sim_v2 no gate failures, run_tests 95/95, pytest 18/18.
   - **Evidence:** `renders/last_light/cp2_vs_photos.png` (Daniel's photos vs after), `cp2_sheet_{a,b}.png`, `cp2b_sheet.png`, `cp2c_t066_cu_coat.png`.
 
+- **Daniel (2026-11-05): checkpoint 2 approved; committed `9e0eeef`.** The reference photos stay untracked; tone the floor down.
+- **Checkpoint 3 (full cabin audit). Approved by Daniel (2026-11-05); the in-between saves stay untracked:**
+  - **Contact scan (Blender, scratch `float_scan.py`):**
+    - method: one BVH of every room mesh; every connected island (1,616) must come within 8 mm of a different island or object;
+    - 63 islands were flagged before the fixes and 45 after;
+    - the 45 left are explained false positives: sparse-vertex faces (stool seat, drawer pulls, plate on the cage bars, flange), parts embedded in others (exhaust rings, wheel hubs, lineshaft, kettle spout), bulbs inside globes, glass inside beads, conduits on spacer saddles.
+  - **Real defects fixed:**
+    - generator: base on the drip tray (−2.4 cm), radiator against the block, fins on its face, flywheel hub on the block, maker plate and FUEL VALVE label onto the cage bars (on a tag plate), control box back on the bars, the capped-pipe flange seated with its tag tied on, a lampholder and cross rail for the cage bulb;
+    - radio: carrying handles on the case edges with posts (they hung 2 cm beyond the sides);
+    - lampholders for the desk-lamp and stair-lamp bulbs;
+    - wall-lamp backplates seated, including the −48° lamp on the bay's recessed lintel (moving it to −54° put it on the frame, so that was reverted);
+    - the red box handle on posts;
+    - extinguisher: hook reaching the plate, chips on the drum;
+    - the tin lid print within the lid;
+    - the coat seam, toggles, pockets and note following the folded surface (`surf()`).
+  - **Small props:** storage spares boxes (lid lip, handle, hasp, stencil plate); the red cantilever toolbox (seam, latches); a real rope coil (sweep, 3 layers); a turned-down coat collar.
+  - **Floor (Daniel):** rough 0.25–0.6 → 0.4–0.72, clearcoat 0.45 @ 0.25 → 0.16 @ 0.45. Still dark polished concrete, now a soft sheen.
+  - **Regression caught in review:** deepening the generator control box (0.14 → 0.15 m) without moving its centre pushed its face 5 mm past the gauges and the GENERATOR plate (striped z-fight, plate hidden; `cp3_t068_cu_gen.png`). The centre moved to front − 0.075 so the face stays in the gauge plane; re-checked in `cp3c_t068_cu_gen.png`.
+  - **Build:** v035 `.blend`, GLB v033. Evidence: `renders/last_light/cp3_sheet_{a,b}.png`, `cp3b_t070_cu_lamp.png`, `cp3c_t068_cu_gen.png`.
+
 ## Stage 2 log
 - **Plan (2026-11-05), approved.** The full audit is at `~/.claude/plans/the-last-light-soft-hearth.md`.
   - **P0:**

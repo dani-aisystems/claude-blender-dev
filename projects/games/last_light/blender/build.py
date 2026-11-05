@@ -850,8 +850,10 @@ def build_desk(B):
     lamp(B, "radio_tx", fc + fb3.col[0] * 0.21 - fb3.col[1] * 0.07, fb3, "red", 0.012)
     label(B, "VHF  CH 16", fc + fb3.col[0] * 0.18 - fb3.col[1] * 0.115, fb3, 0.12)
     for s in (-1, 1):
-        seg_cyl(B.bm("M_LL_Brass"), fc + fb3.col[0] * (s * 0.3) + fb3.col[1] * 0.1 + fb3.col[2] * 0.02,
-                fc + fb3.col[0] * (s * 0.3) - fb3.col[1] * 0.1 + fb3.col[2] * 0.02, 0.008)
+        hx = fb3.col[0] * (s * 0.258)
+        seg_cyl(B.bm("M_LL_Brass"), fc + hx + fb3.col[1] * 0.1 + fb3.col[2] * 0.022, fc + hx - fb3.col[1] * 0.1 + fb3.col[2] * 0.022, 0.008)
+        for sy in (-1, 1):
+            seg_cyl(B.bm("M_LL_Brass"), fc + hx + fb3.col[1] * (sy * 0.1), fc + hx + fb3.col[1] * (sy * 0.1) + fb3.col[2] * 0.026, 0.006, 8)
     # the desk microphone (PT_handset = its press-to-talk bar) is in build_desk_detail
     # radar (right of centre, R1)
     rd = back - 0.24
@@ -887,6 +889,7 @@ def build_desk(B):
     bulb.loops.layers.uv.new("UVMap")
     sphere(bulb, head + shade_dir * 0.11, 0.03)
     B.mesh_obj("LMP_desk", bulb, "M_LL_Lamp")
+    seg_cyl(B.bm("M_LL_Iron"), head + shade_dir * 0.015, head + shade_dir * 0.085, 0.013, 10)          # lampholder
     B.empty("LIGHT_desk", head + shade_dir * 0.14, (0.05, 0.05, 0.05), basis_z(-shade_dir), kind="SINGLE_ARROW")
     # chart, open logbook, compass, binoculars, books, mug, pencil cup
     top_b3 = basis(r, o, u)
@@ -1435,12 +1438,12 @@ def build_generator(B):
     eng = B.bm("M_LL_EngineGreen")
     ec = back - d / 2 + 0.05
     box(eng, dp(b, -0.1, 0.42, ec), (0.95, 0.55, 0.6), bs)
-    box(eng, dp(b, -0.1, 0.12, ec), (1.15, 0.7, 0.16), bs)
+    box(eng, dp(b, -0.1, 0.096, ec), (1.15, 0.7, 0.16), bs)                       # base ON the drip tray (it floated 2.4 cm)
     for k in range(3):
         box(eng, dp(b, -0.4 + k * 0.28, 0.82, ec), (0.22, 0.42, 0.2), bs)
         cyl(B.bm("M_LL_Iron"), dp(b, -0.4 + k * 0.28, 0.95, ec), 0.03, 0.03, 0.06, 10)
     # spoked flywheel (was a solid disc)
-    fw = dp(b, 0.48, 0.45, ec)
+    fw = dp(b, 0.44, 0.45, ec)                                                   # hub meets the block face (it stood 3.5 cm off)
     iron = B.bm("M_LL_Iron")
     torus(iron, fw, 0.29, 0.035, 36, 8, basis_z(r))
     cyl(iron, fw, 0.07, 0.07, 0.14, 20, basis_z(r))
@@ -1455,9 +1458,9 @@ def build_generator(B):
         box(tray, dp(b, sx * 0.675 - 0.05, 0.03, ec), (0.012, 0.9, 0.05), bs)
     for sy in (-1, 1):
         box(tray, dp(b, -0.05, 0.03, ec + sy * 0.45), (1.35, 0.012, 0.05), bs)
-    box(eng, dp(b, -0.65, 0.55, ec), (0.12, 0.6, 0.8), bs)
+    box(eng, dp(b, -0.63, 0.55, ec), (0.12, 0.6, 0.8), bs)                        # radiator against the block
     for k in range(10):
-        box(B.bm("M_LL_Iron"), dp(b, -0.72, 0.25 + k * 0.06, ec), (0.01, 0.55, 0.02), bs)
+        box(B.bm("M_LL_Iron"), dp(b, -0.694, 0.25 + k * 0.06, ec), (0.01, 0.55, 0.02), bs)   # fins on its face (they floated 2.5 cm)
     ex0, ex1 = dp(b, -0.25, 0.95, ec), dp(b, -0.25, 1.4, ec)
     ex2 = dp(b, -0.25, 1.4, R_OUT + 0.1)
     seg_cyl(B.bm("M_LL_SteelRust"), ex0, ex1, 0.07, 14)
@@ -1465,15 +1468,15 @@ def build_generator(B):
     for k in range(6):
         cyl(B.bm("M_LL_Iron"), ex1.lerp(ex2, 0.15 + k * 0.05), 0.085, 0.085, 0.02, 14, basis_z(o))
     B.collider("generator", dp(b, 0, h / 2, back - d / 2), (w + 0.06, d + 0.04, h), bs)
-    cb = dp(b, 0.42, 1.25, front - 0.08)
-    box(B.bm("M_LL_SteelPaint"), cb, (0.5, 0.14, 0.5), bs)
+    cb = dp(b, 0.42, 1.25, front - 0.075)                                         # front face stays at front - 0.15 (the gauges'
+    box(B.bm("M_LL_SteelPaint"), cb, (0.5, 0.15, 0.5), bs)                          # plane); the box grows back onto the cage bars
     fb3, fc = face_frame(b, 0.42, 1.25, front - 0.15 - 0.002)
 
     def at(x, z):
         return fc + fb3.col[0] * x + fb3.col[1] * (z - 1.25)
     label(B, "GENERATOR", at(0, 1.45), fb3, 0.24)
     # maker plate on the cage's top rail: why there is a generator in the watch room at all
-    pb3, pc = face_frame(b, -0.35, h - 0.11, front - 0.03)
+    pb3, pc = face_frame(b, -0.35, h - 0.11, front - 0.008)                      # ON the cage bars (it hung 2.6 cm in front)
     box(B.bm("M_LL_Brass", "SM_GenPlate"), pc + pb3.col[2] * 0.002, (0.3, 0.085, 0.006), pb3)
     label(B, "AUX. SET  No.2", pc + pb3.col[2] * 0.006, pb3, 0.26)
     gauge(B, "fuel", at(-0.12, 1.3), fb3, 0.075, CELLS["fuel"])
@@ -1497,7 +1500,9 @@ def build_generator(B):
         cyl(bm, (0, 0, 0.02), 0.02, 0.02, 0.04, 14)
         box(bm, (0, 0.06, 0.035), (0.03, 0.15, 0.018))
     B.part("PT_fuel_valve", "M_LL_Red", vc + vb3.col[2] * 0.02, vb3, valve)
-    label(B, "FUEL VALVE", vc - vb3.col[1] * 0.12, vb3, 0.14)
+    lb3_, lc_ = face_frame(b, -0.45, 0.78, front - 0.008)
+    box(B.bm("M_LL_Iron"), lc_ - lb3_.col[2] * 0.0005, (0.16, 0.045, 0.004), lb3_)           # tag plate on the bars
+    label(B, "FUEL VALVE", lc_ + lb3_.col[2] * 0.002, lb3_, 0.14)                # (the label floated 5.8 cm in front)
     B.empty("IA_fuel_valve", vc + vb3.col[2] * 0.06, (0.09, 0.1, 0.07), vb3)
     B.empty("IA_gen_panel", cb - o * 0.1, (0.28, 0.28, 0.1), bs)
     # fuel day-tank on wall brackets above the cage, with a sight glass; the fuel line rises to it
@@ -1527,12 +1532,15 @@ def build_generator(B):
     # the main engines' feed, capped off: they are downstairs and out of action tonight
     cp = dp(b, 0.62, 0.0, back - 0.12)
     seg_cyl(B.bm("M_LL_Iron"), cp - u * 0.1, cp + u * 0.85, 0.035, 12)
-    cyl(B.bm("M_LL_Red", "SM_CappedPipe"), cp + u * 0.87, 0.07, 0.07, 0.025, 20)
-    box(B.bm("M_LL_Paper", "SM_CappedPipe"), cp + u * 0.72 - o * 0.04, (0.06, 0.004, 0.09), bs)   # "out of service" tag
+    cyl(B.bm("M_LL_Red", "SM_CappedPipe"), cp + u * 0.86, 0.07, 0.07, 0.025, 20)   # blank flange seated on the pipe end
+    box(B.bm("M_LL_Paper", "SM_CappedPipe"), cp + u * 0.72 - o * 0.0375, (0.06, 0.004, 0.09), bs)   # "out of service" tag, against the pipe
+    torus(B.bm("M_LL_Iron", "SM_CappedPipe"), cp + u * 0.775, 0.037, 0.0015, 16, 4)   # its wire tie
     bm = bmesh.new()
     bm.loops.layers.uv.new("UVMap")
     sphere(bm, dp(b, 0.0, h - 0.08, back - d / 2), 0.035)
     B.mesh_obj("LMP_cage", bm, "M_LL_Lamp")
+    seg_cyl(B.bm("M_LL_Iron"), dp(b, 0.0, h - 0.05, back - d / 2), dp(b, 0.0, h + 0.02, back - d / 2), 0.012, 10)   # lampholder up to the top rail
+    box(B.bm("M_LL_SteelPaint", "SM_GenCage"), dp(b, 0, h, back - d / 2), (w, 0.05, 0.05), bs)            # the cross rail it hangs from
 
 
 # ------------------------------------------------------------------ stair housing (R1/R2: south)
@@ -1610,6 +1618,7 @@ def build_stair(B):
     bm.loops.layers.uv.new("UVMap")
     sphere(bm, dp(b, 0, h - 0.12, (front + back) / 2), 0.04)
     B.mesh_obj("LMP_stair", bm, "M_LL_Lamp")
+    seg_cyl(B.bm("M_LL_Iron"), dp(b, 0, h - 0.085, (front + back) / 2), dp(b, 0, h + 0.005, (front + back) / 2), 0.012, 10)   # pendant lampholder
     B.empty("LIGHT_stair", dp(b, 0, h - 0.2, (front + back) / 2), (0.05, 0.05, 0.05), kind="SPHERE")
     B.empty("SPAWN_player", dp(b, 0.0, 0.0, 1.45), (0.2, 0.2, 0.2), kind="ARROWS")
     # story anchors (REFERENCE_SPEC Stage 1 review): the slid photograph lands here; knocks and voice come from here
@@ -1638,11 +1647,31 @@ def build_storage(B):
     for k in range(3):
         box(B.bm("M_LL_WoodDark", "SM_Storage"), dp(b, -0.38, 0.12 + k * 0.13, c - 0.212), (0.5, 0.01, 0.03), bs)
     box(B.bm("M_LL_Red"), dp(b, 0.25, 0.73, c), (0.5, 0.25, 0.24), bs)
-    seg_cyl(B.bm("M_LL_Iron"), dp(b, 0.1, 0.88, c), dp(b, 0.4, 0.88, c), 0.012)
-    for k in range(2):
-        box(B.bm("M_LL_SteelPaint", "SM_Storage"), dp(b, -0.45 + k * 0.28, 0.72, c), (0.24, 0.32, 0.22), bs)
-    torus(B.bm("M_LL_Rope"), dp(b, 0.3, 0.17, c), 0.17, 0.06, 20, 8)
-    torus(B.bm("M_LL_Rope"), dp(b, 0.3, 0.27, c), 0.13, 0.05, 20, 8)
+    box(B.bm("M_LL_Red"), dp(b, 0.25, 0.815, c), (0.506, 0.256, 0.012), bs)                             # lid seam band
+    for lx in (0.08, 0.42):
+        box(B.bm("M_LL_Iron", "SM_Storage"), dp(b, lx, 0.8, c - 0.1285), (0.03, 0.006, 0.045), bs)     # latches
+    seg_cyl(B.bm("M_LL_Iron"), dp(b, 0.12, 0.88, c), dp(b, 0.38, 0.88, c), 0.012)
+    for hx_ in (0.12, 0.38):
+        box(B.bm("M_LL_Iron"), dp(b, hx_, 0.865, c), (0.02, 0.03, 0.03), bs)             # handle posts on the lid
+    for k in range(2):                                              # cabin pass: steel spares boxes, not bare cubes
+        bx = -0.45 + k * 0.28
+        box(B.bm("M_LL_SteelPaint", "SM_Storage"), dp(b, bx, 0.72, c), (0.24, 0.32, 0.22), bs)
+        box(B.bm("M_LL_SteelPaint", "SM_Storage"), dp(b, bx, 0.79, c), (0.246, 0.326, 0.04), bs)          # lid lip
+        box(B.bm("M_LL_Iron", "SM_Storage"), dp(b, bx, 0.835, c), (0.09, 0.02, 0.012), bs)               # top handle
+        for hx in (-0.035, 0.035):
+            box(B.bm("M_LL_Iron", "SM_Storage"), dp(b, bx + hx, 0.8235, c), (0.012, 0.016, 0.014), bs)
+        box(B.bm("M_LL_Iron", "SM_Storage"), dp(b, bx, 0.77, c - 0.163), (0.03, 0.006, 0.05), bs)        # front hasp
+        box(B.bm("M_LL_Paper", "SM_Storage"), dp(b, bx, 0.71, c - 0.1615), (0.12, 0.003, 0.05), bs)      # stencilled plate
+    rc0 = dp(b, 0.3, 0.0925, c)                                       # cabin pass: a coil of rope (it was two tori)
+    pts = []
+    for i in range(3 * 4 * 16 + 1):                                  # 3 layers x 4 turns, laid inward then outward
+        t = i / 16.0
+        layer = int(t // 4)
+        frac = (t % 4) / 4.0
+        rr = 0.17 - 0.07 * (frac if layer % 2 == 0 else 1.0 - frac)
+        a = 2 * math.pi * t
+        pts.append(rc0 + Vector((rr * math.cos(a), rr * math.sin(a), 0.014 + layer * 0.025)))
+    sweep(B.bm("M_LL_Rope"), pts, 0.0135, 7)
     build_storm_lantern(B, dp(b, -0.25, 1.1125, c), wall_frame(b))   # cabin pass (IMG_3135): stands ON the shelf
     # the old station logs (1946-1965) in an open oak box: the 1953 log is the chapter-2 clue (IA_archive)
     lb = B.bm("M_LL_Wood", "SM_LogBox")
@@ -1953,7 +1982,8 @@ def well_glass(B, i, base, r, o, u):
     room): backplate, neck, glass globe, brass guard. Creates LMP_wall_<i> and LIGHT_wall_<i>."""
     fb3 = basis(r, u, -o)
     brass = B.bm("M_LL_Brass", "SM_WallLamps")
-    cyl(brass, base - o * 0.015, 0.085, 0.08, 0.03, 24, fb3)                          # cast backplate
+    cyl(brass, base + o * 0.045, 0.085, 0.08, 0.14, 24, fb3)                         # cast backplate: 2.5 cm shows, the rest runs into the
+                                                                                      # wall, so it seats on flat walls and the recessed lintel at -48 alike
     cyl(B.bm("M_LL_Iron", "SM_WallLamps"), base - o * 0.05, 0.035, 0.03, 0.05, 16, fb3)  # neck
     g = base - o * 0.135
     sphere(B.bm("M_LL_Glass", "SM_WallLampGlass"), g, 0.072, 18, 12)
@@ -2112,7 +2142,7 @@ def build_props(B):
                                                  (0.022, 0.07, 0.014), wb(-30.0) @ rot_about((0, 0, 1), 8.0 * (k - 1)), bevel=0.0))
     lid = bt - tr_ * 0.18 - to_ * 0.0                                                 # lid lying on the sill beside it
     solid(B, "tin_red", lambda bm: cyl(bm, lid + tu_ * 0.007, 0.088, 0.088, 0.014, 40))
-    quad_uv(pm, B.uv(pm), lid + tu_ * 0.0142, basis(tr_, -to_, tu_), 0.15, 0.15, region_rect("tin_band", 0.0, 0.0, 0.33, 1.0))
+    quad_uv(pm, B.uv(pm), lid + tu_ * 0.0142, basis(tr_, -to_, tu_), 0.12, 0.12, region_rect("tin_band", 0.0, 0.0, 0.33, 1.0))
     solid(B, "tin_gold", lambda bm: torus(bm, lid + tu_ * 0.0135, 0.086, 0.0018, 40, 5))
     # (R) touched-up paint at hand height, a slightly different cream (maintained, not new)
     for tb, tz, tw, th in ((-96.0, 1.45, 0.2, 0.14), (101.0, 1.3, 0.16, 0.12), (158.0, 1.55, 0.22, 0.16), (-19.0, 1.12, 0.1, 0.08)):
@@ -2200,17 +2230,27 @@ def build_coat_rack(B):
             cyl(oil, (pts[k] + pts[k + 1]) / 2, rk, rk + 0.0015, dv.length + 0.01, 14, basis_z(-dv))
         cdv = pts[-1] - pts[-2]
         torus(oil, pts[-1] + cdv.normalized() * 0.004, 0.039, 0.007, 14, 5, basis_z(cdv))   # turned cuff
-    lathe(oil, top - ou * 0.035, cb3, [(0.05, -0.02), (0.058, 0.0), (0.06, 0.035), (0.052, 0.04), (0.046, 0.0)], 18)   # collar
+    lathe(oil, top - ou * 0.03, cb3, [(0.035, 0.03), (0.05, 0.035), (0.07, 0.012), (0.085, -0.03), (0.08, -0.04), (0.06, -0.01), (0.034, 0.012)], 22)   # turned-down collar
     dark = B.bm("M_LL_Bakelite", "SM_CoatRack")
-    fy = 0.178 * YS + 0.004                                  # front surface at chest height
-    box(dark, top + cb3 @ Vector((0.0, fy, -0.56)), (0.012, 0.007, 0.8), cb3, bevel=0.0)           # storm flap seam
+    fold = lambda th, t: 1.0 + t * (0.075 * math.sin(4 * th + 1.1) + 0.045 * math.sin(7 * th + 0.3)) + 0.02 * math.sin(11 * th) * t * t
+    def surf(x, z):                                          # the folded front surface: y at (x, z), as drape() builds it
+        zs = [zz for zz, _ in rings]
+        j = max(0, min(len(rings) - 2, max(k for k in range(len(zs)) if zs[k] >= z)))
+        f = (z - zs[j]) / (zs[j + 1] - zs[j])
+        r_ = rings[j][1] + (rings[j + 1][1] - rings[j][1]) * f
+        t = (j + f) / (len(rings) - 1)
+        th = math.acos(max(-1.0, min(1.0, x / max(r_, 1e-3))))
+        return r_ * fold(th, t) * math.sin(th) * YS
+    for z0, z1 in ((-0.16, -0.3), (-0.3, -0.45), (-0.45, -0.62), (-0.62, -0.78), (-0.78, -0.9)):   # storm flap seam, in pieces
+        zm = (z0 + z1) / 2
+        box(dark, top + cb3 @ Vector((0.0, surf(0.0, zm) + 0.002, zm)), (0.012, 0.006, abs(z1 - z0) + 0.01), cb3, bevel=0.0)
     for zt in (0.24, 0.4, 0.56, 0.72):
-        cyl(B.bm("M_LL_WoodDark", "SM_CoatRack"), top + cb3 @ Vector((0.01, fy + 0.007, -zt)), 0.007, 0.007, 0.028, 8, basis_z(cside))
-    for sx in (-1, 1):                                       # pocket flaps, slightly proud
-        pc = top + cb3 @ Vector((sx * 0.1, 0.185 * YS + 0.006, -0.63))
+        cyl(B.bm("M_LL_WoodDark", "SM_CoatRack"), top + cb3 @ Vector((0.01, surf(0.01, -zt) + 0.006, -zt)), 0.007, 0.007, 0.028, 8, basis_z(cside))
+    for sx in (-1, 1):                                       # pocket flaps on the surface
+        pc = top + cb3 @ Vector((sx * 0.1, surf(sx * 0.1, -0.63) + 0.004, -0.63))
         box(oil, pc, (0.14, 0.012, 0.055), cb3 @ rot_about((0, 1, 0), sx * 4.0), bevel=0.003)
     # the stores note, folded twice, poking out of the right pocket (IA_coat_note opens it)
-    nc = top + cb3 @ Vector((0.1, 0.185 * YS + 0.0, -0.585))
+    nc = top + cb3 @ Vector((0.1, surf(0.1, -0.585) - 0.002, -0.585))
     nb3 = cb3 @ rot_about((0, 1, 0), -14.0)
     pm = B.bm("M_LL_Props")
     solid(B, "page_cream", lambda bm: box(bm, nc, (0.07, 0.003, 0.055), nb3, bevel=0.0), prefix="SM_CoatRack")
@@ -2282,7 +2322,7 @@ def build_extinguisher(B):
     box(iron, ep + eu * 0.24 - er * 0.094, (0.02, 0.03, 0.025), basis(er, eo, eu), bevel=0.0)           # hose clip
     torus(iron, ep + eu * 0.32, 0.0905, 0.004, 32, 4)       # strap band
     box(iron, dp(e, 0, 0.62, R_IN - 0.008), (0.06, 0.012, 0.36), wb(e), bevel=0.002)                    # wall plate
-    box(iron, ep + eu * 0.53 + eo * 0.06, (0.03, 0.06, 0.01), basis(er, eo, eu))                        # hook under the shoulder
+    box(iron, ep + eu * 0.53 + eo * 0.07, (0.03, 0.075, 0.01), basis(er, eo, eu))                       # hook under the shoulder, into the plate
     for k in range(4):                                       # wall plate screws
         cyl(brass, dp(e, 0, 0.47 + k * 0.1, R_IN - 0.0146), 0.005, 0.005, 0.002, 8, basis_z(fr))
     # wrapped label (props atlas "ext_label"): a 70 degree band of the body's own radius, 13 cm tall
@@ -2300,7 +2340,7 @@ def build_extinguisher(B):
         f = pm.faces.new((rows[0][i][0], rows[0][i + 1][0], rows[1][i + 1][0], rows[1][i][0]))
         for lp, uvv in zip(f.loops, (rows[0][i][1], rows[0][i + 1][1], rows[1][i + 1][1], rows[1][i][1])):
             lp[uvl].uv = region_uv("ext_label", *uvv)
-    for th_d, zc in ((48, 0.62), (-60, 0.5), (75, 0.14), (12, 0.07)):                     # chips at hand height and at the foot
+    for th_d, zc in ((48, 0.34), (-60, 0.27), (75, 0.12), (12, 0.06)):                     # chips (heights from the foot, on the drum)
         th = math.radians(th_d)
         nrm = fr * math.cos(th) + er * math.sin(th)
         cyl(iron, ep + eu * zc + nrm * 0.0884, 0.005 + 0.002 * (th_d % 3), 0.004, 0.0009, 8, basis_z(nrm))
