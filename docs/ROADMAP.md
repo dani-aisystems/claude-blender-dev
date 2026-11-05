@@ -44,14 +44,14 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | | |
 |---|---|
 | **Stage** | 1, cabin lighting, materials and architecture |
-| **Iteration** | 3b, device detail pass (console, radio, power chain), then 4. Iteration 3 is approved |
-| **Next actionable task** | Iteration 3, devices in priority order:<br>• P0: stair door and housing (reads as a black slab), generator auxiliary set (day-tank, extractor, exhaust, AUX plate, capped MAIN ENGINES pipe), power chain, console, radio. Each must pass the 8-item checklist.<br>• P1: optic drive (motor, gearbox, standby clockwork, governor, revolution counter, the 046 worn tooth), desk, stair |
+| **Iteration** | Stage 1 **approved by Daniel 2026-11-05** after iteration 1p. Stage 2 not started |
+| **Next actionable task** | Stage 2 (first-person interactions and gameplay): inspect, propose and agree the plan with Daniel **before** implementing |
 
 ## Stages
 | # | Stage | Status |
 |---|---|---|
 | 0 | Critical fixes and regression baseline | ✅ **approved by Daniel 2026-11-04** (iteration 0.2) |
-| 1 | Cabin lighting, materials and architecture | 🟡 in progress (iterations 1.0, 1a, 1b, 2, 3, 4) |
+| 1 | Cabin lighting, materials and architecture | ✅ **approved by Daniel 2026-11-05** (iterations 1.0, 1a, 1b, 2, 3, 3b, 4, 1p) |
 | 2 | First-person interactions and gameplay | ⬜ |
 | 3 | Dialogue, characters and story pacing | ⬜ |
 | 4 | Outside world and major story events | ⬜ |
@@ -99,6 +99,8 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
   - logic tests run headless at background priority: `taskpolicy -b tools/godot --headless …`;
   - **ask Daniel before opening any Godot window**;
   - batch captures into one run per checkpoint, at Auto resolution;
+  - **previews are silent** (Daniel, 2026-11-05): `tools/godot_bg` uses the Dummy audio driver, and capture runs mute the master bus unless `--audio` is passed;
+  - **windowed runs go through `tools/godot_bg`** (Daniel, 2026-11-05: don't pull him out of his current window). It launches in the background, hands focus back after Godot's ~0.3 s startup activation, and capture runs never capture the mouse;
   - no benchmarks unless Daniel says the Mac is free.
 
 ## Stage 0: critical fixes and regression baseline (2026-11-04)
@@ -259,6 +261,74 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
   - **Evidence:** `renders/last_light/s13_checkpoint_a.png`, `s13_checkpoint_b.png`, `s13d_check.png`.
   - **Daniel (2026-11-04):** iteration 3 approved; next, finish the device detail pass (3b), then iteration 4.
   - **Not yet done in iteration 3:** a detail pass on the console, radio and power chain. They already have the other session's gauges and selectors (Iteration A).
+- **Iteration 3b (2026-11-04), device detail pass:**
+  - **Radio:** ventilation louvres on the case top. **Radar:** a solid rubber viewing hood (`lathe`; an open tube is single-sided and vanished from inside).
+  - **Power chain:** louvres along the charger base; cable glands where the conduits enter the cabinets; a black ebonite switch panel behind the breakers (kept clear of the labels, so no z-fighting); the battery cells in steel crates with vent caps and lead inter-cell connectors on both tiers.
+  - **Console:** no extra geometry beyond Iteration A's gauges and selectors (deliberately: it already reads well in `cu_console`).
+- **Iteration 4 (2026-11-04), story-ready props at the anchors.** Tags: S = story, R = realism, C = composition.
+  - **Calendar (S/R):** NLB, November 1971, the 14th ringed, on the pier between the west and centre windows.
+  - **Wiring diagram (R/S):** framed under glass between the distribution board and the charger; 12 cells, a fixed layout.
+  - **Aneroid barometer (R/S):** reads 975 mb, "falling tonight", on the pier between the centre and east windows.
+  - **Tide Tables (S):** Admiralty Tide Tables on the top storage shelf, with the half bottle of Grant's hidden behind them (a story anchor).
+  - **Spares (R):** the old vapour-burner kit from before electrification, with a spare mantle, and a box of spare lamp bulbs.
+  - **Oilskins (C):** oilskin coat and sou'wester on a hook **left** of the stair door (stair − 19°), echoing the Visitor's look. At + 17° they hid behind the generator cage.
+  - **Kettle and mug (C):** a kettle on an electric ring and a mug on the west window sill: the keeper's long night.
+  - **Touch-ups (R):** hand-height paint touch-ups in a slightly different cream.
+  - **Texture budget:** the calendar, diagram and barometer dial are packed into one 2048² atlas, `T_LL_Props.png` (`documents.py`), so the room stays at **32 materials**. New flat materials: `M_LL_ClothBlue`, `M_LL_Whisky`, `M_LL_Oilskin`.
+  - **Build:** v019 `.blend`, GLB v017, **82.6k tris, 187 meshes, 32 materials**, 0 validation FAIL. pytest 18/18, interaction 134/134, story, regress, qa_sweep, sim_v2 and run_tests all pass.
+  - **Evidence:** `renders/last_light/s14_*` (props), then the stage-end matched capture `s1f_*` against `s0_*`.
+  - **Found in the stage-end capture `s1f`:** the oilskins read as a tan bottle with a top hat floating above it. Rebuilt with:
+    - a shaped coat (collar, sloped shoulders, flared hem) and two sleeves;
+    - the sou'wester on its own hook (stair − 27.5°, 1.68 m) as a wide brim with a domed crown;
+    - the Visitor's waxed-olive colour (#52451F, roughness 0.3).
+
+    The first rebuild (v020) still read as a bottle with side panels, so the sleeves now hang in front of the body and there's a dark storm-flap seam with four toggles. Build **v021, 83.3k tris**, 0 validation FAIL. Geometry checked in `renders/last_light/blender_v021/cu_door.png`; **not yet seen in a Godot capture**.
+  - **Stage-end performance (`s1f_q2_bench.json`, window focused, Mac free):**
+    - High at Auto resolution: fp_desk 27.4 / 28.1 ms, fp_window 28.3 / 29.0 ms, fp_gen 28.7 / 29.9 ms (median / 95th percentile);
+    - Medium (the run stopped after 2 shots, exit 0): fp_desk 24.8 / 26.3 ms, fp_window 25.6 / 26.8 ms;
+    - Low not measured.
+
+    **Over the 16.7 ms budget, and a regression against Stage 0.2** (High fp_desk was 18.9 / 20.7 ms). Primitives went 1.18M → 2.33M, draw calls 545 → 1080, VRAM 854 → 1251 MB. The 95th percentile sits only about 1 ms above the median, so this is a steady GPU cost, not hitches. The cause isn't isolated yet. Candidates: shadow passes (up to 8 shadowed lights on High), the 9-sample triplanar `room_pbr`, SSAO and SSIL, the reflection probe, and the 2k textures.
+  - **Found by looking at `s1f`, logged for Stage 3:** narration lines (`~`) inside radio conversations (15 lines across ch1, 2, 3, 5 and 6) appear in the radio panel with a **blank identity card, no name and a live signal meter**, so the keeper's thoughts look like an empty transmission. Fix: show speakerless radio lines as italic thought subtitles.
+  - **Daniel's decisions at the Stage 1 report (2026-11-05):**
+    - **another iteration: performance**, plus a 2-shot check of the oilskins in the game;
+    - **fix the thought lines now**: done in `dialogue_ui.gd`. The display look (`line_look`) is now separate from the conversation mode, so reply gating is unchanged. New regress R4 adds 6 checks, including a data check that no radio reply follows narration directly;
+    - **delete the stale textures**: done.
+- **Iteration 1p (2026-11-05), performance. In progress.**
+  - **Tooling:**
+    - bench flags `--novsync`, `--msaa=N`, `--probe=off`;
+    - `--bench_toggle` freezes one node at a time, with per-second series, primitives, draw calls and per-script ms;
+    - process time and render-thread CPU time added to the bench report;
+    - `tools/godot_bg` for windowed runs that don't take focus.
+  - **Findings, High, fp_desk:**
+    - GPU-bound: process time (which includes the wait for the GPU) ≈ frame time; render-thread CPU about 1.9 ms; game scripts below 0.3 ms per frame;
+    - 4× MSAA is on for **every preset** (`project.godot` `msaa_3d=2`): off 23.3 ms, 2× 26.2 ms, 4× 27.5 ms;
+    - everything off: 14.7 ms.
+  - **Shadow cache fixed:** every shadow map was re-rendered every frame (constant 2.34M primitives). Three causes:
+    - the rain `GPUParticles3D` cast shadows with an AABB around the room;
+    - `_set_angle` rewrote settled part transforms every frame;
+    - the continuously moving optic parts and needles cast shadows.
+
+    Now 1.57M primitives and 910 draw calls, **but no frame-time gain**, so the limit is per-pixel work.
+  - **Daniel's decisions (2026-11-05):**
+    - **60 fps on Medium**, which is now the default; High is the quality preset with a 25 ms budget;
+    - **FXAA on Low and Medium, 2× MSAA on High.**
+
+    Implemented in `settings.gd` (`q_msaa`, `q_screen_aa`, `settings_rev` 2 moves old High-default files to Medium once), with checks in qa_sweep (948/948). The Options hint text was updated.
+  - **Clean bench `s1p_q{0,1,2}_bench.json`** (quiet Mac, no vsync, worst case), median / 95th percentile in ms:
+
+    | Preset | fp_desk | fp_window | fp_gen | Budget |
+    |---|---|---|---|---|
+    | Medium | 17.4 / 19.0 | 18.0 / 19.5 | 16.6 / 18.9 | 16.7: about 1 ms over |
+    | High | 26.0 / 30.6 | 27.0 / 30.7 | 28.4 / 31.6 | 25: 1–3 ms over |
+    | Low | 12.3 / 19.2 | 12.8 / 22.1 | 14.4 / 21.3 | none |
+
+    Medium was 24.8 ms at the desk in `s1f` (−30 %).
+  - **Trials not usable:** Medium without SSIL, and High with 6 shadowed lights (`s1p_q1_nossil`, `s1p_q2_6sh`). They ran while the Mac was busy: slower than the baseline, 95th percentile 41–54 ms.
+  - **Oilskins in the game:** `s1p_t060_cu_door.png`, `s1p_t060_fp_stair.png`. They read as a hanging coat with toggles and a sou'wester (PASS).
+  - **Daniel (2026-11-05): Stage 1 approved.** The remaining gap (Medium about 1 ms over 16.7 ms, High 1–3 ms over 25 ms) is **tracked for Stage 6** final optimisation. Untested trims: softer shadow filtering, SSIL off on Medium, 6 shadowed lamps on High, plus the exterior costs (ocean, rain, fog).
+  - **Ruled out:** the radar SubViewport. A 7 ms reading appeared only when the window was occluded; with the window visible the frame was unchanged at 28.0 ms.
+  - **Stale files (deleted 2026-11-05 with Daniel's OK):** `blender/tex/T_LL_Calendar.png`, `T_LL_Diagram.png` and `T_LL_Barometer.png`. They were superseded by the atlas and nothing references them.
 
 ## Stage 1: cabin (planned; starts after Stage 0 approval)
 1. **1.0 Review:** infrastructure logic, story anchors and the tier table, written into `REFERENCE_SPEC.md`.

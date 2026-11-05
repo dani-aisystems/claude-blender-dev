@@ -27,7 +27,8 @@ const NAMES := {"MORAG": "Morag Fraser", "RORY": "Rory Bain", "HECTOR": "Hector 
 	"LOWESTOFT": "Lowestoft Star", "ELSPETH": "Elspeth Ross", "MARY ELLEN": "Mary Ellen", "VISITOR": "The man at the door",
 	"ROSS": "Alasdair Ross", "CALLUM": "Callum"}
 
-var mode := "radio"
+var mode := "radio"                         # the conversation's mode (radio replies are gated on it)
+var line_look := "radio"                        # how the current line is drawn (radio / person / thought)
 var speed_cps := 42.0                       # Settings: typewriter speed
 var text_scale := 1.0                       # Settings: subtitle size
 var at_radio_fn: Callable                   # returns true when the player is at the handset
@@ -151,11 +152,14 @@ func show_line(item: Dictionary) -> void:
 	_clear_choices()
 	mode = item["mode"]
 	_speaker = item["speaker"]
+	# narration ("~") inside a radio conversation is the keeper thinking, not a transmission: drawn as a
+	# thought subtitle, never as a radio call with a blank identity card (Stage 1 s1f)
+	line_look = "thought" if mode == "radio" and _speaker == "" else mode
 	_full = item["text"]
 	_shown = 0.0
 	_pause = 0.15
 	_done_t = 0.0
-	var radio := mode == "radio"
+	var radio := line_look == "radio"
 	radio_panel.visible = radio
 	sub_box.visible = not radio
 	if radio:
@@ -164,7 +168,7 @@ func show_line(item: Dictionary) -> void:
 		card.queue_redraw()
 		blip.emit("squelch")
 	else:
-		s_name.text = "" if _speaker == "" or mode == "thought" else NAMES.get(_speaker, _speaker.capitalize())
+		s_name.text = "" if _speaker == "" or line_look == "thought" else NAMES.get(_speaker, _speaker.capitalize())
 	_render()
 
 
@@ -257,9 +261,9 @@ func _render() -> void:
 	var n := int(_shown)
 	var vis := _full.substr(0, n)
 	var txt := vis
-	if mode == "thought":
+	if line_look == "thought":
 		txt = "[i]" + vis + "[/i]"
-	if mode == "radio":
+	if line_look == "radio":
 		r_text.text = txt
 	else:
 		s_text.text = "[center]" + txt + "[/center]"
@@ -349,7 +353,7 @@ func _draw_card() -> void:
 			card.draw_rect(Rect2(cx - 10, cy - 50, 20, 64), ink)
 			card.draw_colored_polygon(PackedVector2Array([Vector2(cx - 14, cy - 50), Vector2(cx + 14, cy - 50), Vector2(cx, cy - 66)]), ink)
 			card.draw_line(Vector2(cx + 14, cy - 56), Vector2(cx + 60, cy - 70), Color(0.75, 0.5, 0.15), 3.0)
-	if mode == "radio" and _active:
+	if line_look == "radio" and _active:
 		for i in 5:
 			var lit := (sin(_t * 9.0 + i) * 0.5 + 0.5) * 5.0 > i
 			card.draw_rect(Rect2(w - 22, h - 40 - i * 9, 12, 6), Color(0.2, 0.6, 0.3) if lit else Color(0.4, 0.35, 0.3))

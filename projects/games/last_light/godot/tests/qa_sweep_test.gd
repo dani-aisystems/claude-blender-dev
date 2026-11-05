@@ -147,6 +147,10 @@ func _options() -> void:
 		var ids: Array = Settings.q_shadow_ids()
 		_check(Settings.q_ssao() == (q >= 1) and Settings.q_ssil() == (q >= 1) and Settings.q_volumetric() == (q >= 1)
 			and ids.size() <= 8 and not ("*" in ids), "quality %d presets (shadowed lights %d)" % [q, ids.size()])
+		# 1p: FXAA on Low/Medium, 2x MSAA on High (4x MSAA everywhere cost about 5 ms)
+		_check(root.msaa_3d == [Viewport.MSAA_DISABLED, Viewport.MSAA_DISABLED, Viewport.MSAA_2X][q]
+			and root.screen_space_aa == [Viewport.SCREEN_SPACE_AA_FXAA, Viewport.SCREEN_SPACE_AA_FXAA, Viewport.SCREEN_SPACE_AA_DISABLED][q],
+			"quality %d anti-aliasing (msaa %d, screen aa %d)" % [q, root.msaa_3d, root.screen_space_aa])
 	if headless:
 		skips.append("render_res / vsync (headless display)")
 	else:

@@ -11,7 +11,7 @@ var v := {
 	# graphics
 	"window_mode": 3,            # 0 windowed, 3 fullscreen, 4 exclusive fullscreen
 	"resolution": "1920x1080",   # windowed size
-	"quality": 2,                # 0 low, 1 medium, 2 high
+	"quality": 1,                # 0 low, 1 medium (60 fps target, default), 2 high (quality, 30 fps+ target)
 	"render_res": 0,             # 0 auto: 3D at ~1920x1080-equivalent pixels (HiDPI), 1 native
 	"vsync": true,
 	"max_fps": 0,                # 0 = unlimited
@@ -24,6 +24,7 @@ var v := {
 	# accessibility
 	"subtitles": true, "subtitle_size": 1.0, "text_speed": 42.0, "reduce_flashing": false,
 	"hold_to_crank": true,       # START button: hold (true) or press-to-toggle cranking (false)
+	"settings_rev": 2,           # 2: Medium became the default preset (Stage 1 iteration 1p, Daniel 2026-11-05)
 }
 
 
@@ -53,6 +54,11 @@ func load_settings() -> void:
 			var val = cf.get_value("s", k)
 			if typeof(val) == typeof(v[k]) or (typeof(v[k]) == TYPE_FLOAT and typeof(val) == TYPE_INT):
 				v[k] = val
+	# rev < 2 files were written when High was the default: move them to the new default once
+	if int(cf.get_value("s", "settings_rev", 1)) < 2:
+		if int(v["quality"]) == 2:
+			v["quality"] = 1
+		v["settings_rev"] = 2
 
 
 func save_settings() -> void:
@@ -152,9 +158,21 @@ func q_shadow_atlas() -> int:
 
 
 ## Global (not per-scene) render settings for the current preset.
+## Anti-aliasing (1p): 4x MSAA on every preset cost about 5 ms. Low and Medium use FXAA (about 0.4 ms);
+## High keeps 2x MSAA for crisp window bars and railings.
+func q_msaa() -> Viewport.MSAA:
+	return [Viewport.MSAA_DISABLED, Viewport.MSAA_DISABLED, Viewport.MSAA_2X][int(v["quality"])]
+
+
+func q_screen_aa() -> Viewport.ScreenSpaceAA:
+	return [Viewport.SCREEN_SPACE_AA_FXAA, Viewport.SCREEN_SPACE_AA_FXAA, Viewport.SCREEN_SPACE_AA_DISABLED][int(v["quality"])]
+
+
 func apply_quality_globals() -> void:
 	if not is_inside_tree():
 		return
+	get_tree().root.msaa_3d = q_msaa()
+	get_tree().root.screen_space_aa = q_screen_aa()
 	RenderingServer.positional_soft_shadow_filter_set_quality(q_soft_shadows())
 	RenderingServer.directional_soft_shadow_filter_set_quality(q_soft_shadows())
 	get_tree().root.positional_shadow_atlas_size = q_shadow_atlas()

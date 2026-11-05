@@ -56,6 +56,7 @@ func _run() -> void:
 	await _r1_mouse()
 	await _r2_overlap()
 	await _r3_pause()
+	await _r4_thought_in_radio()
 	print("REGRESS_RESULT ", JSON.stringify({"passed": passes, "failed": fails.size(), "failures": fails, "skipped": skips}))
 	quit(1 if fails.size() > 0 else 0)
 
@@ -206,3 +207,37 @@ func _r3_pause() -> void:
 	dlg.advance_requested.disconnect(ca)
 	dlg.choice_made.disconnect(cc)
 	dlg.close()
+
+
+## R4 (Stage 1 s1f): narration inside a radio conversation is the keeper thinking. It must be drawn as an
+## italic thought subtitle, not as a radio call with a blank identity card and a live signal meter.
+func _r4_thought_in_radio() -> void:
+	dlg.show_line({"mode": "radio", "speaker": "", "text": "Static. Then nothing. Not even the carrier."})
+	await _frames(2)
+	_check(not dlg.radio_panel.visible, "radio narration does not open the radio panel")
+	_check(dlg.sub_box.visible and dlg.s_text.text.contains("[i]"), "radio narration is an italic subtitle")
+	_check(dlg.s_name.text == "", "radio narration has no speaker name")
+	_check(dlg.mode == "radio", "the conversation stays a radio conversation (reply gating)")
+	dlg.show_line({"mode": "radio", "speaker": "MORAG", "text": "North Point, Stornoway. Over."})
+	await _frames(2)
+	_check(dlg.radio_panel.visible and not dlg.sub_box.visible, "the next radio line opens the radio panel again")
+	dlg.close()
+	# the handset hint lives in the radio panel, so radio replies must never follow narration directly
+	var db := DialogueDB.new()
+	db.load_dir("res://data/story")
+	var bad: Array = []
+	for id in db.convs:
+		var c: Dictionary = db.convs[id]
+		if c["mode"] != "radio":
+			continue
+		var last_narr := false
+		for st in c["steps"]:
+			if st["kind"] == "line":
+				last_narr = st["speaker"] == ""
+			elif st["kind"] == "choice":
+				if last_narr:
+					bad.append(id)
+				last_narr = false
+			elif st["kind"] == "goto":
+				last_narr = false
+	_check(bad.is_empty(), "no radio replies directly after narration (the handset hint would be hidden): %s" % [bad])

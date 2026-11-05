@@ -54,7 +54,8 @@ North Point Light, Outer Hebrides, the night of 14–15 November 1971. The playe
 | Island, reef rocks and ships as Blender models | ⬜ (procedural stand-ins in Godot) |
 | Character portraits | ⬜ (base meshes downloaded; see the handoff for measurements) |
 
-## 4. Test and verification status (last run 2026-11-04, session 2 / Stage 0)
+## 4. Test and verification status (last run 2026-11-05, Stage 1 end, build v021 / GLB v019)
+All suites below re-run at the end of Stage 1: pytest 18/18, regress 38/38 (headless), interaction 134/134 (6 warnings: documents open with no sound), qa_sweep 945/945 (headless), run_tests 95/95, sim_v2 no gate failures, story_test 0 failures. The rows below give the commands.
 | Check | Command | Result |
 |---|---|---|
 | Workspace pytest (now includes GLB hooks, import hints, normals, budgets) | `tools/py -m pytest -q` | ✅ 18 pass |
@@ -93,6 +94,22 @@ North Point Light, Outer Hebrides, the night of 14–15 November 1971. The playe
    | Low (0.36) | 25.0 / 29.2 | 12.0 / 16.6 | 11.0 / 14.7 |
 
    These numbers are **noisy**: the window was not focused for most shots, and frame times seem to snap to the 8.3 ms vsync steps of the 120 Hz display. Low's 25 ms on fp_desk is probably that artefact. High in the generator view is still over budget; shadow presets are Stage 1a work.
+
+   **Stage 1 end (2026-11-05, `s1f_q{2,1}_bench.json`, window focused, Mac free: the first clean bench).** Median / 95th percentile in ms:
+
+   | Preset | fp_desk | fp_window | fp_gen |
+   |---|---|---|---|
+   | High | 27.4 / 28.1 | 28.3 / 29.0 | 28.7 / 29.9 |
+   | Medium | 24.8 / 26.3 | 25.6 / 26.8 | not measured |
+
+   The Medium run stopped after 2 shots; Low was not measured. **Over budget; the cause is not yet isolated** (see ROADMAP, iteration 4).
+
+   **Iteration 1p (2026-11-05):** shadow cache fixed. Medium is now the default 60 fps preset with FXAA; High is the quality preset with 2× MSAA and a 25 ms budget. Clean bench `s1p_q*` (median ms, desk / window / generator):
+   - Medium: 17.4 / 18.0 / 16.6;
+   - High: 26.0 / 27.0 / 28.4;
+   - Low: 12.3 / 12.8 / 14.4.
+
+   See the ROADMAP 1p entry.
 
    Visual comparison: `renders/last_light/s02_render_res_vs_s0.png`. The captures are downscaled to 1920 px, so they understate how much sharper Native looks on the Retina screen.
 2. **Play length NOT verified.** Bots finish the campaign in about 1,000 sim-seconds. A human estimate is 45–70 minutes against a 2-hour target; nobody has played it start to finish.

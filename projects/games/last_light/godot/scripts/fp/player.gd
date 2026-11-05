@@ -63,8 +63,11 @@ func place(t: Transform3D, look_at_point := Vector3.ZERO) -> void:
 	_apply_look()
 
 
+## Capture and autotest runs (bot-driven, often in the background) never take the mouse: on macOS a
+## capture re-activates the app, pulling Daniel out of whatever he is working in, and hides his pointer.
 func capture_mouse(on: bool) -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if on else Input.MOUSE_MODE_VISIBLE
+	var unattended: bool = GameState.user_args.has("capture") or GameState.user_args.has("autotest")
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if on and not unattended else Input.MOUSE_MODE_VISIBLE
 
 
 func _unhandled_input(event: InputEvent) -> void:

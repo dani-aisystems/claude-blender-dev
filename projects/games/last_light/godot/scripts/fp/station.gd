@@ -39,6 +39,8 @@ var door_prompt := "Stair door. Bolted for the night."
 var outside: Node3D                     # set by game_fp: storm, dawn and lightning for the window lights
 var windows: Array = []                 # [{light: SpotLight3D, out: Vector3}] one per window bay
 var probe: ReflectionProbe
+## parts that move continuously while the light turns: no shadows, so they never dirty the shadow cache
+const MOVING_PARTS := ["PT_optic_drive", "PT_optic_gear", "PT_optic_governor"]
 var fog_cut: FogMaterial                # negative-density fog volume: only a faint haze indoors
 var probe_mode := "b"                   # a: capture once + scale; b: re-capture on lighting state changes
 var _probe_key := ""
@@ -105,7 +107,9 @@ func _bind(root: Node) -> void:
 		if n is MeshInstance3D:
 			_swap_materials(n)
 		if nm.begins_with("PT_") or nm.begins_with("NDL_"):
-			parts[nm] = {"node": n, "rest": n.transform, "angle": 0.0, "press": 0.0}
+			parts[nm] = {"node": n, "rest": n.transform, "angle": 0.0, "press": 0.0, "w_angle": 0.0, "w_press": 0.0}
+			if nm.begins_with("NDL_") or nm in MOVING_PARTS:
+				_no_shadow(n)
 		elif nm.begins_with("LMP_"):
 			_bind_lamp(n, nm.substr(4))
 		elif nm.begins_with("IA_"):
@@ -145,10 +149,10 @@ func _swap_materials(mi: MeshInstance3D) -> void:
 		var rep := LLMaterials.get_room_mat(nm)      # Stage 1b: interior palette looks (exterior keeps get_mat)
 		if rep:
 			mi.set_surface_override_material(i, rep)
-		elif m is BaseMaterial3D and nm in ["M_LL_Atlas", "M_LL_Chart", "M_LL_Rose", "M_LL_Rug", "M_LL_Photo", "M_LL_Logbook"]:
+		elif m is BaseMaterial3D and nm in ["M_LL_Atlas", "M_LL_Chart", "M_LL_Rose", "M_LL_Rug", "M_LL_Photo", "M_LL_Logbook", "M_LL_Props"]:
 			var bm := (m as BaseMaterial3D).duplicate()
 			# Iteration A: the framed print is semi-gloss photo paper; the ledger is matte rag paper
-			bm.roughness = {"M_LL_Atlas": 0.35, "M_LL_Photo": 0.5, "M_LL_Logbook": 0.88}.get(nm, 0.8)
+			bm.roughness = {"M_LL_Atlas": 0.35, "M_LL_Photo": 0.5, "M_LL_Logbook": 0.88, "M_LL_Props": 0.6}.get(nm, 0.8)
 			bm.metallic = 0.0
 			bm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 			mi.set_surface_override_material(i, bm)
@@ -160,6 +164,13 @@ func _swap_materials(mi: MeshInstance3D) -> void:
 			all_glass = false
 	if all_glass or String(mi.name).begins_with("SM_WallLamps"):
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+func _no_shadow(n: Node) -> void:
+	if n is GeometryInstance3D:
+		(n as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for c in n.get_children():
+		_no_shadow(c)
 
 
 func _bind_lamp(n: Node, id: String) -> void:
@@ -313,6 +324,8 @@ func _make_instrument_lights() -> void:
 ## storm sky. Box-projected over the room; ambient is a dark neutral colour scaled by the room lights.
 func _make_probe() -> void:
 	probe_mode = String(GameState.user_args.get("probe", "b"))
+	if probe_mode == "off":                  # perf bisect: --probe=off
+		return
 	probe = ReflectionProbe.new()
 	probe.size = Vector3(7.0, 3.3, 7.0)
 	probe.box_projection = true
@@ -345,6 +358,8 @@ func _make_fog_cut() -> void:
 ## Which lights cast shadows follows the quality preset (Settings.q_shadow_ids).
 func apply_shadow_preset() -> void:
 	var ids: Array = Settings.q_shadow_ids()
+	if GameState.user_args.has("shadow_ids"):     # perf bisect: --shadow_ids=desk,wall_0,...
+		ids = Array(String(GameState.user_args["shadow_ids"]).split(","))
 	var off := GameState.user_args.has("noshadows")
 	for id in lights:
 		lights[id].shadow_enabled = not off and not String(id).begins_with("inst") and id != "cage" and ("*" in ids or id in ids)
@@ -516,7 +531,7 @@ func _process_body(delta: float) -> void:
 	# fly-ball governor: spins while the rotation motor runs, winds down when it stops or jams
 	_gov_speed = move_toward(_gov_speed, 9.0 if (k.motor_on() and not k.jammed) else 0.0, delta * 4.0)
 	_gov_angle = wrapf(_gov_angle + _gov_speed * delta, -PI, PI)
-	if parts.has("PT_optic_governor"):
+	if parts.has("PT_optic_governor") and _gov_speed > 0.0:
 		var gp: Dictionary = parts["PT_optic_governor"]
 		gp["node"].transform = gp["rest"] * Transform3D(Basis(Vector3.UP, _gov_angle), Vector3.ZERO)
 	_set_angle("PT_fuel_valve", deg_to_rad(-90.0) if k.fuel_valve else 0.0, delta)
@@ -594,12 +609,19 @@ func _set_gauge(name_: String, v: float, delta: float, speed := 4.0) -> void:
 	_set_angle(name_, (0.5 - clampf(v, 0.0, 1.0)) * GAUGE_SWEEP, delta, speed)
 
 
+## Writes the transform only when the pose really changed (1p performance): any transform write marks the
+## part dirty, and a dirty shadow caster makes Godot re-render the shadow map of every shadowed light that
+## reaches it. Settled controls written every frame kept all 8 shadow maps re-rendering (2.3M primitives).
 func _set_angle(name_: String, target: float, delta: float, speed := 8.0) -> void:
 	if not parts.has(name_):
 		return
 	var p: Dictionary = parts[name_]
 	var diff := wrapf(target - p["angle"], -PI, PI)
-	p["angle"] = p["angle"] + diff * minf(1.0, delta * speed)
+	p["angle"] = target if absf(diff) < 1e-4 else p["angle"] + diff * minf(1.0, delta * speed)
+	if absf(p["angle"] - p["w_angle"]) < 1e-5 and absf(p["press"] - p["w_press"]) < 1e-5:
+		return
+	p["w_angle"] = p["angle"]
+	p["w_press"] = p["press"]
 	var rest: Transform3D = p["rest"]
 	p["node"].transform = Transform3D(rest.basis * Basis(Vector3.UP, p["angle"]), rest.origin + rest.basis * Vector3(0, p["press"], 0))
 
@@ -608,5 +630,5 @@ func _set_press(name_: String, depth: float, delta: float) -> void:
 	if not parts.has(name_):
 		return
 	var p: Dictionary = parts[name_]
-	p["press"] = lerpf(p["press"], -depth, minf(1.0, delta * 20.0))
+	p["press"] = -depth if absf(p["press"] + depth) < 1e-4 else lerpf(p["press"], -depth, minf(1.0, delta * 20.0))
 	_set_angle(name_, p["angle"], delta)

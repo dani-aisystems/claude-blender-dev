@@ -36,6 +36,10 @@ const PLAIN := {
 	"M_LL_Leather": [Color(0.3, 0.1, 0.08), 0.55, 0.0],
 	"M_LL_Ceramic": [Color(0.85, 0.83, 0.78), 0.25, 0.0],
 	"M_LL_Screen": [Color(0.01, 0.04, 0.02), 0.15, 0.0],
+	# Stage 1 iteration 4 props
+	"M_LL_ClothBlue": [Color(0.12, 0.17, 0.3), 0.85, 0.0],      # Admiralty Tide Tables
+	"M_LL_Whisky": [Color(0.4, 0.19, 0.05), 0.12, 0.0],         # the half bottle of Grant's
+	"M_LL_Oilskin": [Color(0.32, 0.27, 0.12), 0.3, 0.0],       # oilskin coat and sou'wester (= visitor_figure.gd)
 }
 
 

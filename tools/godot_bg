@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Windowed Godot run (captures, benches, windowed tests) that does NOT pull Daniel away from what he is
+# doing (Daniel, 2026-11-05). Use instead of tools/godot whenever a window is needed:
+#   tools/godot_bg --path projects/games/last_light/godot -- --capture=NAME --shots=... --bot=expert
+#
+# How:
+#   * launched through LaunchServices in the background and hidden (open -g -j), so macOS doesn't
+#     activate it or switch Spaces;
+#   * Godot itself still activates once while its window appears (the engine does that on startup and
+#     has no option to stop it), so for the first GODOT_BG_GUARD seconds (default 20) this script hands
+#     focus straight back to the app that was frontmost. After that it stops polling (no bench load);
+#   * capture/autotest runs never capture the mouse (player.gd), which would also re-activate the app.
+#   * silent: Godot runs on the Dummy audio driver (Daniel, 2026-11-05: preview audio disturbs his other
+#     work). Sound logic still runs; set GODOT_BG_AUDIO=1 to hear it.
+# Output is printed when the run ends. The exit code is 0 when the log has a *_RESULT line, 1 otherwise
+# (`open` cannot pass the app's own exit code through).
+# Note: a window behind other windows may be throttled by macOS, so bench numbers from it are
+# indicative only. Frame-time budgets are measured with the window visible.
+set -uo pipefail
+APP="${GODOT_APP:-/Applications/Godot.app}"
+GUARD="${GODOT_BG_GUARD:-20}"
+args=()
+[[ "${GODOT_BG_AUDIO:-0}" == "1" ]] || args+=("--audio-driver" "Dummy")   # engine option: must precede "--"
+while [[ $# -gt 0 ]]; do                      # `open` starts the app in /, so make --path absolute
+  if [[ "$1" == "--path" && $# -gt 1 ]]; then
+    p="$2"; [[ "$p" = /* ]] || p="$PWD/$p"
+    args+=("--path" "$p"); shift 2
+  else
+    args+=("$1"); shift
+  fi
+done
+front_id() { osascript -e 'tell application "System Events" to get bundle identifier of first application process whose frontmost is true' 2>/dev/null; }
+prev="$(front_id)"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/godot_bg.XXXXXX")"
+open -g -j -n -W -a "$APP" --stdout "$tmp/out.log" --stderr "$tmp/err.log" --args "${args[@]}" &
+pid=$!
+end=$((SECONDS + GUARD))
+while kill -0 "$pid" 2>/dev/null && (( SECONDS < end )); do
+  if [[ -n "$prev" && "$prev" != "org.godotengine.godot" && "$(front_id)" == "org.godotengine.godot" ]]; then
+    osascript -e "tell application id \"$prev\" to activate" >/dev/null 2>&1
+  fi
+  sleep 0.15
+done
+wait "$pid"
+cat "$tmp/out.log" "$tmp/err.log" 2>/dev/null
+status=1
+grep -q '_RESULT' "$tmp/out.log" 2>/dev/null && status=0
+rm -rf "$tmp"
+exit $status

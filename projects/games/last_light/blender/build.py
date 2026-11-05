@@ -71,6 +71,10 @@ MATS = {
     "M_LL_Paper": ("#E3DCC6", 0.9, 0.0, {}),
     "M_LL_Leather": ("#5B1F18", 0.55, 0.0, {}),
     "M_LL_Ceramic": ("#E8E4DA", 0.3, 0.0, {}),
+    # Stage 1 iteration 4 props (Godot: materials.gd PLAIN)
+    "M_LL_ClothBlue": ("#1F2B47", 0.85, 0.0, {}),
+    "M_LL_Whisky": ("#6E3C10", 0.12, 0.0, {}),
+    "M_LL_Oilskin": ("#52451F", 0.3, 0.0, {}),     # waxed olive, the Visitor's coat colour
     "M_LL_Lamp": ("#FFE2B0", 0.4, 0.0, {"emission_hex": "#FFB45C", "emission_strength": 2.0}),
     "M_LL_LampRed": ("#8A1A12", 0.4, 0.0, {"emission_hex": "#FF2A1A", "emission_strength": 0.0}),
     "M_LL_LampGreen": ("#1A5A2A", 0.4, 0.0, {"emission_hex": "#40FF70", "emission_strength": 0.0}),
@@ -80,7 +84,8 @@ MATS = {
 }
 TEXTURED = {"M_LL_Atlas": "T_LL_Atlas.png", "M_LL_Chart": "T_LL_Chart.png", "M_LL_Rose": "T_LL_Rose.png",
             "M_LL_Rug": "T_LL_Rug.png",
-            "M_LL_Photo": "T_LL_Photo.png", "M_LL_Logbook": "T_LL_Logbook.png"}   # documents.py (Iteration A)
+            "M_LL_Photo": "T_LL_Photo.png", "M_LL_Logbook": "T_LL_Logbook.png",   # documents.py (Iteration A)
+            "M_LL_Props": "T_LL_Props.png"}                                    # documents.py (Stage 1 iteration 4)
 
 
 def textured_material(name, image_path):
@@ -663,6 +668,8 @@ def build_desk(B):
     steel = B.bm("M_LL_SteelPaint")
     rx_d = back - 0.2
     box(steel, dp(b, -0.38, top + 0.14, rx_d), (0.56, 0.34, 0.28), bs)
+    for k in range(8):                                             # ventilation louvres on the case top
+        box(B.bm("M_LL_Bakelite", "SM_RadioVent"), dp(b, -0.38 - 0.21 + k * 0.06, top + 0.2815, rx_d + 0.03), (0.012, 0.19, 0.003), bs)
     fb3, fc = face_frame(b, -0.38, top + 0.14, rx_d - 0.17 - 0.002)
     rect = atlas_cell_rect(CELLS["radio_dial"])
     rect = (rect[0], rect[1] + (rect[3] - rect[1]) * 0.29, rect[2], rect[1] + (rect[3] - rect[1]) * 0.71)
@@ -688,6 +695,8 @@ def build_desk(B):
     box(steel, dp(b, 0.42, top + 0.22, rd), (0.44, 0.44, 0.44), bs)
     pb3, pc = face_frame(b, 0.42, top + 0.24, rd - 0.22 - 0.002)
     cyl(B.bm("M_LL_Iron"), pc + pb3.col[2] * 0.03, 0.185, 0.17, 0.06, 32, pb3, caps=False)
+    # rubber viewing hood: a solid ring (an open tube is single-sided and vanishes from inside)
+    lathe(B.bm("M_LL_Bakelite", "SM_RadarHood"), pc, pb3, [(0.168, 0.004), (0.19, 0.004), (0.2, 0.14), (0.182, 0.14)], 40)
     sbm = bmesh.new()
     uvl = sbm.loops.layers.uv.new("UVMap")
     segs, rim = 48, []
@@ -787,6 +796,10 @@ def build_power(B):
     B.empty("IA_charge", at(0.22, 1.3) + fb3.col[2] * 0.05, (0.07, 0.1, 0.07), fb3)
     for x in (-w / 2 + 0.03, w / 2 - 0.03):
         rivets(B, at(x, 1.1), at(x, 1.82), 8, fb3)
+    for k in range(6):                                             # louvres along the bottom of the charger
+        box(B.bm("M_LL_Iron", "SM_PowerDetail"), at(-0.3 + k * 0.06, 1.11) + fb3.col[2] * 0.003, (0.04, 0.008, 0.004), fb3)
+    for along in (-0.3, -0.18, 0.0, 0.3):                          # cable glands where the conduits enter
+        cyl(B.bm("M_LL_Brass", "SM_PowerDetail"), dp(b, along, 1.865, back - 0.1), 0.024, 0.024, 0.03, 12)
     B.collider("charger", dp(b, 0, 1.45, back - 0.14), (w + 0.02, 0.3, 0.82), bs)
     drop(B, b, -0.3, 2.78, 1.85, back - 0.1)
     drop(B, b, 0.3, 2.78, 1.85, back - 0.1, 0.015)
@@ -808,6 +821,10 @@ def build_power(B):
         label(B, lab, at2(x, 1.1), fb3, 0.17 if key != "brk_main" else 0.12)
         B.empty(f"IA_{key}", cpos + fb3.col[2] * 0.06 + fb3.col[1] * 0.03, (0.08, 0.12, 0.08), fb3)
     lamp(B, "main", at2(-0.27, 1.5), fb3, "red", 0.016)
+    # black ebonite switch panel behind the breakers (clear of the labels at 1.1 m: no z-fighting)
+    box(B.bm("M_LL_Bakelite", "SM_PowerDetail"), at2(0, 1.4) + fb3.col[2] * 0.003, (0.82, 0.44, 0.006), fb3, bevel=0.0)
+    for along in (-0.2, 0.0, 0.2):                                 # cable glands on the cabinet top
+        cyl(B.bm("M_LL_Brass", "SM_PowerDetail"), dp(b, along, h + 0.015, back - 0.15), 0.028, 0.028, 0.03, 12)
     label(B, "DANGER  415 V", at2(0, 0.6), fb3, 0.3)
     for x in (-0.43, 0.43):
         box(B.bm("M_LL_Iron"), at2(x, h / 2), (0.012, h - 0.1, 0.012), fb3)
@@ -828,14 +845,17 @@ def build_power(B):
         for k in range(6):
             cx = -w / 2 + 0.11 + k * 0.196
             box(B.bm("M_LL_Bakelite", "SM_RoomCells"), dp(b, cx, z + 0.17, back - d / 2), (0.17, 0.4, 0.3), bs)
+            box(B.bm("M_LL_SteelPaint", "SM_CellCrates"), dp(b, cx, z + 0.115, back - d / 2), (0.182, 0.412, 0.19), bs)   # steel crate
+            cyl(B.bm("M_LL_Iron", "SM_PowerDetail"), dp(b, cx, z + 0.327, back - d / 2), 0.014, 0.012, 0.016, 8)          # vent cap
             for t in (-0.1, 0.1):
                 cyl(B.bm("M_LL_Red"), dp(b, cx, z + 0.335, back - d / 2 + t), 0.018, 0.018, 0.03, 10)
     for sx in (-1, 1):
         for sy in (-1, 1):
             box(rack, dp(b, sx * (w / 2 - 0.02), 0.47, back - d / 2 + sy * (d / 2 - 0.02)), (0.03, 0.03, 0.94), bs)
-    for k in range(5):
-        cx = -w / 2 + 0.11 + k * 0.196
-        seg_cyl(B.bm("M_LL_Red"), dp(b, cx, 0.86, back - d / 2 + 0.1), dp(b, cx + 0.196, 0.86, back - d / 2 - 0.1), 0.007, 6)
+    for zc in (0.41, 0.86):                                        # lead inter-cell connectors, both tiers
+        for k in range(5):
+            cx = -w / 2 + 0.11 + k * 0.196
+            seg_cyl(B.bm("M_LL_Iron", "SM_PowerDetail"), dp(b, cx, zc, back - d / 2 + 0.1), dp(b, cx + 0.196, zc, back - d / 2 - 0.1), 0.008, 6)
     B.collider("batteries", dp(b, 0, 0.47, back - d / 2), (w + 0.04, d + 0.04, 0.95), bs)
     drop(B, b, -0.5, 2.78, 0.95, back - 0.05, 0.025)
 
@@ -1411,6 +1431,97 @@ def build_conduits(B):
     drop(B, dist, -0.2, 2.78, 1.85, d, 0.016)                   # distribution up to the ring mains
 
 
+def build_props(B):
+    """Stage 1 iteration 4: the approved story and lived-in props (REFERENCE_SPEC props table).
+    Each one says why it is here: story (S), realism (R), composition (C)."""
+    # (S/R) NLB calendar, November 1971, the 14th ringed: on the pier between the west and centre windows
+    cb = -18.0
+    cr, co, cu = wall_frame(cb)
+    cc = dp(cb, 0, 1.55, R_IN - 0.012)
+    fb3 = basis(cr, cu, -co)
+    pm = B.bm("M_LL_Props")
+    A = 2048.0
+    px = lambda x0, y0, x1, y1: (x0 / A, 1 - y1 / A, x1 / A, 1 - y0 / A)                    # image px -> UV rect
+    quad_uv(pm, B.uv(pm), cc, fb3, 0.25, 0.357, px(0, 0, 700, 1000))
+    sphere(B.bm("M_LL_Iron"), cc + cu * 0.19 - co * 0.004, 0.006, 6, 4)                          # the nail
+    # (R/S) the station wiring diagram, framed under glass, between the distribution board and the charger
+    db = -67.0
+    dr, do_, du = wall_frame(db)
+    dc = dp(db, 0, 2.02, R_IN - 0.02)
+    db3 = basis(dr, du, -do_)
+    box(B.bm("M_LL_WoodDark", "SM_Props"), dc + do_ * 0.006, (0.47, 0.35, 0.012), db3)
+    quad_uv(pm, B.uv(pm), dc - do_ * 0.001, db3, 0.42, 0.305, px(720, 0, 1820, 800))
+    box(B.bm("M_LL_Glass", "SM_PropsGlass"), dc - do_ * 0.004, (0.43, 0.315, 0.002), db3, bevel=0.0)
+    # (R/S) aneroid barometer, falling tonight: on the pier between the centre and east windows
+    bb = 18.0
+    br, bo, bu = wall_frame(bb)
+    bc = dp(bb, 0, 1.62, R_IN - 0.02)
+    bb3 = basis(br, bu, -bo)
+    cyl(B.bm("M_LL_Brass", "SM_Props"), bc + bo * 0.006, 0.125, 0.12, 0.03, 40, bb3)
+    disc_uv(pm, B.uv(pm), bc - bo * 0.0095, bb3, 0.105, 48, 4, cell_px=1024, atlas_px=2048)        # cell 4 = (0, 1024)
+    na = math.radians(-135 + (975 - 950) / 100 * 270)                                           # 975 mb: storm
+    nd = br * math.sin(na) + bu * math.cos(na)
+    seg_cyl(B.bm("M_LL_Iron", "SM_Props"), bc - bo * 0.013 - nd * 0.02, bc - bo * 0.013 + nd * 0.09, 0.0025, 6)
+    cyl(B.bm("M_LL_Brass", "SM_Props"), bc - bo * 0.014, 0.01, 0.01, 0.006, 12, bb3)
+    # (S) Admiralty Tide Tables on the top storage shelf, the half bottle of Grant's hidden behind them
+    sb_ = R["storage"]
+    sbs = wb(sb_)
+    sc = back_dist(1.4) - 0.25
+    for k in range(3):
+        box(B.bm("M_LL_ClothBlue", "SM_Props"), dp(sb_, -0.6 + k * 0.035, 1.24, sc - 0.06), (0.03, 0.2, 0.25), sbs)
+    bot = dp(sb_, -0.56, 1.113, sc + 0.12)
+    cyl(B.bm("M_LL_Whisky", "SM_Props"), bot + Vector((0, 0, 0.075)), 0.035, 0.035, 0.15, 16)
+    cyl(B.bm("M_LL_Whisky", "SM_Props"), bot + Vector((0, 0, 0.175)), 0.012, 0.02, 0.05, 12)
+    cyl(B.bm("M_LL_Red", "SM_Props"), bot + Vector((0, 0, 0.205)), 0.013, 0.013, 0.012, 12)
+    box(B.bm("M_LL_Paper", "SM_Props"), dp(sb_, -0.56, 1.19, sc + 0.084), (0.05, 0.002, 0.06), sbs)   # label
+    # (S) the old vapour-burner kit from before electrification, and a box of spare lamp bulbs
+    vb = dp(sb_, 0.55, 0.613, sc)
+    cyl(B.bm("M_LL_Brass", "SM_Props"), vb + Vector((0, 0, 0.06)), 0.05, 0.06, 0.12, 20)
+    sphere(B.bm("M_LL_Paper", "SM_Props"), vb + Vector((0, 0, 0.16)), 0.045, 12, 8)               # spare mantle
+    seg_cyl(B.bm("M_LL_Brass", "SM_Props"), vb + Vector((0.0, 0.0, 0.1)), dp(sb_, 0.45, 0.85, sc), 0.008, 8)
+    box(B.bm("M_LL_Paper", "SM_Props"), dp(sb_, 0.02, 1.17, sc - 0.02), (0.16, 0.14, 0.11), sbs)    # bulb box
+    # (C) oilskin coat and sou'wester on a hook left of the stair door (it mirrors the Visitor's look)
+    ob = R["stair"] - 19.0                                    # left of the door: right of it they hid behind the cage
+    orr, oo, ou = wall_frame(ob)
+    oh = dp(ob, 0, 1.78, R_IN - 0.03)
+    seg_cyl(B.bm("M_LL_Brass", "SM_Props"), oh, oh - oo * 0.07, 0.008, 8)
+    flat = Matrix((orr, oo * 0.45, ou)).transposed()                                            # flattened against the wall
+    # collar on the hook, sloped shoulders, a flared hem (s1f: a plain cone read as a bottle)
+    coat = [(0.015, 0.02), (0.07, 0.0), (0.08, -0.05), (0.2, -0.13), (0.21, -0.3), (0.2, -0.55),
+            (0.23, -0.9), (0.24, -0.98), (0.2, -1.0), (0.015, -1.0)]
+    cc_ = oh - oo * 0.11
+    lathe(B.bm("M_LL_Oilskin", "SM_Props"), cc_, flat, coat, 20)
+    for s in (-1, 1):                    # sleeves hang IN FRONT of the body (at the sides they read as panels)
+        seg_cyl(B.bm("M_LL_Oilskin", "SM_Props"), cc_ + orr * (s * 0.16) - ou * 0.17 - oo * 0.06,
+                cc_ + orr * (s * 0.17) - ou * 0.66 - oo * 0.09, 0.045, 10)
+    # front opening: a dark storm-flap seam with toggles, so it reads as a coat, not a bottle
+    box(B.bm("M_LL_Bakelite", "SM_Props"), cc_ - oo * 0.1 - ou * 0.6, (0.012, 0.02, 0.76), wb(ob), bevel=0)
+    for zt in (0.3, 0.45, 0.6, 0.75):
+        sphere(B.bm("M_LL_Iron", "SM_Props"), cc_ - oo * 0.103 - ou * zt + orr * 0.02, 0.012, 8, 6)
+    # sou'wester on its own hook beside the coat: wide brim against the wall, domed crown into the room
+    hb = ob - 8.5                                             # clear of the sleeves (and the storage rack top at 1.5 m)
+    hr, ho, hu = wall_frame(hb)
+    seg_cyl(B.bm("M_LL_Brass", "SM_Props"), dp(hb, 0, 1.82, R_IN - 0.03), dp(hb, 0, 1.82, R_IN - 0.08), 0.008, 8)
+    lathe(B.bm("M_LL_Oilskin", "SM_Props"), dp(hb, 0, 1.68, R_IN - 0.035), basis_z(-ho),
+          [(0.0, 0.0), (0.17, 0.0), (0.18, 0.012), (0.1, 0.03), (0.095, 0.08), (0.065, 0.125), (0.0, 0.135)], 24)
+    # (C) kettle on an electric ring and a mug on the west window sill: the keeper's long night
+    kb = -42.0
+    kr, ko, ku = wall_frame(kb)
+    ks = dp(kb, 0, 0.95, R_IN - 0.06)
+    cyl(B.bm("M_LL_Iron", "SM_Props"), ks + ku * 0.015, 0.1, 0.1, 0.03, 20)
+    lathe(B.bm("M_LL_EngineGreen", "SM_Props"), ks + ku * 0.03, Matrix.Identity(3),
+          [(0.0, 0.0), (0.09, 0.0), (0.1, 0.05), (0.085, 0.13), (0.03, 0.16), (0.0, 0.16)], 24)
+    seg_cyl(B.bm("M_LL_EngineGreen", "SM_Props"), ks + ku * 0.09 + kr * 0.08, ks + ku * 0.15 + kr * 0.15, 0.012, 8)   # spout
+    torus(B.bm("M_LL_Bakelite", "SM_Props"), ks + ku * 0.2, 0.06, 0.008, 16, 5, basis_z(kr))                       # handle
+    mug = dp(kb + 4.5, 0, 0.95, R_IN - 0.04)
+    cyl(B.bm("M_LL_Ceramic", "SM_Props"), mug + Vector((0, 0, 0.045)), 0.035, 0.035, 0.09, 16)
+    torus(B.bm("M_LL_Ceramic", "SM_Props"), mug + Vector((0, 0, 0.05)) + kr * 0.04, 0.022, 0.006, 12, 5, basis_z(ko))
+    # (R) touched-up paint at hand height, a slightly different cream (maintained, not new)
+    for tb, tz, tw, th in ((-96.0, 1.45, 0.2, 0.14), (101.0, 1.3, 0.16, 0.12), (152.0, 1.55, 0.22, 0.16), (-30.0, 1.25, 0.12, 0.1)):
+        tr, to, tu = wall_frame(tb)
+        box(B.bm("M_LL_Paper", "SM_Props"), dp(tb, 0, tz, R_IN - 0.0015), (tw, 0.002, th), basis(tr, to, tu), bevel=0.0)
+
+
 def build_anchors(B):
     """Story anchors (non-interactive empties; Godot ignores them): positions reserved now so later
     story stages never force an architectural rebuild."""
@@ -1418,7 +1529,7 @@ def build_anchors(B):
     B.empty("ANCHOR_diagram", dp(-67.0, 0, 2.0, R_IN - 0.02), (0.3, 0.2, 0.01), wb(-67.0))
     B.empty("ANCHOR_telephone", dp(R["desk"], 0.95, 0.8, 2.75), (0.12, 0.1, 0.08), wb(R["desk"]))
     B.empty("ANCHOR_tide_tables", dp(R["storage"], -0.2, 1.05, R_IN - 0.3), (0.15, 0.1, 0.12), wb(R["storage"]))
-    B.empty("ANCHOR_oilskins", dp(R["stair"] + 17.0, 0, 1.7, R_IN - 0.05), (0.2, 0.4, 0.1), wb(R["stair"] + 17.0))   # right of the door
+    B.empty("ANCHOR_oilskins", dp(R["stair"] - 19.0, 0, 1.7, R_IN - 0.05), (0.2, 0.4, 0.1), wb(R["stair"] - 19.0))   # left of the door
     B.empty("ANCHOR_gear_046", dp(R["optic_drive"], 0, 1.2, 2.78 - 0.3), (0.06, 0.06, 0.06), wb(R["optic_drive"]), kind="SPHERE")
 
 
@@ -1435,6 +1546,7 @@ def build_room(B):
     build_photo(B)
     build_conduits(B)
     build_anchors(B)
+    build_props(B)
 
 
 # ------------------------------------------------------------------ lighthouse exterior

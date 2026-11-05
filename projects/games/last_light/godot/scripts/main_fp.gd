@@ -368,7 +368,7 @@ func _open_options() -> void:
 	var gfx := _tab(tabs, "Graphics")
 	_opt_choice(gfx, "Window mode", "window_mode", [["Windowed", 0], ["Fullscreen", 3], ["Exclusive fullscreen", 4]])
 	_opt_choice(gfx, "Resolution (windowed)", "resolution", [["1280×720", "1280x720"], ["1600×900", "1600x900"], ["1920×1080", "1920x1080"], ["2560×1440", "2560x1440"]])
-	_opt_choice(gfx, "Quality", "quality", [["Low", 0], ["Medium", 1], ["High", 2]], "Applies when the next scene loads (fog, ambient occlusion, rain, render scale).")
+	_opt_choice(gfx, "Quality", "quality", [["Low", 0], ["Medium", 1], ["High", 2]], "Medium targets 60 fps (default). High adds more shadowed lamps and 2x MSAA for quality at 30 fps or more. Applies when the next scene loads.")
 	_opt_choice(gfx, "Render resolution", "render_res", [["Auto (1080p-equivalent, upscaled)", 0], ["Native (sharpest, slowest)", 1]], "On high-DPI screens Auto renders 3D at about 1920×1080 and keeps text sharp.")
 	_opt_toggle(gfx, "VSync", "vsync")
 	_opt_choice(gfx, "Frame-rate limit", "max_fps", [["Unlimited", 0], ["30", 30], ["60", 60], ["120", 120]])

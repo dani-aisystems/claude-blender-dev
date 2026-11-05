@@ -313,6 +313,89 @@ def add(doc_id, title, img, text):
     DOCS[doc_id] = {"title": title, "text": text}
 
 
+# ------------------------------------------------------------------ in-world prop faces (Stage 1 iteration 4)
+
+def calendar():
+    """Northern Lighthouse Board wall calendar, November 1971, Sunday-first grid; the 14th ringed in red pencil."""
+    W, H = 700, 1000
+    img = paper(W, H, 1971, tone=(236, 228, 206), stains=1)
+    d = ImageDraw.Draw(img, "RGBA")
+    d.rectangle([0, 0, W, 210], fill=(38, 62, 52))
+    d.text((W // 2, 70), "NORTHERN LIGHTHOUSE BOARD", font=PRINTB(34), fill=(226, 214, 180), anchor="mm")
+    d.text((W // 2, 140), "84 George Street, Edinburgh", font=PRINT(24), fill=(200, 190, 160), anchor="mm")
+    d.text((W // 2, 280), "NOVEMBER  1971", font=PRINTB(58), fill=(30, 30, 34), anchor="mm")
+    cols = ["S", "M", "T", "W", "T", "F", "S"]
+    x0, y0, cw, rh = 40, 360, (W - 80) / 7, 105
+    for i, c in enumerate(cols):
+        d.text((x0 + cw * (i + 0.5), y0), c, font=PRINTB(30), fill=(150, 40, 30) if i == 0 else (40, 40, 44), anchor="mm")
+    day, col = 1, 1               # 1 November 1971 was a Monday
+    row = 0
+    while day <= 30:
+        cx, cy = x0 + cw * (col + 0.5), y0 + 70 + row * rh
+        d.text((cx, cy), str(day), font=PRINT(40), fill=(150, 40, 30) if col == 0 else (34, 34, 38), anchor="mm")
+        if day == 14:
+            for k in range(3):    # red pencil ring, drawn twice like a hand would
+                d.ellipse([cx - 44 + k, cy - 36 - k, cx + 46 - k, cy + 38 + k], outline=(176, 40, 32, 200), width=4)
+        day += 1
+        col += 1
+        if col == 7:
+            col, row = 0, row + 1
+    for r in range(7):
+        y = y0 + 25 + r * rh
+        d.line([x0, y, W - x0, y], fill=(0, 0, 0, 40), width=2)
+    return img
+
+
+def wiring_diagram():
+    """Station power-chain diagram (as the room is built): generator -> charger -> batteries -> distribution."""
+    W, H = 1100, 800
+    img = paper(W, H, 49, tone=(222, 226, 222), stains=2)
+    d = ImageDraw.Draw(img, "RGBA")
+    ink = (32, 46, 86)
+    d.text((W // 2, 60), "NORTH POINT LIGHT  -  STATION ELECTRICAL SUPPLY", font=TYPE(34), fill=ink, anchor="mm")
+    d.text((W // 2, 105), "Watch room.  Drg. No. NP/E/7   (revised 1962)", font=TYPE(24), fill=ink, anchor="mm")
+    boxes = {"AUX. SET No.2\n(diesel)": (150, 300, 110), "CHARGER": (420, 300, 110), "BATTERY\n12 cells": (690, 300, 110),
+             "DISTRIBUTION": (950, 300, 110), "LAMP": (590, 600, 95), "ROOM LIGHTS": (800, 600, 95), "RADAR / W.T.": (1000, 600, 95)}
+    for name, (x, y, hw) in boxes.items():
+        d.rectangle([x - hw, y - 55, x + hw, y + 55], outline=ink, width=4)
+        d.multiline_text((x, y), name, font=TYPE(24), fill=ink, anchor="mm", align="center")
+    for a, b in (((260, 300), (310, 300)), ((530, 300), (580, 300)), ((800, 300), (840, 300))):
+        d.line([a, b], fill=ink, width=5)
+        d.polygon([(b[0], b[1]), (b[0] - 18, b[1] - 10), (b[0] - 18, b[1] + 10)], fill=ink)
+    d.line([(950, 355), (950, 450)], fill=ink, width=4)
+    d.line([(590, 450), (1000, 450)], fill=ink, width=4)              # the three circuits off the board
+    for x in (590, 800, 1000):
+        d.line([(x, 450), (x, 545)], fill=ink, width=4)
+    d.text((150, 420), "MAIN ENGINES\n(engine room)\nDISCONNECTED", font=TYPE(22), fill=(150, 40, 30), anchor="mm", align="center")
+    d.line([(150, 355), (150, 380)], fill=(150, 40, 30), width=3)
+    d.text((60, H - 60), "Initialled  C.M.  4.6.62", font=CALLUM(30), fill=INK)
+    return img
+
+
+def barometer_dial():
+    """Aneroid barometer face in millibars (the station log reads the barometer in mb)."""
+    S = 1024
+    img = Image.new("RGB", (S, S), (234, 226, 204))
+    d = ImageDraw.Draw(img, "RGBA")
+    c, R = S / 2, S / 2 - 30
+    d.ellipse([c - R, c - R, c + R, c + R], outline=(60, 50, 40), width=6)
+    ink = (36, 32, 30)
+    for mb in range(950, 1051, 5):            # 950..1050 mb over 270 degrees, 1000 mb at the top
+        a = math.radians(-135 + (mb - 950) / 100 * 270)
+        L = 60 if mb % 10 == 0 else 32
+        x0, y0 = c + (R - 20) * math.sin(a), c - (R - 20) * math.cos(a)
+        x1, y1 = c + (R - 20 - L) * math.sin(a), c - (R - 20 - L) * math.cos(a)
+        d.line([x0, y0, x1, y1], fill=ink, width=5 if mb % 10 == 0 else 3)
+        if mb % 20 == 10 or mb in (950, 1050):
+            d.text((c + (R - 130) * math.sin(a), c - (R - 130) * math.cos(a)), str(mb), font=PRINT(40), fill=ink, anchor="mm")
+    for word, mb in (("STORMY", 960), ("RAIN", 985), ("CHANGE", 1000), ("FAIR", 1015), ("VERY DRY", 1040)):
+        a = math.radians(-135 + (mb - 950) / 100 * 270)
+        d.text((c + (R - 250) * math.sin(a), c - (R - 250) * math.cos(a)), word, font=PRINTB(44), fill=ink, anchor="mm")
+    d.text((c, c + 200), "MILLIBARS", font=PRINT(36), fill=ink, anchor="mm")
+    d.text((c, c + 260), "NEGRETTI & ZAMBRA", font=PRINT(30), fill=(90, 80, 70), anchor="mm")
+    return img
+
+
 def main():
     C = CALLUM
     rows71 = [
@@ -370,6 +453,13 @@ def main():
         TEX / "T_LL_Logbook.png", optimize=True)
     add("photo_1953", "Photograph slid under the door", photo("crew"),
         "Eight men on a deck at Leverburgh pier. On the back, in pencil: \"Mary Ellen, July 1953. A. Ross, master.\"")
+    # one 2048 atlas for the three prop faces (one material, not three): calendar top-left (700x1000),
+    # wiring diagram top-right (1100x800 at x 720), barometer dial bottom-left (1024x1024 at y 1024)
+    props = Image.new("RGB", (2048, 2048), (230, 226, 214))
+    props.paste(calendar(), (0, 0))
+    props.paste(wiring_diagram(), (720, 0))
+    props.paste(barometer_dial(), (0, 1024))
+    props.save(TEX / "T_LL_Props.png", optimize=True)
     (OUT / "docs.json").write_text(json.dumps(DOCS, indent=1))
     print("DOCS_RESULT", json.dumps(sorted(DOCS)))
 

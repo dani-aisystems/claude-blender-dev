@@ -10,6 +10,8 @@ extends Node
 ##   --nohud hides the HUD / dialogue layers for room views (kept for "player" and "focus_*" shots).
 ##   --quality applies a preset to the whole run WITHOUT writing user://settings.cfg (presets only
 ##   take effect on scene load, so it cannot change per shot).
+##   --novsync: bench without vsync (true frame cost). Perf bisect flags: --noshadows --nossao --nossil --halfao
+##     --novolfog --norain --noglow --noroom --probe=off
 ##   --bench [--bench_secs=60] [--bench_shots=fp_desk,fp_window,fp_gen]: worst case (storm 1.0, lightning
 ##     every 3 s, generator running, all breakers on, one ship) at 1x speed; writes NAME_bench.json with
 ##     median / p95 frame time, GPU time, draw calls, primitives and memory per shot.
@@ -32,12 +34,21 @@ func _ready() -> void:
 	out_dir = ProjectSettings.globalize_path("res://").path_join("../../../../renders/last_light").simplify_path()
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	var args: Dictionary = GameState.user_args
+	if not args.has("audio"):         # previews are silent (Daniel); --audio to hear them
+		AudioServer.set_bus_mute(0, true)
 	if args.has("quality"):
 		Settings.v["quality"] = clampi(int(args["quality"]), 0, 2)     # in memory only: no settings file write
 	if args.has("render_res"):
 		Settings.v["render_res"] = clampi(int(args["render_res"]), 0, 1)
 	Settings.apply_render_scale()
 	Settings.apply_quality_globals()
+	if args.has("msaa"):              # perf bisect: 0 off, 1 2x, 2 4x (project default), in memory only
+		get_viewport().msaa_3d = clampi(int(args["msaa"]), 0, 3) as Viewport.MSAA
+	if args.has("fxaa"):              # perf bisect: screen-space AA instead of MSAA
+		get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
+	if args.has("novsync"):          # bench: true frame cost, not the display's 8.3 ms vsync steps (in memory only)
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		Engine.max_fps = 0
 	_run.call_deferred()
 
 
@@ -274,6 +285,73 @@ func _cutaway(g, on: bool) -> void:
 
 # ------------------------------------------------------------------ benchmark
 
+func _bench_toggle(g, vname: String, secs: float, report: Dictionary) -> void:
+	_place(g, vname)
+	await _frames(30)
+	var targets: Array = String(GameState.user_args.get("bench_targets", "none,station,outside,radar_vp,ui,presenter,audio,player,director")).split(",")
+	var res := []
+	for t in targets:
+		var n: Node = g.get(t) if t in ["station", "outside", "radar_vp", "radar", "ui", "presenter", "audio", "player", "director"] else null
+		var old := Node.PROCESS_MODE_INHERIT
+		if t == "radar_render":            # keep the script, stop the SubViewport re-rendering
+			g.radar_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		var hid: Node3D = null
+		if t == "radar_hide":
+			g.radar.visible = false
+		elif t == "scr_hide":              # the desk screen that samples the radar texture
+			hid = g.station.find_child("SCR_radar*", true, false)
+			if hid:
+				hid.visible = false
+		if n:
+			old = n.process_mode
+			n.process_mode = Node.PROCESS_MODE_DISABLED
+		await _frames(10)
+		GameState.prof = {}
+		var ft: Array[float] = []
+		var proc: Array[float] = []
+		var prim_t := 0.0
+		var dc_t := 0.0
+		var sec_ft: Array[float] = []
+		var sec_pr := 0.0
+		var next_sec := 1.0
+		var series := []
+		var el := 0.0
+		var last := Time.get_ticks_usec()
+		while el < secs:
+			_worst_case(g)
+			await get_tree().process_frame
+			var now := Time.get_ticks_usec()
+			var ms := (now - last) / 1000.0
+			last = now
+			el += ms / 1000.0
+			ft.append(ms)
+			proc.append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
+			prim_t += Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+			sec_ft.append(ms)
+			sec_pr += Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+			if el >= next_sec:
+				series.append([snappedf(el, 0.1), snappedf(_pct(sec_ft, 0.5), 0.1), int(sec_pr / sec_ft.size())])
+				sec_ft = []
+				sec_pr = 0.0
+				next_sec += 1.0
+			dc_t += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+		if n:
+			n.process_mode = old
+		if t == "radar_render":
+			g.radar_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		if t == "radar_hide":
+			g.radar.visible = true
+		if hid:
+			hid.visible = true
+		var per := {}
+		for k in GameState.prof:
+			per[k] = snappedf(GameState.prof[k] / 1000.0 / maxf(1.0, ft.size()), 0.01)   # ms per frame
+		var r := {"off": t, "median_ms": _pct(ft, 0.5), "p95_ms": _pct(ft, 0.95), "process_median_ms": _pct(proc, 0.5), "prims_avg": int(prim_t / maxf(1.0, ft.size())), "draws_avg": int(dc_t / maxf(1.0, ft.size())), "script_ms": per, "series_s_ms_prims": series}
+		res.append(r)
+		print("TOGGLE ", JSON.stringify(r))
+	report["toggle"] = res
+
+
 func _bench(name_: String, args: Dictionary) -> void:
 	var secs := float(args.get("bench_secs", "60"))
 	var shots: PackedStringArray = String(args.get("bench_shots", "fp_desk,fp_window,fp_gen")).split(",")
@@ -288,10 +366,15 @@ func _bench(name_: String, args: Dictionary) -> void:
 	g._route(g.sim.spawn_story_ship({"name": "Bench", "kind": "fishing", "bearing": 20, "aim": 24, "speed_mul": 0.4, "hold": true, "protected": true}))
 	var report := {"name": name_, "quality": int(Settings.v["quality"]), "scale3d": get_viewport().scaling_3d_scale,
 		"window": DisplayServer.window_get_size(), "focused": DisplayServer.window_is_focused(), "secs": secs, "shots": []}
+	if args.has("bench_toggle"):          # perf bisect: freeze one node's processing at a time
+		await _bench_toggle(g, shots[0], float(args.get("bench_toggle_secs", "6")), report)
+		shots = PackedStringArray()
 	for vname in shots:
 		_place(g, vname)
 		var ft: Array[float] = []
 		var gpu: Array[float] = []
+		var proc: Array[float] = []        # script _process time (Performance.TIME_PROCESS)
+		var rcpu: Array[float] = []        # render-thread CPU: viewport draw + frame setup
 		var dc := 0.0
 		var prims := 0.0
 		var next_strike := 0.5
@@ -311,10 +394,13 @@ func _bench(name_: String, args: Dictionary) -> void:
 			el += ms / 1000.0
 			ft.append(ms)
 			gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(vrid))
+			proc.append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
+			rcpu.append(RenderingServer.viewport_get_measured_render_time_cpu(vrid) + RenderingServer.get_frame_setup_time_cpu())
 			dc = maxf(dc, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 			prims = maxf(prims, Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 		var r := {"shot": vname, "frames": ft.size(), "median_ms": _pct(ft, 0.5), "p95_ms": _pct(ft, 0.95),
 			"p99_ms": _pct(ft, 0.99), "max_ms": ft.max(), "gpu_median_ms": _pct(gpu, 0.5), "gpu_p95_ms": _pct(gpu, 0.95),
+			"process_median_ms": _pct(proc, 0.5), "render_cpu_median_ms": _pct(rcpu, 0.5),
 			"draw_calls_max": dc, "primitives_max": prims,
 			"video_mem_mb": snappedf(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0, 0.1),
 			"texture_mem_mb": snappedf(Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0, 0.1),

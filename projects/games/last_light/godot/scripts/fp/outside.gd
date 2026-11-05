@@ -398,6 +398,9 @@ func _rain() -> void:
 	rain.amount = Settings.q_rain_amount()
 	rain.lifetime = 1.4
 	rain.visibility_aabb = AABB(Vector3(-40, -25, -40), Vector3(80, 50, 80))
+	# particles are re-uploaded every frame; as a shadow caster whose AABB encloses the room, the rain forced
+	# every shadowed interior light to re-render its shadow map every frame (1p performance)
+	rain.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	rain.position = Vector3(0, 30, 0)
 	var pm := ParticleProcessMaterial.new()
 	# Rain fix: emit only from a ring OUTSIDE the tower (never above the roof), and kill every drop that

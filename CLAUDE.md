@@ -83,7 +83,7 @@ A first-person narrative lighthouse-keeper game: **Godot 4.7.2** (`tools/godot`)
   - `… -s res://tests/sim_v2.gd`
   - `… -s res://tests/run_tests.gd`
   - `tools/py -m pytest -q`
-- **Visual QA:** `tools/godot --path projects/games/last_light/godot -- --capture=NAME --shots=menu,60@fp_desk,120@focus_radio --bot=expert`. View the PNGs in `renders/last_light/` with Read.
+- **Visual QA:** `tools/godot_bg --path projects/games/last_light/godot -- --capture=NAME --shots=menu,60@fp_desk,120@focus_radio --bot=expert`. View the PNGs in `renders/last_light/` with Read.
 - **Rules agreed with Daniel:**
   - no AI-generated images or voices; dialogue is text plus synthesised radio sound;
   - portraits are Blender busts from the CC0 Human Base Meshes;

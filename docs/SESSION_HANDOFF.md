@@ -31,7 +31,20 @@ The staged-polish session won't edit `build.py` (needed for bevels, smooth shadi
 
 Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (current stage and iteration, decisions, feedback log, next task), and with `docs/PROJECT_STATE.md`.
 
-## Latest status (2026-11-04, evening)
+## Latest status (2026-11-05, later)
+- **Stage 1 approved** and committed locally. Next: plan Stage 2 with Daniel (no implementation before he agrees the plan).
+- New working rules:
+  - windowed runs go through `tools/godot_bg` (no focus stealing, silent);
+  - Medium is the default 60 fps preset;
+  - the last few ms of frame time are tracked for Stage 6.
+
+## Status (2026-11-05, earlier)
+- **Stage 1** iterations 3b and 4 are done (uncommitted). The stage-end report has been presented, awaiting Daniel's verdict.
+  - Matched sheets: `renders/last_light/s1f_vs_s0_{a,b,c}.png`.
+  - Bench: High 27–29 ms median, **over the 16.7 ms budget**.
+  - Open items: the blank radio card for narration lines; the oilskins not yet seen in Godot; 3 stale textures awaiting the OK to delete. Details are in the ROADMAP Stage 1 log.
+
+## Status (2026-11-04, evening)
 - **Stage 1:** iterations 1b and 2 approved and committed (`2559508`, `5f22e63`). **Next is iteration 3** (devices); see ROADMAP.
 
 ## Earlier status (2026-11-04, afternoon)
