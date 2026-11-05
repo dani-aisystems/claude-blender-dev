@@ -71,6 +71,7 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | Generator | Stays in the watch room as a small **auxiliary standby set** (exhaust through the wall, extractor fan, fuel day-tank). The main engine room is downstairs and out of action |
 | Platform | **macOS only for now.** Performance is measured on Daniel's M3 |
 | Retina rendering | **1080p-equivalent 3D by default** on HiDPI displays: upscaled, with the UI kept pixel-sharp, plus a "Render resolution" option to go native. Implement in Stage 1a with the presets |
+| Branding (2026-11-05) | Daniel's brand sheet (`branding/source/brand_sheet.png`) is the game's identity. `branding/make_branding.py` cuts it into:<br>• the app and window icon (`icon.png`, `icon.icns`, using the flat art at 16 and 32 px);<br>• the main-menu logotype;<br>• the boot-splash key art.<br>Supplied by Daniel directly: this is his explicit choice, overriding the general "no AI-generated images" rule for this asset if it is AI-made |
 | Git | Generated 2k texture copies in `godot/assets/textures` are gitignored, **only after** regeneration is shown to be reproducible and documented |
 
 ## Working rules for every stage

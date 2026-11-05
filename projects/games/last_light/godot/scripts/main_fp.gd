@@ -95,7 +95,13 @@ func show_menu() -> void:
 	col.offset_top = -300
 	col.add_theme_constant_override("separation", 12)
 	root.add_child(col)
-	col.add_child(UIStyle.label("THE LAST LIGHT", 104, UIStyle.INK, UIStyle.serif()))
+	var logo := TextureRect.new()             # Daniel's logotype (branding/make_branding.py)
+	logo.texture = preload("res://assets/branding/logo_title.png")
+	logo.custom_minimum_size = Vector2(760, 219)
+	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
+	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(logo)
 	col.add_child(UIStyle.label("North Point Light  ·  Outer Hebrides  ·  14 November 1971", 24, UIStyle.AMBER, UIStyle.serif()))
 	var sp := Control.new()
 	sp.custom_minimum_size = Vector2(0, 40)
