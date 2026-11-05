@@ -463,6 +463,35 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
     - new R8 (17 checks, including 4 rounds of radio, chart, pause and console);
     - R1 and R5 updated to the new reply and chart rules (Daniel's decisions).
 
+- **Daniel (2026-11-05): checkpoint 1 approved; committed `91faeb1`.** The pocket-note and chart-transcription texts were approved as drafted.
+- **Checkpoint 2 (major visual fixes). Done, awaiting the checkpoint:**
+  - **Extinguisher (IMG_3134):** `build_extinguisher`, a period 2-gallon water (soda-acid) unit with:
+    - a lathed body with rolled shoulders and a foot ring;
+    - a brass head, carrying handle, squeeze lever, safety pin and pull ring;
+    - a pressure gauge, and a hose to a horn in a clip;
+    - a strap band, wall plate and screws;
+    - a wrapped label (props atlas `ext_label`) and chips.
+
+    The old sphere top was the "glowing eyes".
+  - **Shelf lamp (IMG_3135):** `build_storm_lantern`, a hurricane lantern **standing on** the 1.1125 m shelf, 0.28 m tall and 5 cm under the top board. It used to float 10 cm above its shelf with its cap through the board above. The storage boards also got angle-iron lips and bolt heads.
+  - **Coat and hat (IMG_3137):** `build_coat_rack`, a freestanding oak stand at 149° (tripod legs, finial, 4 brass hooks) carrying:
+    - the oilskin, hung by its collar from a side hook (`drape()`: steep shoulders, folds deepening toward the hem, an uneven hem, bent sleeves with cuffs, pocket flaps, toggles);
+    - the sou'wester, hung by its brim on another hook;
+    - the stores note in the right pocket (`IA_coat_note` → document `coat_note`, Callum's hand).
+  - **Tin and the floating square (IMG_3138):**
+    - the shortbread tin has a tartan band (`tin_band`), rolled rim and shortbread, with its lid lying beside it;
+    - the floating square was a paint touch-up at −30°, inside the west window bay. It moved to the pier at −19°, and `build_props` now asserts that no patch is in a bay.
+  - **Optic drive (IMG_3141):**
+    - the revolution counter sat at the crown wheel's height, inside it; it moved to the gearbox face, 8 cm below;
+    - the governor's spindle went through the upper wheel and its balls swept the shaft; it now hangs from the top plate, 0.17 m off-axis;
+    - the motor (9 cm) and gearbox (4 cm) floated above the pedestal; they now sit on it;
+    - the drive shaft extended into the top plate;
+    - **Blender BVH clearance check** (scratch script, drive at 24 angles × governor at 12): the governor is clear everywhere, and the drive touches only its seats (gearbox, top plate).
+  - **Viewer:** the document viewer moved to its own CanvasLayer 30 (HUD chatter drew over it).
+  - **Build:** v031 `.blend`, GLB v029, room about 114k tris, 0 validation FAIL.
+  - **Suites:** regress 101/101, interaction 134/134 (7 known warnings), qa_sweep 948/948, story 0 failures, sim_v2 no gate failures, run_tests 95/95, pytest 18/18.
+  - **Evidence:** `renders/last_light/cp2_vs_photos.png` (Daniel's photos vs after), `cp2_sheet_{a,b}.png`, `cp2b_sheet.png`, `cp2c_t066_cu_coat.png`.
+
 ## Stage 2 log
 - **Plan (2026-11-05), approved.** The full audit is at `~/.claude/plans/the-last-light-soft-hearth.md`.
   - **P0:**

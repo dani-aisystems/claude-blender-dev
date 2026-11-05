@@ -556,7 +556,8 @@ def props_extras(props, pa):
     rough = Image.new("L", props.size, int(0.8 * 255))
     rdr = ImageDraw.Draw(rough)
     for name, r in (("calendar", 0.85), ("diagram", 0.85), ("barometer", 0.45), ("forecast", 0.85), ("sked", 0.82),
-                    ("tin", 0.32), ("spines", 0.75), ("note", 0.86), ("page_edge", 0.9), ("knit", 1.0)):
+                    ("tin", 0.32), ("spines", 0.75), ("note", 0.86), ("page_edge", 0.9), ("knit", 1.0),
+                    ("ext_label", 0.55), ("note_fold", 0.88), ("tin_band", 0.3)):
         rdr.rectangle(rg[name], fill=int(r * 255))
     box = lambda n: rg[n]
     size = lambda n: (rg[n][2] - rg[n][0], rg[n][3] - rg[n][1])
@@ -570,6 +571,9 @@ def props_extras(props, pa):
     props.paste(stores_note(*size("note")), box("note")[:2])
     props.paste(page_edge(*size("page_edge")), box("page_edge")[:2])
     props.paste(knit(*size("knit")), box("knit")[:2])
+    props.paste(ext_label(*size("ext_label")), box("ext_label")[:2])
+    props.paste(note_fold(*size("note_fold")), box("note_fold")[:2])
+    props.paste(tin_band(*size("tin_band")), box("tin_band")[:2])
     sw = pa["swatch"]
     for i, (name, (rgb, r)) in enumerate(pa["swatches"].items()):
         x = sw["x0"] + (i % sw["cols"]) * sw["px"]
@@ -577,6 +581,75 @@ def props_extras(props, pa):
         ImageDraw.Draw(props).rectangle([x, y, x + sw["px"] - 1, y + sw["px"] - 1], fill=tuple(rgb))
         rdr.rectangle([x, y, x + sw["px"] - 1, y + sw["px"] - 1], fill=int(r * 255))
     return rough
+
+
+# ------------------------------------------------------------------ cabin pass (2026-11-05)
+
+def ext_label(w, h):
+    """Extinguisher wrap label: cream enamel band, red border, period lettering and instructions."""
+    img = Image.new("RGB", (w, h), (226, 214, 184))
+    d = ImageDraw.Draw(img)
+    d.rectangle([4, 4, w - 5, h - 5], outline=(140, 30, 24), width=6)
+    d.text((w // 2, 34), "FIRE", font=F("Georgia Bold.ttf", 46), fill=(140, 30, 24), anchor="mm")
+    d.text((w // 2, 76), "EXTINGUISHER", font=F("Georgia Bold.ttf", 26), fill=(40, 30, 24), anchor="mm")
+    d.text((w // 2, 108), "WATER  (SODA-ACID)  2 GALL.", font=F("Georgia.ttf", 17), fill=(40, 30, 24), anchor="mm")
+    d.line([30, 128, w - 30, 128], fill=(140, 30, 24), width=2)
+    for i, line in enumerate(("1. PULL OUT SAFETY PIN", "2. DIRECT AT BASE OF FIRE", "3. SQUEEZE LEVER",
+                              "NOT FOR USE ON ELECTRICAL FIRES")):
+        d.text((w // 2, 148 + i * 22), line, font=F("Georgia.ttf", 15), fill=(40, 30, 24) if i < 3 else (140, 30, 24), anchor="mm")
+    noise = Image.effect_noise((w // 2, h // 2), 14).resize((w, h), Image.BICUBIC).convert("RGB")
+    return Image.blend(img, noise, 0.06)                   # a little enamel grime
+
+
+def note_fold(w, h):
+    """The folded stores note seen in the pocket: a slip of cream paper with a few pencil lines showing."""
+    img = paper(w, h, 77, (230, 222, 196), 1)
+    d = ImageDraw.Draw(img)
+    for i, line in enumerate(("Stores - relief", "paraffin x2", "No.8 cells", "tea, milk")):
+        jitter_text(d, (12, 14 + i * 40), line, CALLUM(24), (90, 90, 96), i)
+    d.line([w * 0.52, 0, w * 0.52, h], fill=(200, 190, 165), width=2)       # the fold
+    return img
+
+
+def tin_band(w, h):
+    """Shortbread tin band: a red tartan (one third of the way round; build.py repeats it 3x)."""
+    img = Image.new("RGB", (w, h), (130, 24, 26))
+    d = ImageDraw.Draw(img, "RGBA")
+    for x in range(0, w, 32):
+        d.rectangle([x, 0, x + 10, h], fill=(20, 50, 34, 150))
+        d.rectangle([x + 18, 0, x + 20, h], fill=(220, 190, 90, 170))
+    for y in range(0, h, 32):
+        d.rectangle([0, y, w, y + 10], fill=(20, 50, 34, 130))
+        d.rectangle([0, y + 18, w, y + 20], fill=(220, 190, 90, 150))
+    d.rectangle([0, 0, w, 10], fill=(180, 140, 60, 255))
+    d.rectangle([0, h - 10, w, h], fill=(180, 140, 60, 255))
+    return img
+
+
+COAT_NOTE = ["Stores for the relief boat,", "Thurs. if the sea allows", "",
+             "- paraffin for the stove (2 drums)", "- No. 8 cells for the torch, a dozen",
+             "- tea, condensed milk, Skerry Flake", "- glass for the west window, 2nd pane",
+             "   (cracked in the Sept. gale)", "", "Tell Stornoway the No. 2 set still",
+             "smokes on starting.", "", "C.M."]
+
+
+def coat_note():
+    """The note in the oilskin pocket (text approved by Daniel, 2026-11-05): a pencilled stores list in
+    Callum's hand on a notebook leaf, folded twice."""
+    W, H = 900, 1180
+    img = paper(W, H, 78, (232, 225, 200), 2)
+    d = ImageDraw.Draw(img, "RGBA")
+    for y in range(150, H - 60, 70):                       # notebook rules
+        d.line([40, y, W - 40, y], fill=(150, 170, 190, 90), width=2)
+    for fx in (W // 2,):
+        d.line([fx, 0, fx, H], fill=(190, 178, 150, 120), width=3)    # the folds
+    d.line([0, H // 2, W, H // 2], fill=(190, 178, 150, 120), width=3)
+    y = 110
+    for i, line in enumerate(COAT_NOTE):
+        if line:
+            jitter_text(d, (70, y), line, CALLUM(40), (70, 70, 80), 80 + i, slope=-0.004)
+        y += 70
+    return img
 
 
 def main():
@@ -634,6 +707,7 @@ def main():
     ]
     logbook_spread(log_page(1971, rows13, 70, "NOVEMBER"), log_page(1971, rows71, 71, "NOVEMBER")).save(
         TEX / "T_LL_Logbook.png", optimize=True)
+    add("coat_note", "Note in the oilskin pocket", coat_note(), "\n".join(COAT_NOTE))
     add("photo_1953", "Photograph slid under the door", photo("crew"),
         "Eight men on a deck at Leverburgh pier. On the back, in pencil: \"Mary Ellen, July 1953. A. Ross, master.\"")
     # one 2048 atlas for the three prop faces (one material, not three): calendar top-left (700x1000),

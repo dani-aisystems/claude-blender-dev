@@ -85,11 +85,14 @@ func _ready() -> void:
 	card_sub = UIStyle.label("", 22, UIStyle.AMBER, UIStyle.serif())
 	card_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cv.add_child(card_sub)
-	# document viewer
+	# document viewer: its own top canvas layer, above the HUD (radio chatter and notices drew over it, cp2)
+	var doc_layer := CanvasLayer.new()
+	doc_layer.layer = 30
+	add_child(doc_layer)
 	doc_root = Control.new()
 	doc_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	doc_root.visible = false
-	root.add_child(doc_root)
+	doc_layer.add_child(doc_root)
 	var shade := ColorRect.new()
 	shade.color = Color(0, 0, 0, 0.82)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

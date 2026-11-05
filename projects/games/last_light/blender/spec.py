@@ -111,6 +111,10 @@ SPEC = {
             "note": [1700, 1264, 1968, 1700],        # foolscap stores note under the radio
             "page_edge": [1024, 1608, 1424, 1640],   # ledger / book page-block striations
             "knit": [1024, 1660, 1424, 2048],        # the keeper's jumper (gansey rib)
+            # cabin pass (free corner 1440-2048 x 1712-2048)
+            "ext_label": [1440, 1712, 1840, 1952],   # extinguisher wrap label (70 deg of the body)
+            "note_fold": [1850, 1712, 2040, 1900],   # the stores note folded in the oilskin pocket
+            "tin_band": [1850, 1910, 2040, 2040],    # shortbread tin tartan band (repeats 3x round)
         },
         "swatch": {"x0": 1824, "y0": 0, "px": 32, "cols": 7},
         # name: [sRGB, roughness]

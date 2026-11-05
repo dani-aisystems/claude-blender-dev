@@ -1631,6 +1631,9 @@ def build_storage(B):
             box(rack, dp(b, sx * (w / 2 - 0.02), h / 2, c + sy * (d / 2 - 0.02)), (0.035, 0.035, h), bs)
     for z in (0.08, 0.6, 1.1, 1.48):
         box(rack, dp(b, 0, z, c), (w, d, 0.025), bs)
+        box(rack, dp(b, 0, z - 0.02, c - d / 2 + 0.005), (w, 0.01, 0.04), bs)       # cabin pass: angle-iron front lip
+        for sx in (-1, 1):                                                          # corner bolt heads
+            cyl(B.bm("M_LL_Iron", "SM_Storage"), dp(b, sx * (w / 2 - 0.02), z - 0.02, c - d / 2 - 0.001), 0.007, 0.007, 0.004, 6, bs)
     box(B.bm("M_LL_Wood", "SM_Storage"), dp(b, -0.38, 0.27, c), (0.5, 0.42, 0.36), bs)
     for k in range(3):
         box(B.bm("M_LL_WoodDark", "SM_Storage"), dp(b, -0.38, 0.12 + k * 0.13, c - 0.212), (0.5, 0.01, 0.03), bs)
@@ -1640,10 +1643,7 @@ def build_storage(B):
         box(B.bm("M_LL_SteelPaint", "SM_Storage"), dp(b, -0.45 + k * 0.28, 0.72, c), (0.24, 0.32, 0.22), bs)
     torus(B.bm("M_LL_Rope"), dp(b, 0.3, 0.17, c), 0.17, 0.06, 20, 8)
     torus(B.bm("M_LL_Rope"), dp(b, 0.3, 0.27, c), 0.13, 0.05, 20, 8)
-    lan = dp(b, -0.25, 1.23, c)
-    cyl(B.bm("M_LL_Brass"), lan, 0.08, 0.08, 0.04, 16)
-    cyl(B.bm("M_LL_Glass", "SM_StorageGlass"), lan + Vector((0, 0, 0.12)), 0.065, 0.065, 0.18, 16)
-    cyl(B.bm("M_LL_Brass"), lan + Vector((0, 0, 0.25)), 0.07, 0.03, 0.08, 16)
+    build_storm_lantern(B, dp(b, -0.25, 1.1125, c), wall_frame(b))   # cabin pass (IMG_3135): stands ON the shelf
     # the old station logs (1946-1965) in an open oak box: the 1953 log is the chapter-2 clue (IA_archive)
     lb = B.bm("M_LL_Wood", "SM_LogBox")
     lc = dp(b, 0.3, 1.113, c)
@@ -1659,12 +1659,7 @@ def build_storage(B):
         box(B.bm("M_LL_Paper", "SM_LogBox"), dp(b, x, 1.12 + tall * 0.7, c - 0.147), (0.03, 0.004, 0.05), bs)   # year labels
     B.empty("IA_archive", dp(b, 0.3, 1.27, c - 0.12), (0.24, 0.1, 0.17), bs)
     B.collider("storage", dp(b, 0, h / 2, c), (w + 0.04, d + 0.04, h), bs)
-    e = R["extinguisher"]
-    ep = dp(e, 0, 0.62, R_IN - 0.11)
-    cyl(B.bm("M_LL_Red"), ep, 0.08, 0.08, 0.5, 18)
-    sphere(B.bm("M_LL_Red"), ep + Vector((0, 0, 0.25)), 0.08)
-    cyl(B.bm("M_LL_Iron"), ep + Vector((0, 0, 0.35)), 0.025, 0.025, 0.08, 10)
-    box(B.bm("M_LL_Iron"), dp(e, 0, 0.75, R_IN - 0.02), (0.06, 0.03, 0.2), wb(e))
+    build_extinguisher(B)                                           # cabin pass (IMG_3134)
     nb3, nc = face_frame(b, 0, 2.05, back_dist(0.4, 0.0))
     quad_uv(B.bm("M_LL_Atlas"), B.uv(B.bm("M_LL_Atlas")), nc + nb3.col[2] * 0.005, nb3, 0.4, 0.4, atlas_cell_rect(CELLS["notice"]))
     cb3, cc = face_frame(100.0, 0.0, 2.2, back_dist(0.4, 0.0))
@@ -1799,12 +1794,15 @@ def build_optic_drive(B):
     B.mesh_obj("GLS_optic_drive", gb, "M_LL_Glass")
     # motor and reduction gearbox on the pedestal top
     off = r_ * 0.14
-    cyl(cast, c + off + u * (F + 0.72), 0.1, 0.1, 0.26, 24, basis_z(r_))                     # motor body
+    # cabin pass (IMG_3141 audit): motor and gearbox SIT on the pedestal plate (F+0.53); they floated 9 / 4 cm
+    pz = F + 0.53
+    box(cast, c + off + u * (pz + 0.03), (0.2, 0.16, 0.06), basis(r_, o, u))                # motor cradle
+    cyl(cast, c + off + u * (pz + 0.16), 0.1, 0.1, 0.26, 24, basis_z(r_))                   # motor body
     for k in range(5):
-        torus(cast, c + off + r_ * (-0.09 + k * 0.045) + u * (F + 0.72), 0.102, 0.008, 24, 4, basis_z(r_))   # cooling fins
-    cyl(B.bm("M_LL_Iron", "SM_OpticDrive"), c + off + r_ * 0.15 + u * (F + 0.72), 0.06, 0.06, 0.04, 16, basis_z(r_))
-    box(cast, c - r_ * 0.05 + u * (F + 0.7), (0.2, 0.22, 0.26), basis(r_, o, u))             # gearbox
-    lamp(B, "optic_motor", c + off + u * (F + 0.83) - o * 0.05, basis(r_, -o, u), "green", 0.01)
+        torus(cast, c + off + r_ * (-0.09 + k * 0.045) + u * (pz + 0.16), 0.102, 0.008, 24, 4, basis_z(r_))   # cooling fins
+    cyl(B.bm("M_LL_Iron", "SM_OpticDrive"), c + off + r_ * 0.15 + u * (pz + 0.16), 0.06, 0.06, 0.04, 16, basis_z(r_))
+    box(cast, c - r_ * 0.05 + u * (pz + 0.13), (0.2, 0.22, 0.26), basis(r_, o, u))          # gearbox
+    lamp(B, "optic_motor", c + off + u * (pz + 0.27) - o * 0.05, basis(r_, -o, u), "green", 0.01)
 
     def drum(bm, uv):
         # rotating train (turns with the beam): crown wheel with the marked worn tooth, two standby
@@ -1822,22 +1820,28 @@ def build_optic_drive(B):
         for k in range(4):                                             # crown-wheel spokes
             a = math.pi * k / 4
             box(bm, (0, 0, -0.38), (0.5 * abs(math.cos(a)) + 0.02, 0.5 * abs(math.sin(a)) + 0.02, 0.02))
-        cyl(bm, (0, 0, 0.0), 0.03, 0.03, 1.36, 12)
+        cyl(bm, (0, 0, 0.035), 0.03, 0.03, 1.43, 12)                 # drive shaft: seated in the gearbox, up into the top plate
         tag(red, 1)
     B.part("PT_optic_drive", "M_LL_Brass", c + u * (F + 1.28), Matrix.Identity(3), drum, extra_mats=("M_LL_Red",))
 
     def governor(bm, uv):
-        # fly-ball governor: spindle, two arms, two brass balls (spins while the motor runs)
-        cyl(bm, (0, 0, 0), 0.012, 0.012, 0.3, 10)
-        cyl(bm, (0, 0, -0.06), 0.03, 0.03, 0.03, 12)
+        # fly-ball governor HANGING from the cabinet's top plate (cabin pass, IMG_3141: it stood with its
+        # spindle through the upper standby wheel and its balls swept the drive shaft). Spin radius 0.12 m.
+        cyl(bm, (0, 0, 0.0), 0.011, 0.011, 0.29, 10)                  # spindle, top end in the plate boss
+        cyl(bm, (0, 0, 0.135), 0.026, 0.026, 0.02, 12)               # boss under the plate
+        cyl(bm, (0, 0, -0.06), 0.026, 0.026, 0.025, 12)              # sliding collar
         for sx in (-1, 1):
-            seg_cyl(bm, Vector((0, 0, 0.12)), Vector((sx * 0.1, 0, -0.02)), 0.005, 6)
-            sphere(bm, Vector((sx * 0.11, 0, -0.04)), 0.03, 12, 8)
-    B.part("PT_optic_governor", "M_LL_Brass", c - r_ * 0.16 + o * 0.05 + u * (F + 1.75), Matrix.Identity(3), governor)
-    # revolution counter (brass drum with a white figure band) on the gearbox
-    rc = c - r_ * 0.05 - o * 0.12 + u * (F + 0.9)
+            seg_cyl(bm, Vector((0, 0, 0.08)), Vector((sx * 0.09, 0, -0.02)), 0.0045, 6)
+            seg_cyl(bm, Vector((0, 0, -0.06)), Vector((sx * 0.06, 0, -0.005)), 0.0035, 6)   # links to the collar
+            sphere(bm, Vector((sx * 0.095, 0, -0.035)), 0.025, 12, 8)
+    # spindle 0.17 m off the shaft axis: balls clear the shaft by 2 cm and the glazing by 3 cm; their lowest
+    # point (F+1.80) is 10 cm above the upper wheel's top (F+1.70); the boss meets the top plate (F+2.005)
+    B.part("PT_optic_governor", "M_LL_Brass", c - r_ * 0.15 + o * 0.08 + u * (F + 1.86), Matrix.Identity(3), governor)
+    # revolution counter on the gearbox FACE, below the crown wheel (it sat at the wheel's height, inside it)
+    rc = c - r_ * 0.05 - o * 0.158 + u * (F + 0.76)
     cyl(brass, rc, 0.04, 0.04, 0.1, 16, basis_z(r_))
     cyl(B.bm("M_LL_Ceramic", "SM_OpticDrive"), rc, 0.042, 0.042, 0.05, 16, basis_z(r_))
+    box(brass, rc + o * 0.03, (0.06, 0.04, 0.05), basis(r_, o, u))                      # its mounting bracket
     # standby clockwork: winding crank outside the glazing, and the weight tube down through the floor
     ck = c - o * (R8 + 0.06) + r_ * 0.12 + u * (F + 0.42)
     cyl(B.bm("M_LL_Iron", "SM_OpticDrive"), ck, 0.02, 0.02, 0.08, 10, basis_z(-o))
@@ -2057,30 +2061,7 @@ def build_props(B):
     sphere(B.bm("M_LL_Paper", "SM_Props"), vb + Vector((0, 0, 0.16)), 0.045, 12, 8)               # spare mantle
     seg_cyl(B.bm("M_LL_Brass", "SM_Props"), vb + Vector((0.0, 0.0, 0.1)), dp(sb_, 0.45, 0.85, sc), 0.008, 8)
     box(B.bm("M_LL_Paper", "SM_Props"), dp(sb_, 0.02, 1.17, sc - 0.02), (0.16, 0.14, 0.11), sbs)    # bulb box
-    # (C) oilskin coat and sou'wester on a hook left of the stair door (it mirrors the Visitor's look)
-    ob = R["stair"] - 19.0                                    # left of the door: right of it they hid behind the cage
-    orr, oo, ou = wall_frame(ob)
-    oh = dp(ob, 0, 1.78, R_IN - 0.03)
-    seg_cyl(B.bm("M_LL_Brass", "SM_Props"), oh, oh - oo * 0.07, 0.008, 8)
-    flat = Matrix((orr, oo * 0.45, ou)).transposed()                                            # flattened against the wall
-    # collar on the hook, sloped shoulders, a flared hem (s1f: a plain cone read as a bottle)
-    coat = [(0.015, 0.02), (0.07, 0.0), (0.08, -0.05), (0.2, -0.13), (0.21, -0.3), (0.2, -0.55),
-            (0.23, -0.9), (0.24, -0.98), (0.2, -1.0), (0.015, -1.0)]
-    cc_ = oh - oo * 0.11
-    lathe(B.bm("M_LL_Oilskin", "SM_Props"), cc_, flat, coat, 20)
-    for s in (-1, 1):                    # sleeves hang IN FRONT of the body (at the sides they read as panels)
-        seg_cyl(B.bm("M_LL_Oilskin", "SM_Props"), cc_ + orr * (s * 0.16) - ou * 0.17 - oo * 0.06,
-                cc_ + orr * (s * 0.17) - ou * 0.66 - oo * 0.09, 0.045, 10)
-    # front opening: a dark storm-flap seam with toggles, so it reads as a coat, not a bottle
-    box(B.bm("M_LL_Bakelite", "SM_Props"), cc_ - oo * 0.1 - ou * 0.6, (0.012, 0.02, 0.76), wb(ob), bevel=0)
-    for zt in (0.3, 0.45, 0.6, 0.75):
-        sphere(B.bm("M_LL_Iron", "SM_Props"), cc_ - oo * 0.103 - ou * zt + orr * 0.02, 0.012, 8, 6)
-    # sou'wester on its own hook beside the coat: wide brim against the wall, domed crown into the room
-    hb = ob - 8.5                                             # clear of the sleeves (and the storage rack top at 1.5 m)
-    hr, ho, hu = wall_frame(hb)
-    seg_cyl(B.bm("M_LL_Brass", "SM_Props"), dp(hb, 0, 1.82, R_IN - 0.03), dp(hb, 0, 1.82, R_IN - 0.08), 0.008, 8)
-    lathe(B.bm("M_LL_Oilskin", "SM_Props"), dp(hb, 0, 1.68, R_IN - 0.035), basis_z(-ho),
-          [(0.0, 0.0), (0.17, 0.0), (0.18, 0.012), (0.1, 0.03), (0.095, 0.08), (0.065, 0.125), (0.0, 0.135)], 24)
+    build_coat_rack(B)                                              # cabin pass (IMG_3137)
     # (C) kettle on an electric ring and a mug on the west window sill: the keeper's long night
     kb = -42.0
     kr, ko, ku = wall_frame(kb)
@@ -2117,23 +2098,212 @@ def build_props(B):
                                       basis(up_side.cross(tdir), up_side, tdir), bevel=0.0), prefix="PROP_torch")
     solid(B, "chrome", lambda bm: torus(bm, tail - tdir * 0.004, 0.009, 0.0018, 16, 5, basis_z(up_side)), prefix="PROP_torch")  # lanyard ring
     B.empty("IA_torch", tail + tdir * 0.105, (0.04, 0.04, 0.13), tb3)
-    # (C) a shortbread tin on the west sill beside the kettle, its lid ajar
-    bt = dp(-30.0, 0, 0.95, R_IN - 0.04)
-    solid(B, "tin_red", lambda bm: cyl(bm, bt + Vector((0, 0, 0.035)), 0.085, 0.085, 0.07, 32))
-    for zb in (0.006, 0.064):
-        solid(B, "tin_gold", lambda bm, zb=zb: cyl(bm, bt + Vector((0, 0, zb)), 0.0858, 0.0858, 0.006, 32))
+    # (C) cabin pass (IMG_3138): a tartan shortbread tin on the west sill, its lid off and lying beside it
+    # (the old lid floated, tilted, above the rim and the tin read as a plain red disc)
+    bt = dp(-30.0, 0, 0.95, R_IN - 0.05)
+    tr_, to_, tu_ = wall_frame(-30.0)
+    pm = B.bm("M_LL_Props")
+    lathe_uv(pm, B.uv(pm), bt, basis(tr_, -to_, tu_), [(0.0, 0.0, 0.0), (0.082, 0.0, 0.0), (0.084, 0.003, 0.0), (0.084, 0.064, 1.0),
+             (0.082, 0.066, 1.0), (0.078, 0.066, 1.0), (0.078, 0.008, 1.0), (0.0, 0.008, 1.0)], 40,
+             lambda uu, vv: region_uv("tin_band", uu * 3.0 % 1.0, vv))                 # printed tartan band
+    solid(B, "tin_gold", lambda bm: torus(bm, bt + tu_ * 0.066, 0.083, 0.0022, 40, 5))   # rolled rim
     for k in range(3):
-        solid(B, "wood_raw", lambda bm, k=k: box(bm, bt + Vector((0, 0, 0.062)) + wall_frame(-30.0)[0] * (-0.03 + k * 0.026),
+        solid(B, "wood_raw", lambda bm, k=k: box(bm, bt + tu_ * 0.058 + tr_ * (-0.03 + k * 0.026),
                                                  (0.022, 0.07, 0.014), wb(-30.0) @ rot_about((0, 0, 1), 8.0 * (k - 1)), bevel=0.0))
-    lr_, lo_, _ = wall_frame(-30.0)
-    lid_b3 = rot_about(lr_, -9.0) @ Matrix.Identity(3)
-    lid_c = bt + Vector((0, 0, 0.074)) - lo_ * 0.045 + Vector((0, 0, 0.006))
-    solid(B, "tin_red", lambda bm: cyl(bm, lid_c, 0.088, 0.088, 0.012, 32, lid_b3))
-    solid(B, "tin_gold", lambda bm: cyl(bm, lid_c + lid_b3.col[2] * 0.0062, 0.07, 0.07, 0.0008, 32, lid_b3))
+    lid = bt - tr_ * 0.18 - to_ * 0.0                                                 # lid lying on the sill beside it
+    solid(B, "tin_red", lambda bm: cyl(bm, lid + tu_ * 0.007, 0.088, 0.088, 0.014, 40))
+    quad_uv(pm, B.uv(pm), lid + tu_ * 0.0142, basis(tr_, -to_, tu_), 0.15, 0.15, region_rect("tin_band", 0.0, 0.0, 0.33, 1.0))
+    solid(B, "tin_gold", lambda bm: torus(bm, lid + tu_ * 0.0135, 0.086, 0.0018, 40, 5))
     # (R) touched-up paint at hand height, a slightly different cream (maintained, not new)
-    for tb, tz, tw, th in ((-96.0, 1.45, 0.2, 0.14), (101.0, 1.3, 0.16, 0.12), (152.0, 1.55, 0.22, 0.16), (-30.0, 1.25, 0.12, 0.1)):
+    for tb, tz, tw, th in ((-96.0, 1.45, 0.2, 0.14), (101.0, 1.3, 0.16, 0.12), (158.0, 1.55, 0.22, 0.16), (-19.0, 1.12, 0.1, 0.08)):
+        assert not in_window(tb), f"touch-up patch at {tb} would float in a window bay"
         tr, to, tu = wall_frame(tb)
         box(B.bm("M_LL_Paper", "SM_Props"), dp(tb, 0, tz, R_IN - 0.0015), (tw, 0.002, th), basis(tr, to, tu), bevel=0.0)
+
+
+
+def drape(bm, top, b3, rings, segs=28, ys=0.6, fold=None, hem=None):
+    """A hanging garment: rings of (z, r) from the collar down (z negative), squashed front to back by ys,
+    with vertical folds fold(theta, t) -> radius factor (t = 0 at the collar, 1 at the hem). Capped at the
+    collar; the hem is turned in so it never shows a razor edge."""
+    rows = []
+    n = len(rings)
+    for j, (z, r) in enumerate(rings):
+        t = j / (n - 1)
+        row = []
+        for i in range(segs):
+            th = 2 * math.pi * i / segs
+            rr = r * (fold(th, t) if fold else 1.0)
+            zz = z + (hem(th) * t ** 4 if hem else 0.0)          # uneven hem, fading out toward the collar
+            row.append(bm.verts.new(top + b3 @ Vector((rr * math.cos(th), rr * math.sin(th) * ys, zz))))
+        rows.append(row)
+    z_h, r_h = rings[-1]
+    inner = [bm.verts.new(top + b3 @ Vector((r_h * 0.9 * math.cos(2 * math.pi * i / segs), r_h * 0.9 * math.sin(2 * math.pi * i / segs) * ys,
+                                              z_h + 0.04 + (hem(2 * math.pi * i / segs) if hem else 0.0)))) for i in range(segs)]
+    rows.append(inner)
+    for a, b_ in zip(rows, rows[1:]):
+        for i in range(segs):
+            bm.faces.new((a[i], a[(i + 1) % segs], b_[(i + 1) % segs], b_[i]))
+    cap = bm.verts.new(top + b3 @ Vector((0, 0, rings[0][0] + 0.01)))
+    for i in range(segs):
+        bm.faces.new((cap, rows[0][(i + 1) % segs], rows[0][i]))
+
+
+def build_coat_rack(B):
+    """Cabin pass (IMG_3137): a freestanding oak coat stand left of the stair door, the keeper's oilskin
+    hanging from its front hook by the collar, the sou'wester on the finial. The coat: collar, sloped
+    shoulders, folds that deepen toward the hem, sleeves hanging forward with turned cuffs, two flapped
+    pockets (a folded stores note in the right one: IA_coat_note), the storm flap with toggles."""
+    ob = R["stair"] - 21.0                                   # 149: 13 cm clear of the storage rack, 14 of the bulkhead
+    orr, oo, ou = wall_frame(ob)
+    front = -oo                                              # toward the room
+    base = dp(ob, 0, 0, R_IN - 0.55)
+    oak = B.bm("M_LL_WoodDark", "SM_CoatRack")
+    lathe(oak, base, Matrix.Identity(3), [(0.0, 0.32), (0.034, 0.32), (0.03, 0.36), (0.024, 0.4), (0.022, 1.55), (0.026, 1.6),
+                                         (0.022, 1.64), (0.02, 1.78), (0.0, 1.78)], 16)
+    sphere(oak, base + ou * 1.80, 0.032, 14, 10)              # finial
+    for k in range(3):                                       # tripod legs, splayed, with a turned foot
+        a = 2 * math.pi * k / 3 + math.pi / 6
+        dvec = (orr * math.cos(a) + oo * math.sin(a)).normalized()
+        legs = bezier(base + ou * 0.36, base + ou * 0.22 + dvec * 0.08, base + ou * 0.06 + dvec * 0.2, base + dvec * 0.25 + ou * 0.012, 10)
+        sweep(oak, legs, 0.016, 8)
+        sphere(oak, base + dvec * 0.25 + ou * 0.012, 0.018, 10, 6)
+    brass = B.bm("M_LL_Brass", "SM_CoatRack")
+    for k in range(4):                                       # four double hooks at 1.62 m
+        a = 2 * math.pi * k / 4 + math.pi / 4
+        hd = (orr * math.cos(a) + front * math.sin(a)).normalized()
+        h0 = base + ou * 1.62 + hd * 0.02
+        sweep(brass, bezier(h0, h0 + hd * 0.05, h0 + hd * 0.09 - ou * 0.01, h0 + hd * 0.095 + ou * 0.04, 8), 0.005, 6)
+        sphere(brass, h0 + hd * 0.095 + ou * 0.042, 0.008, 8, 6)
+    # the oilskin hangs by its collar loop from the front-RIGHT hook, beside the post (centred in front of it,
+    # it read as a mannequin, cp2): no body inside, so the shoulders fall narrow and it hangs flat, the
+    # folds deepening toward the hem, the sleeves hanging into its sides
+    hdir = (orr + front).normalized()
+    hook = base + ou * 1.62 + hdir * 0.095
+    cfront = (front * 0.75 + orr * 0.25).normalized()       # it turns a little toward the room as it hangs
+    cside = ou.cross(cfront).normalized() * -1.0
+    cb3 = basis(cside, cfront, ou)
+    top = hook + hdir * 0.02 + cfront * 0.075 + ou * 0.01   # collar loop on the hook, the coat's back toward the post
+    oil = B.bm("M_LL_Oilskin", "SM_CoatRack")
+    YS = 0.42
+    rings = [(-0.02, 0.026), (-0.06, 0.05), (-0.12, 0.092), (-0.2, 0.138), (-0.3, 0.168), (-0.45, 0.176),
+             (-0.62, 0.18), (-0.78, 0.196), (-0.9, 0.212), (-0.98, 0.224)]
+    drape(oil, top, cb3, rings, 36, YS,
+          lambda th, t: 1.0 + t * (0.075 * math.sin(4 * th + 1.1) + 0.045 * math.sin(7 * th + 0.3)) + 0.02 * math.sin(11 * th) * t * t,
+          lambda th: 0.03 * math.sin(th) - 0.018 * math.cos(2 * th))     # front a little shorter, the sides dip
+    for sx in (-1, 1):                                       # sleeves: from inside the shoulder, a soft bend at the elbow
+        pts = bezier(top + cb3 @ Vector((sx * 0.11, 0.0, -0.16)), top + cb3 @ Vector((sx * 0.165, 0.01, -0.32)),
+                     top + cb3 @ Vector((sx * 0.175, 0.035, -0.5)), top + cb3 @ Vector((sx * 0.16, 0.03, -0.71)), 9)
+        for k in range(len(pts) - 1):                        # tapering segments (sweep has one radius)
+            rk = 0.047 - 0.008 * k / (len(pts) - 2)
+            dv = pts[k + 1] - pts[k]
+            cyl(oil, (pts[k] + pts[k + 1]) / 2, rk, rk + 0.0015, dv.length + 0.01, 14, basis_z(-dv))
+        cdv = pts[-1] - pts[-2]
+        torus(oil, pts[-1] + cdv.normalized() * 0.004, 0.039, 0.007, 14, 5, basis_z(cdv))   # turned cuff
+    lathe(oil, top - ou * 0.035, cb3, [(0.05, -0.02), (0.058, 0.0), (0.06, 0.035), (0.052, 0.04), (0.046, 0.0)], 18)   # collar
+    dark = B.bm("M_LL_Bakelite", "SM_CoatRack")
+    fy = 0.178 * YS + 0.004                                  # front surface at chest height
+    box(dark, top + cb3 @ Vector((0.0, fy, -0.56)), (0.012, 0.007, 0.8), cb3, bevel=0.0)           # storm flap seam
+    for zt in (0.24, 0.4, 0.56, 0.72):
+        cyl(B.bm("M_LL_WoodDark", "SM_CoatRack"), top + cb3 @ Vector((0.01, fy + 0.007, -zt)), 0.007, 0.007, 0.028, 8, basis_z(cside))
+    for sx in (-1, 1):                                       # pocket flaps, slightly proud
+        pc = top + cb3 @ Vector((sx * 0.1, 0.185 * YS + 0.006, -0.63))
+        box(oil, pc, (0.14, 0.012, 0.055), cb3 @ rot_about((0, 1, 0), sx * 4.0), bevel=0.003)
+    # the stores note, folded twice, poking out of the right pocket (IA_coat_note opens it)
+    nc = top + cb3 @ Vector((0.1, 0.185 * YS + 0.0, -0.585))
+    nb3 = cb3 @ rot_about((0, 1, 0), -14.0)
+    pm = B.bm("M_LL_Props")
+    solid(B, "page_cream", lambda bm: box(bm, nc, (0.07, 0.003, 0.055), nb3, bevel=0.0), prefix="SM_CoatRack")
+    quad_uv(pm, B.uv(pm), nc + nb3.col[1] * 0.0017, basis(nb3.col[0], nb3.col[2], nb3.col[1]), 0.068, 0.053, region_rect("note_fold"))
+    B.empty("IA_coat_note", nc + cfront * 0.02, (0.06, 0.05, 0.05), cb3)
+    # the sou'wester hangs by its brim from the front-LEFT hook, crown out, brim near vertical
+    hk2 = base + ou * 1.62 + (front - orr).normalized() * 0.095
+    hax = (front * 0.85 - orr * 0.3 - ou * 0.42).normalized()            # crown toward the room and a little down
+    hc = hk2 + ou * 0.04 - (front - orr).normalized() * 0.02 - ou * 0.17   # the brim's top edge rests on the hook
+    lathe(oil, hc, basis_z(hax, ou), [(0.0, 0.15), (0.062, 0.14), (0.09, 0.105), (0.098, 0.05), (0.1, 0.012), (0.16, -0.004),
+                                      (0.178, -0.02), (0.176, -0.028), (0.155, -0.014), (0.096, 0.004), (0.088, 0.03), (0.0, 0.118)], 28)
+    B.collider("coat_rack", base + ou * 0.9 + front * 0.1, (0.6, 0.62, 1.8), basis(orr, front, ou))
+
+
+def build_storm_lantern(B, base, frame):
+    """Cabin pass (IMG_3135): a hurricane lantern standing on the storage shelf (base = shelf top): tin fount
+    with a wick knob, glass globe in a wire guard, vented cap and bail handle. 0.3 m tall, 5 cm under the
+    top board (it used to float 10 cm above its shelf with the cap through the board above)."""
+    r_, o_, u_ = frame
+    brass = B.bm("M_LL_Brass", "SM_Storage")
+    iron = B.bm("M_LL_Iron", "SM_Storage")
+    I3 = Matrix.Identity(3)
+    lathe(brass, base, I3, [(0.0, 0.0), (0.06, 0.0), (0.066, 0.008), (0.067, 0.042), (0.058, 0.055), (0.032, 0.062), (0.0, 0.062)], 24)
+    cyl(iron, base + u_ * 0.048 + r_ * 0.072, 0.009, 0.009, 0.016, 10, basis_z(r_))       # wick knob
+    lathe(B.bm("M_LL_Glass", "SM_StorageGlass"), base + u_ * 0.062, I3,
+          [(0.03, 0.0), (0.046, 0.03), (0.053, 0.07), (0.049, 0.11), (0.031, 0.135)], 24)
+    for k in range(4):                                       # guard wires following the globe
+        a = 2 * math.pi * k / 4 + math.pi / 4
+        dv = Vector((math.cos(a), math.sin(a), 0))
+        pts = [base + u_ * (0.062 + z) + dv * (rr + 0.006) for z, rr in ((0.0, 0.032), (0.03, 0.048), (0.07, 0.055), (0.11, 0.051), (0.137, 0.033))]
+        sweep(iron, pts, 0.0016, 5)
+    torus(iron, base + u_ * 0.132, 0.058, 0.0018, 20, 4)
+    lathe(brass, base + u_ * 0.197, I3, [(0.0, 0.0), (0.042, 0.0), (0.056, 0.006), (0.047, 0.034), (0.022, 0.048), (0.0, 0.05)], 24)
+    cyl(brass, base + u_ * 0.255, 0.018, 0.016, 0.018, 12)  # chimney
+    arc = [base + u_ * 0.205 + r_ * (0.058 * math.cos(math.radians(t))) + u_ * (0.075 * math.sin(math.radians(t))) for t in range(0, 181, 15)]
+    sweep(iron, arc, 0.0022, 6)                              # bail handle, top at 0.28 m
+
+
+def build_extinguisher(B):
+    """Cabin pass (IMG_3134): a 2-gallon water (soda-acid) extinguisher of the period on its wall bracket.
+    Drawn body with rolled shoulders and a foot ring, brass head with a squeeze lever over a carrying handle,
+    safety pin and pull ring, a pressure gauge, hose to a horn held in a clip, a wrapped printed label, a
+    strap band and wall plate, chips at hand height. Satin red (the old sphere top read as two glowing eyes)."""
+    e = R["extinguisher"]
+    er, eo, eu = wall_frame(e)
+    fr = -eo                                                 # toward the room
+    ep = dp(e, 0, 0.34, R_IN - 0.115)                        # foot of the body (it hangs on the bracket)
+    red = B.bm("M_LL_Red", "SM_Extinguisher")
+    lathe(red, ep, Matrix.Identity(3), [(0.0, 0.0), (0.079, 0.0), (0.086, 0.008), (0.088, 0.03), (0.088, 0.47), (0.086, 0.495),
+                                        (0.077, 0.52), (0.057, 0.538), (0.035, 0.546), (0.0, 0.547)], 32)
+    iron = B.bm("M_LL_Iron", "SM_Extinguisher")
+    torus(iron, ep + eu * 0.004, 0.083, 0.006, 32, 6)        # foot ring
+    brass = B.bm("M_LL_Brass", "SM_Extinguisher")
+    hd = ep + eu * 0.547
+    cyl(brass, hd + eu * 0.016, 0.034, 0.03, 0.032, 24)      # screw cap
+    cyl(brass, hd + eu * 0.048, 0.021, 0.021, 0.034, 16)     # valve body
+    hb = basis(er, eo, eu)
+    box(iron, hd + eu * 0.05 + eo * 0.062, (0.026, 0.1, 0.009), hb, bevel=0.002)                       # carrying handle
+    box(iron, hd + eu * 0.074 + eo * 0.055, (0.026, 0.1, 0.008), hb @ rot_about((1, 0, 0), -11.0), bevel=0.002)   # squeeze lever
+    seg_cyl(iron, hd + eu * 0.06 - er * 0.03, hd + eu * 0.06 + er * 0.03, 0.0022, 6)                        # safety pin
+    torus(iron, hd + eu * 0.06 + er * 0.042, 0.012, 0.0018, 14, 4, basis_z(eo))                          # pull ring
+    g = hd + eu * 0.046 + fr * 0.024
+    cyl(brass, g, 0.017, 0.017, 0.012, 20, basis_z(fr))       # pressure gauge
+    cyl(B.bm("M_LL_Ceramic", "SM_Extinguisher"), g + fr * 0.0062, 0.0145, 0.0145, 0.0008, 20, basis_z(fr))
+    seg_cyl(iron, g + fr * 0.0068, g + fr * 0.0068 + (er * 0.7 + eu * 0.7).normalized() * 0.011, 0.0011, 4)   # needle in the green
+    hose = bezier(hd + eu * 0.04 - er * 0.022, hd - er * 0.07 + eu * 0.0, ep + eu * 0.42 - er * 0.105, ep + eu * 0.2 - er * 0.1, 14)
+    solid(B, "rubber", lambda bm: sweep(bm, hose, 0.008, 8), prefix="SM_Extinguisher")                    # hose
+    solid(B, "rubber", lambda bm: cyl(bm, ep + eu * 0.15 - er * 0.1, 0.012, 0.007, 0.1, 10), prefix="SM_Extinguisher")   # horn
+    box(iron, ep + eu * 0.24 - er * 0.094, (0.02, 0.03, 0.025), basis(er, eo, eu), bevel=0.0)           # hose clip
+    torus(iron, ep + eu * 0.32, 0.0905, 0.004, 32, 4)       # strap band
+    box(iron, dp(e, 0, 0.62, R_IN - 0.008), (0.06, 0.012, 0.36), wb(e), bevel=0.002)                    # wall plate
+    box(iron, ep + eu * 0.53 + eo * 0.06, (0.03, 0.06, 0.01), basis(er, eo, eu))                        # hook under the shoulder
+    for k in range(4):                                       # wall plate screws
+        cyl(brass, dp(e, 0, 0.47 + k * 0.1, R_IN - 0.0146), 0.005, 0.005, 0.002, 8, basis_z(fr))
+    # wrapped label (props atlas "ext_label"): a 70 degree band of the body's own radius, 13 cm tall
+    pm = B.bm("M_LL_Props")
+    uvl = B.uv(pm)
+    rows = []
+    for j, vz in enumerate((0.0, 1.0)):
+        row = []
+        for i in range(9):
+            th = math.radians(-35 + 70 * i / 8)
+            pt = ep + eu * (0.22 + 0.13 * vz) + (fr * math.cos(th) + er * math.sin(th)) * 0.0887
+            row.append((pm.verts.new(pt), (i / 8, vz)))
+        rows.append(row)
+    for i in range(8):
+        f = pm.faces.new((rows[0][i][0], rows[0][i + 1][0], rows[1][i + 1][0], rows[1][i][0]))
+        for lp, uvv in zip(f.loops, (rows[0][i][1], rows[0][i + 1][1], rows[1][i + 1][1], rows[1][i][1])):
+            lp[uvl].uv = region_uv("ext_label", *uvv)
+    for th_d, zc in ((48, 0.62), (-60, 0.5), (75, 0.14), (12, 0.07)):                     # chips at hand height and at the foot
+        th = math.radians(th_d)
+        nrm = fr * math.cos(th) + er * math.sin(th)
+        cyl(iron, ep + eu * zc + nrm * 0.0884, 0.005 + 0.002 * (th_d % 3), 0.004, 0.0009, 8, basis_z(nrm))
 
 
 def build_anchors(B):

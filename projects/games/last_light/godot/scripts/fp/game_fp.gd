@@ -204,6 +204,8 @@ func _on_doc(id: String) -> void:
 			doc = "forecast"
 		"chart":
 			doc = "chart"                      # cabin pass: full-screen chart inspection
+		"coat_note":
+			doc = "coat_note"                  # cabin pass: the stores note in the oilskin pocket
 		"drawer":
 			if director.state.chapter >= 5:
 				doc = "letter_1957"

@@ -79,6 +79,7 @@ var DEVICES := {
 	"photo": {"kind": "doc", "prompt": "Look at the photograph"},
 	"note": {"kind": "doc", "prompt": "Read the note on the console"},
 	"forecast": {"kind": "doc", "prompt": "Read the teleprinter forecast"},
+	"coat_note": {"kind": "doc", "prompt": "Read the note in the coat pocket"},   # cabin pass
 	"door": {"kind": "door", "prompt": "The stair door"},
 	"power_panel": {"kind": "info", "prompt": "Check the distribution board"},
 }
