@@ -18,6 +18,7 @@ const BINDINGS := {          # keyboard (physical keycodes)
 	"sprint": [KEY_SHIFT],
 	"logbook": [KEY_L],
 	"transcript": [KEY_T],
+	"torch": [KEY_F],          # cabin pass: switch the carried torch on / off
 	"back": [],               # keyboard "back" is Esc / right click (handled with pause / mouse)
 	"turn_prev": [],          # keyboard: right click / wheel
 	"turn_next": [],
@@ -33,6 +34,7 @@ const PAD_FP := {
 	"turn_prev": ["button", JOY_BUTTON_LEFT_SHOULDER],
 	"turn_next": ["button", JOY_BUTTON_RIGHT_SHOULDER],
 	"sprint": ["button", JOY_BUTTON_LEFT_STICK],
+	"torch": ["axis", JOY_AXIS_TRIGGER_LEFT, 1.0],     # LT (the d-pad belongs to replies and the handwheel)
 	"pause": ["button", JOY_BUTTON_START],
 	"move_left": ["axis", JOY_AXIS_LEFT_X, -1.0],
 	"move_right": ["axis", JOY_AXIS_LEFT_X, 1.0],
@@ -150,6 +152,8 @@ static func glyph(what: String) -> String:
 				return "L1 / R1" if ps else "LB / RB"
 			"next_vessel":
 				return "R1" if ps else "RB"
+			"torch":
+				return "L2" if ps else "LT"
 			"wheel", "handwheel":
 				return "Left stick"
 			"move":
@@ -176,6 +180,8 @@ static func glyph(what: String) -> String:
 			return "Wheel"
 		"next_vessel":
 			return "Tab"
+		"torch":
+			return "F"
 		"wheel", "handwheel":
 			return "A / D"
 		"move":
@@ -192,6 +198,6 @@ static func key(what: String) -> String:
 
 ## Hint text with {interact} {move} {look} {turn_back} {wheel} tokens resolved for the current device.
 static func resolve(text: String) -> String:
-	for t in ["interact", "move", "look", "turn_back", "wheel", "back", "logbook"]:
+	for t in ["interact", "move", "look", "turn_back", "wheel", "back", "logbook", "torch", "transcript", "turn", "next_vessel"]:
 		text = text.replace("{%s}" % t, glyph(t))
 	return text

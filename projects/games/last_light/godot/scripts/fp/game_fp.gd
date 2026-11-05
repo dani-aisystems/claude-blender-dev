@@ -98,7 +98,7 @@ func start(seed_value: int, mode := "", attract_mode := false, story := false, s
 	if story_mode:
 		_setup_story(save)
 	if bot_mode == "":
-		player.capture_mouse(true)
+		refresh_mouse()
 
 
 # ------------------------------------------------------------------ story
@@ -115,7 +115,9 @@ func _setup_story(save: Dictionary) -> void:
 	presenter.bind(director)
 	presenter.dialogue.at_radio_fn = _at_radio
 	presenter.dialogue.mouse_restore_fn = refresh_mouse
-	ui.number_keys_taken_fn = presenter.dialogue.has_open_choices
+	presenter.dialogue.in_view_fn = func(): return player != null and player.focused != ""
+	presenter.dialogue.doc_open_fn = presenter.is_document_open
+	ui.number_keys_taken_fn = func(): return presenter.dialogue.has_open_choices() or presenter.is_document_open()
 	ui.reply_root_fn = func(): return presenter.dialogue.choice_box
 	presenter.dialogue.apply_settings(Settings.v["text_speed"], Settings.v["subtitle_size"])
 	Settings.changed.connect(_on_settings_changed)     # method (not lambda): auto-disconnects when freed
@@ -200,6 +202,8 @@ func _on_doc(id: String) -> void:
 			doc = "note_046"
 		"forecast":
 			doc = "forecast"
+		"chart":
+			doc = "chart"                      # cabin pass: full-screen chart inspection
 		"drawer":
 			if director.state.chapter >= 5:
 				doc = "letter_1957"
@@ -210,7 +214,6 @@ func _on_doc(id: String) -> void:
 				presenter.show_hint("The stair door. Bolted for the night, the way Father always kept it.")
 	if doc != "":
 		player.enabled = false
-		player.capture_mouse(false)
 		ui.clear_prompt()                   # the reading view has no crosshair target
 		presenter.open_document(doc)
 		director.state.flags["seen_" + doc] = 1
@@ -237,7 +240,7 @@ func _toggle_logbook() -> void:
 		return
 	var open: bool = ui.toggle_logbook()
 	player.enabled = not open
-	player.capture_mouse(not open and player.focused == "")
+	refresh_mouse()
 
 
 func _on_campaign_finished(ending: Dictionary) -> void:
@@ -259,7 +262,8 @@ func save_dict() -> Dictionary:
 	var c: Dictionary = director.chapter_data(director.state.chapter)
 	return {"story": director.state.to_dict(), "sim": sim.to_dict(), "chapter_title": c.get("title", ""),
 		"clock": sim.clock_text(),
-		"player": {"pos": [player.global_position.x, player.global_position.y, player.global_position.z], "yaw": player._yaw, "pitch": player._pitch},
+		"player": {"pos": [player.global_position.x, player.global_position.y, player.global_position.z], "yaw": player._yaw, "pitch": player._pitch,
+			"torch": player.torch_held, "torch_on": player.torch_light != null and player.torch_light.visible},
 		"station": {"door_open": station.door_open, "visitor": visitor_fig != null}}
 
 
@@ -292,6 +296,9 @@ func _apply_save(d: Dictionary) -> void:
 		player._yaw = float(p.get("yaw", 0.0))
 		player._pitch = float(p.get("pitch", 0.0))
 		player._apply_look()
+	if bool(p.get("torch", false)):               # cabin pass: the torch stays with the keeper
+		player.give_torch(bool(p.get("torch_on", false)))
+		station.set_torch_taken(true)
 	var st: Dictionary = d.get("station", {})
 	station.door_open = bool(st.get("door_open", false))
 	if bool(st.get("visitor", false)):
@@ -347,7 +354,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if ui.logbook.visible:
 			ui.toggle_logbook()
 			player.enabled = true
-			player.capture_mouse(player.focused == "")
+			refresh_mouse()
 		elif player.focused != "":
 			player.leave_focus()
 		else:
@@ -371,8 +378,12 @@ func mouse_should_capture() -> bool:
 		return false
 	if _paused or player.focused != "" or ui.logbook.visible:
 		return false
-	if presenter and (presenter.is_document_open() or presenter.dialogue.has_open_choices()):
+	if not player.enabled:
+		return false                          # reading a document, the logbook or the end screen
+	if presenter and presenter.is_document_open():
 		return false
+	# open replies no longer free the pointer in free walk (cabin pass, Daniel): mouse look stays on and
+	# the replies are answered with the keys; in device views the pointer is already free
 	return true
 
 
@@ -424,6 +435,15 @@ func _track_player(delta: float) -> void:
 	st.flags["at_radio"] = 1 if _at_radio() else 0
 
 
+## The keeper takes the torch from the storage shelf (only during a blackout: station.availability).
+func _take_torch(on: bool) -> void:
+	player.give_torch(on)
+	station.set_torch_taken(true)
+	if ui and Settings.tip_wanted("torch"):
+		ui.show_notice("The keeper's torch.  %s switches it on and off." % InputSetup.key("torch"), 5.0)
+		Settings.tip_used("torch")
+
+
 ## The stair door's prompt follows the story (Stage 2: it said "Bolted for the night" even after the
 ## ch4 door opened). Before ch4 pressing gives the keeper's line about the bolt; from ch4 the door is the
 ## story's to open (dialogue), so it is shown without a key.
@@ -442,6 +462,9 @@ func _update_door_prompt() -> void:
 func _route(events: Array) -> void:
 	if events.is_empty():
 		return
+	for e in events:
+		if e["type"] == "pickup" and e.get("item", "") == "torch":
+			_take_torch(true)
 	station.on_events(events)
 	outside.on_events(events)
 	if audio:
@@ -527,5 +550,5 @@ func _process(delta: float) -> void:
 func show_end(stats: Dictionary, best: bool) -> void:
 	if ui:
 		player.enabled = false
-		player.capture_mouse(false)
+		refresh_mouse()
 		ui.show_end(stats, best)

@@ -213,6 +213,8 @@ func _force(g, st: String) -> void:
 		"fleet2":                   # Stage 2: at least two vessels on the channel (radio panel Tab tip);
 			while g.sim.active_ships().size() < 2:   # not restored: put such shots last
 				g._route(g.sim.spawn_story_ship({"name": "Capture Test", "kind": "fishing", "bearing": 30, "aim": 30, "hold": true, "protected": true}))
+		"torch":                    # cabin pass: the keeper carries the torch, switched on (not restored)
+			g._take_torch(true)
 		"valve_shut":               # Stage 2: START refused with a reason
 			_restore_state["fuel_valve"] = g.sim.fuel_valve
 			g.sim.fuel_valve = false
@@ -253,6 +255,8 @@ func _place(g, vname: String) -> void:
 	if vname.begins_with("doc_"):
 		# document inspection view as the player sees it (story_presenter.open_document)
 		_hud(g, true)
+		g.player.enabled = false                # as game_fp._on_doc: no crosshair or prompt over the page
+		g.ui.clear_prompt()
 		g.presenter.open_document(vname.substr(4))
 		return
 	if vname.begins_with("focus_"):
@@ -322,7 +326,9 @@ func _restore(g) -> void:
 	_hud(g, true)
 	if g.presenter and g.presenter.is_document_open():
 		g.presenter.doc_root.visible = false
+		g.presenter.dialogue.visible = true
 		g.presenter._doc_open = ""
+		g.player.enabled = true
 	if cam:
 		cam.current = false
 	if g.player:

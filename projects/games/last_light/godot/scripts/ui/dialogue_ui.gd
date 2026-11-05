@@ -6,6 +6,10 @@ extends Control
 ##  person  : low centred subtitles, speaker name, nothing covering the scene (the door scene).
 ##  thought : italic low subtitles, no name.
 ## Input: E / Space / left click = finish the line, then (after a short guard) advance. 1-4 = choose.
+## Replies (cabin pass, Daniel 2026-11-05): this layer never touches the mouse mode (game_fp owns it).
+## In free walk mouse look stays on: the first reply is highlighted, the wheel moves the highlight and
+## E / left click / Space answers. In device views the pointer clicks them. Radio replies show only at
+## the radio and hide again if the keeper walks away.
 
 signal advance_requested
 signal choice_made(index: int)
@@ -32,7 +36,10 @@ var line_look := "radio"                        # how the current line is drawn 
 var speed_cps := 42.0                       # Settings: typewriter speed
 var text_scale := 1.0                       # Settings: subtitle size
 var at_radio_fn: Callable                   # returns true when the player is at the handset
-var mouse_restore_fn: Callable              # game decides the mouse mode once choices close
+var mouse_restore_fn: Callable              # game_fp.refresh_mouse: re-applies the single mouse policy
+var in_view_fn: Callable                    # true while the player is in a device view (the pointer is free)
+var doc_open_fn: Callable                   # true while a document / the chart is being read: no dialogue input
+var choice_hint: Label                      # "1-4 or the wheel, then E" (one-time tip, Settings "replies")
 var radio_panel: PanelContainer
 var card: Control
 var r_name: Label
@@ -50,7 +57,6 @@ var _done_t := 0.0
 var _choices: Array = []
 var _active := false
 var _t := 0.0
-var _freed_mouse := false                   # we made the cursor visible for the choices
 
 
 func _ready() -> void:
@@ -117,6 +123,12 @@ func _ready() -> void:
 	choice_box.alignment = BoxContainer.ALIGNMENT_END
 	choice_box.add_theme_constant_override("separation", 8)
 	add_child(choice_box)
+	choice_hint = UIStyle.label("", 16, Color(0.86, 0.82, 0.72, 0.78), UIStyle.serif())
+	choice_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	choice_hint.offset_left = 52
+	choice_hint.offset_right = 52 + 700
+	choice_hint.visible = false
+	add_child(choice_hint)
 
 
 func _rich(size: int) -> RichTextLabel:
@@ -215,17 +227,56 @@ func _refresh_choices() -> void:
 		var idx: int = c["index"]
 		b.pressed.connect(func(): _pick(idx))
 		choice_box.add_child(b)
-	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN if InputSetup.pad_active else Input.MOUSE_MODE_VISIBLE
-	_freed_mouse = true
 	_layout_choices()
-	if InputSetup.pad_active:
-		focus_first_choice()
+	focus_first_choice()                   # the highlighted reply is what E / Space / A answers
+	_update_choice_hint()
+	_restore_mouse()
 
 
-## Gamepad (Stage 2C): the first reply takes focus so the d-pad moves between replies and A picks one.
+## The first reply takes focus: the d-pad or the wheel moves it, and E / Space / A answers it.
 func focus_first_choice() -> void:
-	if choice_box.get_child_count() > 0 and get_viewport().gui_get_focus_owner() == null:
+	if choice_box.get_child_count() == 0:
+		return
+	var fo := get_viewport().gui_get_focus_owner()
+	if fo == null or not choice_box.is_ancestor_of(fo):
 		(choice_box.get_child(0) as Control).grab_focus.call_deferred()
+
+
+## Move the reply highlight by `step` (the wheel in free walk).
+func _move_choice_focus(step: int) -> void:
+	var n := choice_box.get_child_count()
+	if n == 0:
+		return
+	var fo := get_viewport().gui_get_focus_owner()
+	var i := 0
+	for k in n:
+		if choice_box.get_child(k) == fo:
+			i = k
+	(choice_box.get_child(posmod(i + step, n)) as Control).grab_focus()
+
+
+## Answer with the highlighted reply (the first one if nothing is highlighted yet).
+func _pick_focused() -> void:
+	var fo := get_viewport().gui_get_focus_owner()
+	for c in choice_box.get_children():
+		if c == fo:
+			(c as Button).pressed.emit()
+			return
+	if choice_box.get_child_count() > 0:
+		(choice_box.get_child(0) as Button).pressed.emit()
+
+
+func _update_choice_hint() -> void:
+	var show := choice_box.get_child_count() > 0 and Settings.tip_wanted("replies")
+	choice_hint.visible = show
+	if show:
+		var free_walk: bool = not (in_view_fn.is_valid() and in_view_fn.call())
+		if InputSetup.pad_active:
+			choice_hint.text = "D-pad to choose  ·  %s to answer" % InputSetup.glyph("interact")
+		elif free_walk:
+			choice_hint.text = "1 – %d, or the wheel  ·  E or click to answer" % choice_box.get_child_count()
+		else:
+			choice_hint.text = "1 – %d, or click a reply" % choice_box.get_child_count()
 
 
 ## Keep the reply stack 14 px above the top of the visible speech block (radio panel or subtitles).
@@ -238,20 +289,22 @@ func _layout_choices() -> void:
 		top = sub_box.get_global_rect().position.y
 	choice_box.offset_bottom = top - 14.0 - vp_h
 	choice_box.offset_top = choice_box.offset_bottom - 236.0
+	var stack_h := choice_box.get_combined_minimum_size().y
+	choice_hint.offset_bottom = choice_box.offset_bottom - stack_h - 6.0
+	choice_hint.offset_top = choice_hint.offset_bottom - 24.0
 
 
 func _clear_choices() -> void:
 	for c in choice_box.get_children():
 		choice_box.remove_child(c)      # detach now so the box is empty this frame (layout, tests)
 		c.queue_free()
+	if choice_hint:
+		choice_hint.visible = false
 
 
-## Hand the mouse back to the game (it re-captures only if no device view, document, logbook or
-## pause is open). Done BEFORE choice_made so that choices opened by the next step free it again.
+## Ask the game to re-apply its single mouse policy (game_fp.mouse_should_capture). This layer never
+## sets Input.mouse_mode itself: two owners fighting over it left the pointer stuck on (IMG_3140).
 func _restore_mouse() -> void:
-	if not _freed_mouse:
-		return
-	_freed_mouse = false
 	if mouse_restore_fn.is_valid():
 		mouse_restore_fn.call()
 
@@ -259,6 +312,8 @@ func _restore_mouse() -> void:
 func _pick(i: int) -> void:
 	if get_tree().paused:
 		return
+	if choice_box.get_child_count() > 0 and not (in_view_fn.is_valid() and in_view_fn.call()):
+		Settings.tip_used("replies")       # answered with the keys in free walk: the hint has done its job
 	_choices = []
 	_clear_choices()
 	_restore_mouse()
@@ -284,6 +339,10 @@ func _process(delta: float) -> void:
 		return
 	if not _choices.is_empty() and choice_box.get_child_count() == 0:
 		_refresh_choices()      # the player may have walked to the radio
+	elif choice_box.get_child_count() > 0 and mode == "radio" and at_radio_fn.is_valid() and not at_radio_fn.call():
+		_clear_choices()        # walked away from the handset: hide the replies again (they come back at the radio)
+		r_hint.text = "▸ Pick up the handset at the radio (desk) to answer."
+		_restore_mouse()
 	if choice_box.get_child_count() > 0:
 		_layout_choices()       # the speech block can grow while the line types out
 	if _shown < _full.length():
@@ -311,12 +370,27 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _active or get_tree().paused:      # this layer keeps processing during pause: ignore input
 		return
+	if doc_open_fn.is_valid() and doc_open_fn.call():
+		return                                # reading a document: E / clicks belong to the viewer
 	if not _choices.is_empty():
+		if choice_box.get_child_count() == 0:
+			return                            # radio replies gated: the keeper is away from the handset
 		if event is InputEventKey and event.pressed and not event.echo and event.keycode >= KEY_1 and event.keycode <= KEY_4:
 			var i: int = event.keycode - KEY_1
-			if i < _choices.size() and choice_box.get_child_count() > 0:
+			if i < _choices.size():
 				_pick(i)
 				get_viewport().set_input_as_handled()
+			return
+		var in_view: bool = in_view_fn.is_valid() and in_view_fn.call()
+		if not in_view and event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			_move_choice_focus(-1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1)
+			get_viewport().set_input_as_handled()
+			return
+		var answer: bool = event.is_action_pressed("interact") \
+			or (not in_view and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
+		if answer:
+			_pick_focused()                   # E (or a click while mouse look is on) answers the highlighted reply
+			get_viewport().set_input_as_handled()
 		return
 	var press: bool = event.is_action_pressed("interact") or (event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE) \
 		or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)

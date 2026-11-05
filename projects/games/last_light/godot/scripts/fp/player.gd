@@ -47,6 +47,11 @@ var vessel_cycle_fn: Callable                # fp_ui.cycle_vessel: LB / RB in th
 ## Camera smoothing (Stage 2C): the body moves on 60 Hz physics ticks but frames come faster or out of
 ## step (120 Hz display, Medium at ~55-60 fps). The camera is top-level and drawn at the body position
 ## interpolated between the last two ticks; look rotation is applied at once (no added latency).
+## The keeper's torch (cabin pass): picked up from the storage shelf during a blackout, then carried.
+## A warm incandescent spot on the camera, a little right of and below the eye, converging on the
+## crosshair at about 3 m. F / LT switches it.
+var torch_held := false
+var torch_light: SpotLight3D
 var _pos_prev := Vector3.ZERO
 var _pos_cur := Vector3.ZERO
 var _bob_y := 0.0
@@ -116,6 +121,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_press(event)
 	elif event.is_action_released("interact") or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed):
 		_release()
+	elif event.is_action_pressed("torch"):
+		if torch_held:
+			set_torch(not torch_light.visible)
 	elif event.is_action_pressed("back"):     # pad B (keyboard: Esc and right click, below / in game_fp)
 		if focused != "":
 			leave_focus()
@@ -163,6 +171,8 @@ func _press(_event: InputEvent) -> void:
 			logbook_requested.emit()
 		"doc", "door":
 			doc_requested.emit(id)
+		"pickup":
+			events.emit([{"type": "pickup", "item": id}, {"type": "click", "device": id}])
 		"wheel":
 			if focused != "":
 				return                       # in the console view it turns with A / D, not by clicking
@@ -237,8 +247,7 @@ func enter_focus(id: String) -> void:
 	velocity = Vector3.ZERO
 	if InputSetup.pad_active:                 # the pad cursor starts in the middle of the view
 		virtual_cursor = get_viewport().get_visible_rect().size * 0.5
-	capture_mouse(false)
-	focus_changed.emit(id)
+	focus_changed.emit(id)              # game_fp re-applies the mouse policy (the single owner)
 
 
 func leave_focus() -> void:
@@ -250,8 +259,7 @@ func leave_focus() -> void:
 	focused = ""
 	_focus_from = camera.global_transform
 	_focus_t = 0.0
-	capture_mouse(true)
-	focus_changed.emit("")
+	focus_changed.emit("")              # game_fp re-applies the mouse policy (the single owner)
 
 
 func _apply_look() -> void:
@@ -450,3 +458,31 @@ static func prompt_text(info: Dictionary) -> String:
 		return info.get("help", "")
 	var s: String = ("%s  %s" % [info["key"], info["text"]]) if info["key"] != "" else info["text"]
 	return s + ("  ·  " + info["sub"] if info["sub"] != "" else "")
+
+
+# ------------------------------------------------------------------ torch (cabin pass)
+
+func give_torch(on := true) -> void:
+	torch_held = true
+	if torch_light == null:
+		torch_light = SpotLight3D.new()
+		torch_light.name = "Torch"
+		torch_light.light_color = Color(1.0, 0.85, 0.64)      # a 1970s incandescent bulb, not a white LED
+		torch_light.light_energy = 2.4
+		torch_light.spot_range = 11.0
+		torch_light.spot_angle = 22.0
+		torch_light.spot_angle_attenuation = 0.85
+		torch_light.spot_attenuation = 1.1
+		torch_light.light_size = 0.015                        # a small filament: crisp but not razor shadows
+		torch_light.shadow_enabled = true
+		torch_light.light_specular = 0.45
+		torch_light.light_volumetric_fog_energy = 0.35        # a faint beam in the room's haze
+		camera.add_child(torch_light)
+		var pos := Vector3(0.09, -0.09, 0.0)                  # inside the capsule: never inside a wall
+		torch_light.transform = Transform3D(Basis.looking_at(Vector3(0, 0, -3.0) - pos, Vector3.UP), pos)
+	set_torch(on)
+
+
+func set_torch(on: bool) -> void:
+	if torch_light:
+		torch_light.visible = on and torch_held

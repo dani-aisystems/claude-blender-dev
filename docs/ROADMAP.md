@@ -50,7 +50,7 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 |---|---|
 | **Stage** | 2, first-person interactions and gameplay |
 | **Iteration** | **Stage 2 approved by Daniel 2026-11-05** (2A `52bcb6f`, 2B `1359e44`, 2C `7a715c2`, 2D the Stage 2 milestone commit). Stage 3 not started |
-| **Next actionable task** | **Plan Stage 3** (dialogue, characters and story pacing): inspect and propose only, as Daniel asked. No implementation before he approves the plan |
+| **Next actionable task** | **Stage 3 plan approved in principle by Daniel (2026-11-05), but "don't begin": he has additions.** The draft and his decisions are in `~/.claude/plans/the-last-light-stage3-draft.md`. Wait for his additions, fold them in, then start 3A (OFL font download first) |
 
 ## Stages
 | # | Stage | Status |
@@ -428,6 +428,40 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
     - High fp_desk is 1 % over the median threshold. Run noise is about ±5 % (the unchanged fp_gen view moved −6 %).
     - The likely cost is the desk lamp's shadow pass over the new small props. Suggested trim for Stage 6: a no-shadow bucket for P3 props (cables, pencils, screws, pens).
     - The first Medium run overlapped a Stage 2 capture and was re-run clean.
+
+## Cabin pass (2026-11-05, before Stage 3; Daniel's brief with 8 photos)
+- **Plan and diagnostic matrix:** `~/.claude/plans/the-last-light-cabin-pass.md`. Photos: `projects/games/last_light/cabin-photos/IMG_3134..3141.HEIC`, shot off the monitor; the reflections are not defects.
+- **Daniel's decisions:**
+  - run this pass first, with 4 checkpoints;
+  - **replies keep mouse look in free walk** (1-4, or the wheel and E); radio replies only at the handset;
+  - **the torch:** E picks it up in a blackout, F switches it (pad: A and LT; the d-pad belongs to replies);
+  - Stage 3 owns the Blender files;
+  - new writing (the coat-pocket note, the chart transcription) needs his script review.
+- **Checkpoint 1 (reliability). Done, awaiting the checkpoint:**
+  - **The cursor (IMG_3140):**
+    - root cause: `dialogue_ui` and `story_presenter` set `Input.mouse_mode` themselves (second and third owners), and replies stayed up away from the radio while freeing the pointer;
+    - fix: one owner (`player.capture_mouse`, called only by `game_fp.refresh_mouse`); replies are answered by keys with a focus highlight and a one-time hint (`Settings` tip "replies"); radio replies hide away from the handset.
+  - **Viewer (documents and the chart):**
+    - zoom (wheel, LB/RB) and pan (drag, WASD, sticks);
+    - closes only on E, Esc, B or right click, with a 3-frame open guard;
+    - handled in `_input`, because its shade swallowed mouse buttons before `_unhandled_input`;
+    - dialogue ignores input while a document is open;
+    - the radio panel's number keys are blocked while reading.
+  - **The chart (IMG_3139):**
+    - `chart` is now a `doc` (full-screen inspection using `watch_room_T_LL_Chart.png`; `BUILTIN_DOCS` in `story_presenter.gd`);
+    - the mic is off the paper (between the radio and the radar), with its coiled cord re-routed;
+    - the mug moved off the chart (its printed rings stay);
+    - the parallel rule, dividers and pencil moved to the margins.
+  - **The torch (IMG_3136):**
+    - rebuilt lying on its side on the top storage shelf (`PROP_torch*` meshes, `IA_torch`);
+    - a `pickup` kind is available only when the room lights are out;
+    - `player.give_torch()` adds a warm SpotLight (shadows, 11 m, 22°) on the camera;
+    - saved in the save file;
+    - capture state `!torch`.
+  - **Build:** v027 `.blend`, GLB v025, room 106k tris, 0 validation FAIL.
+  - **regress 101/101 headless:**
+    - new R8 (17 checks, including 4 rounds of radio, chart, pause and console);
+    - R1 and R5 updated to the new reply and chart rules (Daniel's decisions).
 
 ## Stage 2 log
 - **Plan (2026-11-05), approved.** The full audit is at `~/.claude/plans/the-last-light-soft-hearth.md`.

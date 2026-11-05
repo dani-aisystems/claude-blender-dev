@@ -1,6 +1,7 @@
 extends SceneTree
 ## Stage 0 regression tests for the three gameplay blockers (2026-11-04 audit):
-##  R1  mouse look is restored after picking a dialogue reply in free-walk (and NOT inside a device view)
+##  R1  mouse look stays on with replies open in free walk and after picking one (cabin pass); the pointer
+##      stays free inside a device view
 ##  R2  dialogue choices never overlap the radio command panel (several window aspect ratios)
 ##  R3  input under the pause menu does not advance dialogue, pick choices, or run the typewriter
 ##  R4  speakerless narration inside a radio conversation shows as a thought, not a blank transmission
@@ -56,6 +57,11 @@ func _run() -> void:
 	g.start(7, "", false, true)          # story mode, human (no bot)
 	await _frames(3)
 	g.director.process_mode = Node.PROCESS_MODE_DISABLED   # keep the campaign from talking over the tests
+	# windowed runs capture the real pointer: Daniel's own mouse must not turn the camera or flip the device
+	# mode mid-test (cabin pass). In memory only: persist is off, so settings.cfg is never written.
+	var st_node: Node = root.get_node("Settings")
+	st_node.persist = false
+	st_node.v["mouse_sens"] = 0.0
 	dlg = g.presenter.dialogue
 	if dlg.is_active():
 		dlg.close()
@@ -66,6 +72,7 @@ func _run() -> void:
 	await _r5_interaction_state()
 	await _r6_radio_panel()
 	await _r7_gamepad_and_camera()
+	await _r8_cabin_reliability()
 	print("REGRESS_RESULT ", JSON.stringify({"passed": passes, "failed": fails.size(), "failures": fails, "skipped": skips}))
 	quit(1 if fails.size() > 0 else 0)
 
@@ -139,11 +146,9 @@ func _r5_interaction_state() -> void:
 			if key == "[Click]" and st.DEVICES[id]["kind"] == "focus" and not g.player._can_switch(st.DEVICES[id].get("focus_id", id)):
 				dead.append(id)
 		_check(dead.is_empty(), "%s view: no clickable prompt that does nothing (reachable: %s)" % [view, ids.keys()])
-		if view == "radio" and ids.has("chart"):
-			_check(g.player._can_switch("chart"), "radio view -> chart is a direct switch")
-			g.player.enter_focus("chart")
-			await _frames(5)
-			_check(g.player.focused == "chart", "clicking the chart from the radio view opens the chart view")
+		if view == "radio" and ids.has("chart"):      # cabin pass: the chart is a full-screen inspection (R8)
+			_check(g.player._actionable("chart") and g.station.DEVICES["chart"]["kind"] == "doc",
+				"radio view -> the chart is clickable and opens the chart inspection")
 		g.player.leave_focus()
 		await _frames(40)
 	# g) pause while holding START stops the crank (the key-up is lost under the pause menu)
@@ -313,6 +318,7 @@ func _r7_gamepad_and_camera() -> void:
 	print("R7 gamepad and camera (Stage 2C)")
 	var settings: Node = root.get_node("Settings")
 	settings.persist = false
+	InputSetup.pad_forced = false
 	# a) no two first-person actions share a pad input; v1 boost is off A
 	var seen := {}
 	var dup: Array = []
@@ -341,6 +347,7 @@ func _r7_gamepad_and_camera() -> void:
 	_check(is_equal_approx(y0, y_small) and absf(y_full - y0) > 0.1 and is_equal_approx(y_rest, g.player._yaw),
 		"right stick: deadzone %.4f, full turn %.2f rad in 20 frames, stops on release" % [y_small - y0, y_full - y0])
 	_check(InputSetup.pad_active, "a pad input switches the prompts to pad glyphs")
+	InputSetup.pad_forced = true              # a pad-only player from here on (real mouse noise ignored)
 	_check(g.station.prompt_info("radio", false)["key"] == "[A]", "pad prompt key is [A] (%s)" % g.station.prompt_info("radio", false)["key"])
 	# c) pad A uses the control under the crosshair (free walk): aim at the radar breaker
 	var p := _ia_pos("brk_radar")
@@ -441,6 +448,7 @@ func _r7_gamepad_and_camera() -> void:
 	settings.v["head_bob"] = true
 	g.player.velocity = Vector3.ZERO
 	# back to keyboard and mouse for anything after this
+	InputSetup.pad_forced = false
 	var k := InputEventKey.new()
 	k.keycode = KEY_SHIFT
 	k.physical_keycode = KEY_SHIFT
@@ -452,6 +460,179 @@ func _r7_gamepad_and_camera() -> void:
 	Input.parse_input_event(ku)
 	await _frames(2)
 	_check(not InputSetup.pad_active and g.station.prompt_info("radio", false)["key"] == "[E]", "a key press switches back to keyboard glyphs")
+
+
+func _mouse_btn(b: MouseButton, down: bool) -> void:
+	var e := InputEventMouseButton.new()
+	e.button_index = b
+	e.pressed = down
+	e.position = Vector2(960, 540)
+	e.global_position = e.position
+	root.push_input(e)
+
+
+func _act(action: String) -> void:
+	var e := InputEventAction.new()
+	e.action = action
+	e.pressed = true
+	Input.parse_input_event(e)
+	await _frames(2)
+	var u := InputEventAction.new()
+	u.action = action
+	u.pressed = false
+	Input.parse_input_event(u)
+	await _frames(2)
+
+
+## Cabin pass checkpoint 1: one owner for the mouse mode, replies answered without losing mouse look,
+## radio replies re-gated, a document / chart viewer that only closes on purpose, the blackout torch,
+## and a repeated interaction loop that must always come back to free-walk mouse look (IMG_3140).
+func _r8_cabin_reliability() -> void:
+	print("R8 cabin pass: cursor, chart, torch")
+	var settings: Node = root.get_node("Settings")
+	settings.persist = false
+	InputSetup.pad_active = false
+	# a) a single owner: in-game scripts never set Input.mouse_mode except player.capture_mouse (main_fp's
+	#    menu has the screen when no game exists)
+	var writers: Array = []
+	for f in ["fp/game_fp.gd", "fp/fp_ui.gd", "fp/station.gd", "ui/dialogue_ui.gd", "story/story_presenter.gd", "story/story_director.gd"]:
+		var src := FileAccess.get_file_as_string("res://scripts/" + f)
+		for line in src.split("\n"):
+			if line.strip_edges().begins_with("Input.mouse_mode =") or line.contains("Input.mouse_mode = "):
+				writers.append(f)
+				break
+	_check(writers.is_empty(), "only player.capture_mouse sets the mouse mode in-game (other writers: %s)" % [writers])
+	# b) free-walk replies keep mouse look: highlight with the wheel, answer with E
+	g.player.leave_focus()
+	await _frames(30)
+	var picked := [-1]
+	var on_pick := func(i): picked[0] = i
+	dlg.choice_made.connect(on_pick)
+	_choices("person")
+	await _frames(3)
+	_check(g.mouse_should_capture(), "replies open in free walk: mouse look stays on")
+	_mouse_btn(MOUSE_BUTTON_WHEEL_DOWN, true)
+	_mouse_btn(MOUSE_BUTTON_WHEEL_DOWN, false)
+	await _frames(2)
+	await _act("interact")
+	_check(picked[0] == 1, "wheel down then E answers the second reply (picked %d)" % picked[0])
+	dlg.choice_made.disconnect(on_pick)
+	if dlg.is_active():
+		dlg.close()
+	# c) radio replies only at the handset, hidden again when the keeper walks away
+	var at: Vector3 = g.station.focus["radio"]["at"]
+	g.player.global_position = Vector3(at.x, g.player.global_position.y, at.z)
+	g.player._apply_look()
+	_choices("radio")
+	await _frames(3)
+	var shown_at_radio: bool = dlg.has_open_choices()
+	g.player.global_position = Vector3(0, g.player.global_position.y, 0)    # the middle of the room
+	g.player._apply_look()
+	await _frames(3)
+	var hidden_away: bool = not dlg.has_open_choices()
+	g.player.global_position = Vector3(at.x, g.player.global_position.y, at.z)
+	g.player._apply_look()
+	await _frames(3)
+	_check(shown_at_radio and hidden_away and dlg.has_open_choices(), "radio replies: shown at the radio, hidden away from it, back at it (%s/%s)" % [shown_at_radio, hidden_away])
+	dlg.close()
+	await _frames(2)
+	# d) the chart opens full screen; a left click or the wheel never closes it; right click / E / Esc do
+	g._on_doc("chart")
+	await _frames(4)
+	var opened: bool = g.presenter.is_document_open()
+	_mouse_btn(MOUSE_BUTTON_LEFT, true)
+	_mouse_btn(MOUSE_BUTTON_LEFT, false)
+	_mouse_btn(MOUSE_BUTTON_WHEEL_UP, true)
+	_mouse_btn(MOUSE_BUTTON_WHEEL_UP, false)
+	await _frames(3)
+	var still_open: bool = g.presenter.is_document_open()
+	var zoomed: bool = g.presenter._zoom > 1.0
+	_check(opened and not g.mouse_should_capture(), "chart inspection opens and frees the pointer")
+	_check(still_open and zoomed, "a left click and the wheel zoom instead of closing the chart (zoom %.2f)" % g.presenter._zoom)
+	_mouse_btn(MOUSE_BUTTON_RIGHT, true)
+	_mouse_btn(MOUSE_BUTTON_RIGHT, false)
+	await _frames(3)
+	_check(not g.presenter.is_document_open() and g.player.enabled and g.mouse_should_capture(),
+		"right click closes the chart and gives free-walk mouse look back (open=%s enabled=%s focused=%s paused=%s capture=%s)" % [
+		g.presenter.is_document_open(), g.player.enabled, g.player.focused, g._paused, g.mouse_should_capture()])
+	var tex_ok: bool = g.presenter.doc_info("chart").get("tex", "") != "" and ResourceLoader.exists(g.presenter.doc_info("chart")["tex"])
+	_check(tex_ok, "the chart inspection uses the desk chart's own texture")
+	# e) E on a document never also advances the dialogue underneath
+	_choices("person")
+	await _frames(2)
+	dlg.close()
+	dlg.show_line({"mode": "person", "speaker": "VISITOR", "text": "Evening, keeper."})
+	await _frames(2)
+	dlg._shown = dlg._full.length()
+	dlg._done_t = 1.0
+	var adv := [0]
+	var on_adv := func(): adv[0] += 1
+	dlg.advance_requested.connect(on_adv)
+	g._on_doc("forecast")
+	await _frames(4)
+	await _act("interact")
+	dlg.advance_requested.disconnect(on_adv)
+	_check(not g.presenter.is_document_open() and adv[0] == 0, "E closes the document without advancing the line under it (advances %d)" % adv[0])
+	dlg.close()
+	# f) the blackout torch: not with the lights on; taken in the dark; F switches it; it stays taken
+	g._route(g.sim.set_breaker("lights", true))
+	await _frames(2)
+	var p_on: Dictionary = g.station.prompt_info("torch", false)
+	_check(not p_on["ok"] and p_on["key"] == "" and p_on["text"].contains("power fails"), "torch with the lights on: no key, 'for when the power fails' (%s)" % p_on)
+	g._route(g.sim.set_breaker("lights", false))
+	await _frames(2)
+	var p_off: Dictionary = g.station.prompt_info("torch", false)
+	_check(p_off["ok"] and p_off["key"] == "[E]" and p_off["text"] == "Pick up the torch", "torch in a blackout: '[E]  Pick up the torch' (%s)" % p_off)
+	await _aim_at("torch")
+	_check(g.player.hovered == "torch", "the crosshair finds the torch on the shelf (hovered=%s)" % g.player.hovered)
+	await _act("interact")
+	var held: bool = g.player.torch_held and g.player.torch_light != null and g.player.torch_light.visible
+	var gone: bool = g.station.torch_taken and g.station._torch_nodes.all(func(n): return not n.visible)
+	_check(held and gone and not g.station._torch_nodes.is_empty(), "E takes the torch: the beam is on and the shelf torch is gone (%d meshes)" % g.station._torch_nodes.size())
+	await _act("torch")
+	var off: bool = not g.player.torch_light.visible
+	await _act("torch")
+	_check(off and g.player.torch_light.visible, "F switches the torch off and on again")
+	_check(g.player.torch_light.shadow_enabled and g.player.torch_light.spot_range >= 8.0, "the beam casts shadows and reaches across the room")
+	_check(bool(g.save_dict()["player"].get("torch", false)), "the save remembers the keeper has the torch")
+	g._route(g.sim.set_breaker("lights", true))
+	# g) repeated sequences always come back to free-walk mouse look
+	var bad: Array = []
+	for i in 4:
+		g.player.enter_focus("radio")
+		await _frames(30)
+		_choices("radio")
+		await _frames(2)
+		_key(KEY_1)
+		await _frames(2)
+		g.player.leave_focus()
+		await _frames(30)
+		if not g.mouse_should_capture():
+			bad.append("radio#%d" % i)
+		g._on_doc("chart")
+		await _frames(4)
+		await _act("pause")                       # Esc closes the chart, never pauses under it
+		if g._paused or g.presenter.is_document_open() or not g.mouse_should_capture():
+			bad.append("chart#%d" % i)
+		await _act("pause")                       # Esc pauses ...
+		if paused:
+			g.set_paused(false)                   # ... and main_fp resumes on Esc under pause (not loaded here)
+		await _frames(2)
+		if g._paused or not g.mouse_should_capture():
+			bad.append("pause#%d" % i)
+		g.player.enter_focus("console")
+		await _frames(30)
+		await _act("pause")                       # Esc steps back out of the view
+		await _frames(30)
+		if g.player.focused != "" or not g.mouse_should_capture():
+			bad.append("console#%d" % i)
+		if dlg.is_active():
+			dlg.close()
+	_check(bad.is_empty(), "4 rounds of radio, chart, pause and console all return to mouse look (failures: %s)" % [bad])
+	if DisplayServer.get_name() == "headless":
+		skips.append("R8 real Input.mouse_mode after the loop (headless)")
+	else:
+		_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "after the loop the pointer is captured (mode %d)" % Input.mouse_mode)
 
 
 func _choices(mode: String) -> void:
@@ -473,7 +654,8 @@ func _r1_mouse() -> void:
 	_choices("person")
 	await _frames(2)
 	_check(dlg.has_open_choices(), "person choices are shown")
-	_check(not g.mouse_should_capture(), "open choices release mouse-look")
+	# cabin pass (Daniel 2026-11-05): replies no longer free the pointer in free walk (IMG_3140)
+	_check(g.mouse_should_capture(), "open choices keep mouse-look in free walk")
 	_key(KEY_1)
 	await _frames(2)
 	_check(picked == [0], "key 1 picks the first reply (got %s)" % [picked])
@@ -523,7 +705,8 @@ func _r1_mouse() -> void:
 	await _frames(2)
 	g.set_paused(true)
 	g.set_paused(false)
-	_check(not (dlg.has_open_choices() and g.mouse_should_capture()), "unpause/leave-focus with open choices keeps the cursor free")
+	_check(g.mouse_should_capture(), "leaving the radio view with replies open gives mouse-look back (no stuck pointer)")
+	_check(not dlg.has_open_choices() or not g._at_radio(), "radio replies hide once the keeper is away from the handset")
 	dlg.close()
 	dlg.choice_made.disconnect(cb)
 	await _frames(2)

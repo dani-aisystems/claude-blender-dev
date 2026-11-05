@@ -1077,8 +1077,8 @@ def build_desk_detail(B):
     CP = lambda x, y, dz=0.0: cc + cb3 @ Vector((x, y, hz(x, y) + dz))
     uv_xy = lambda uv: ((uv[0] - 0.5) * DC["w"], (uv[1] - 0.5) * DC["h"])
     # Captain Field's parallel rule: two black blades, brass links, brass knobs; slightly opened
-    rb3 = cb3 @ rot_about((0, 0, 1), 12.0)
-    rc = CP(0.07, -0.2, 0.0016)             # 10 cm clear of the compass, inside the chart's near edge
+    rb3 = cb3 @ rot_about((0, 0, 1), 4.0)
+    rc = CP(0.12, -0.258, 0.0016)           # cabin pass: along the near margin, clear of the leading lines
     for k, (sy, sx) in enumerate(((-0.0232, 0.0), (0.0232, 0.012))):      # closed: the blades meet
         blade = rc + rb3 @ Vector((sx, sy, 0.00275))
         solid(B, "vulcanite", lambda bm, blade=blade: box(bm, blade, (0.38, 0.045, 0.0055), rb3, bevel=0.0018))
@@ -1093,21 +1093,21 @@ def build_desk_detail(B):
         for e in (a0, a1):
             cyl(B.bm("M_LL_Brass", "SM_Props"), e + rb3.col[2] * 0.0011, 0.0034, 0.0034, 0.0012, 10, rb3)
     # brass dividers lying open beside the rule
-    hinge = CP(0.15, 0.0, 0.003)
-    for tip in ((0.02, -0.06), (0.03, 0.035)):
+    hinge = CP(0.345, 0.17, 0.003)          # cabin pass: right margin, off the soundings
+    for tip in ((0.25, 0.115), (0.275, 0.215)):
         tp = CP(tip[0], tip[1], 0.0015)
         dv = tp - hinge
         cyl(B.bm("M_LL_Brass", "SM_Props"), hinge + dv * 0.42, 0.0026, 0.0018, dv.length * 0.84, 10, basis_z(dv))
         cyl(B.bm("M_LL_Iron", "SM_Props"), hinge + dv * 0.92, 0.0012, 0.0002, dv.length * 0.16, 8, basis_z(dv))
     cyl(B.bm("M_LL_Brass", "SM_Props"), hinge + cb3.col[2] * 0.001, 0.0085, 0.0085, 0.006, 20, cb3)
-    seg_cyl(B.bm("M_LL_Brass", "SM_Props"), hinge, CP(0.178, 0.008, 0.004), 0.0028, 8)
+    seg_cyl(B.bm("M_LL_Brass", "SM_Props"), hinge, CP(0.373, 0.178, 0.004), 0.0028, 8)
     # a green pencil stub left on the chart (the bearing work)
-    s0, s1 = CP(0.115, -0.105, 0.0042), CP(0.205, -0.078, 0.0042)
+    s0, s1 = CP(0.27, -0.215, 0.0042), CP(0.355, -0.19, 0.0042)     # beside the rule
     pencil(B, s0, s1 - s0, (s1 - s0).length, "pencil_green")
     # ---- the enamel mug: cold tea at ~55 %, beside its newest ring
     mx, my = uv_xy(DC["mug_uv"])
-    mb3 = cb3 @ rot_about((0, 0, 1), 35.0)
-    mc = CP(mx, my, 0.0001)
+    mb3 = basis(r, o, u) @ rot_about((0, 0, 1), 35.0)
+    mc = D(0.62, 0.0, back - 0.62)          # cabin pass: off the chart (IMG_3139), in front of the radar
     mv = PA["mug_v"]
     prof = [(0.0, 0.0, 0.0), (0.034, 0.0, 0.04), (0.0385, 0.003, 0.07), (0.0395, 0.010, 0.10), (0.040, 0.075, 0.66),
             (0.0408, 0.079, mv["rim_v0"]), (0.0418, 0.0815, 0.76), (0.0412, 0.084, 0.80), (0.0395, 0.0832, mv["rim_v1"]),
@@ -1173,7 +1173,7 @@ def build_desk_detail(B):
     bridge = [gc + gb3 @ Vector((x, 0.0, bl + 0.004 * (1 - (x / 0.0062) ** 2))) for x in (-0.0062, -0.003, 0.0, 0.003, 0.0062)]
     solid(B, "tortoise", lambda bm: sweep(bm, bridge, 0.0014, 6))
     # ---- desk microphone: cast base, chrome stem and yoke, grey head; PT_handset is the press-to-talk bar
-    mic = D(-0.02, 0.0013, back - 0.45)
+    mic = D(0.05, 0.0, back - 0.17)          # cabin pass: off the chart, between the radio and the radar
     solid(B, "hammertone", lambda bm: lathe(bm, mic, Matrix.Identity(3), [(0.0, 0.0), (0.056, 0.0), (0.058, 0.004), (0.054, 0.014),
                                                                          (0.042, 0.022), (0.012, 0.026), (0.0, 0.026)], 32))
     solid(B, "chrome", lambda bm: cyl(bm, mic + u * 0.03, 0.009, 0.009, 0.008, 16))
@@ -1190,12 +1190,15 @@ def build_desk_detail(B):
     solid(B, "chrome", lambda bm: torus(bm, hc, 0.0289, 0.0022, 28, 6, basis_z(hax)))
     B.part("PT_handset", "M_LL_Bakelite", mic - o * 0.044 + u * 0.022, Matrix.Identity(3),
            lambda bm, uv: box(bm, (0, 0, 0), (0.048, 0.014, 0.007), bevel=0.0015))
-    # coiled cord over the chart to the radio's front socket, then a short straight lead and a plug
+    # coiled cord from the mic across the chart's top margin to the radio's front socket, then a lead and a plug
     fb3, fc = face_frame(b, -0.38, top + 0.14, back - 0.2 - 0.17 - 0.002)
     sock = fc + fb3.col[0] * 0.24 - fb3.col[1] * 0.11
-    zc = lambda along, dist: hz(*((cb3.transposed() @ (D(along, 0, dist) - cc))[:2])) + 0.0068
-    path = bezier(D(-0.062, zc(-0.062, 2.60), 2.60), D(-0.13, zc(-0.13, 2.50), 2.50),
-                  D(-0.235, zc(-0.235, 2.56), 2.56), D(-0.165, zc(-0.165, 2.628), 2.628), 24)
+    def zc(along, dist):                    # on the chart: its sheet height; off it: the desk top
+        lx, ly = (cb3.transposed() @ (D(along, 0, dist) - cc))[:2]
+        on = abs(lx) <= DC["w"] / 2 and abs(ly) <= DC["h"] / 2
+        return (hz(lx, ly) if on else 0.0) + 0.0068
+    pts = [(-0.004, back - 0.205), (-0.05, back - 0.27), (-0.1, back - 0.31), (-0.13, back - 0.395)]
+    path = bezier(*[D(a, zc(a, dd), dd) for a, dd in pts], 24)
     turns = coil(path, 0.0052, 0.0062, 8)
     solid(B, "rubber", lambda bm: sweep(bm, turns, 0.0016, 5))
     lead = bezier(path[-1], path[-1] + (path[-1] - path[-2]).normalized() * 0.01, sock - fb3.col[2] * 0.03 - u * 0.02, sock + fb3.col[2] * 0.022, 10)
@@ -2090,13 +2093,30 @@ def build_props(B):
     mug = dp(kb + 4.5, 0, 0.95, R_IN - 0.04)
     cyl(B.bm("M_LL_Ceramic", "SM_Props"), mug + Vector((0, 0, 0.045)), 0.035, 0.035, 0.09, 16)
     torus(B.bm("M_LL_Ceramic", "SM_Props"), mug + Vector((0, 0, 0.05)) + kr * 0.04, 0.022, 0.006, 12, 5, basis_z(ko))
-    # Stage 1 iteration 5 (D): a rubber torch standing on the top shelf by the stair door (taken down the stair)
-    tb = dp(sb_, 0.45, 1.4925, sc - 0.1)
-    solid(B, "rubber", lambda bm: cyl(bm, tb + Vector((0, 0, 0.075)), 0.021, 0.021, 0.15, 16))
-    solid(B, "rubber", lambda bm: cyl(bm, tb + Vector((0, 0, 0.17)), 0.022, 0.032, 0.04, 16))
-    solid(B, "chrome", lambda bm: cyl(bm, tb + Vector((0, 0, 0.192)), 0.033, 0.033, 0.005, 16))
-    cyl(B.bm("M_LL_Glass", "SM_PropsGlass"), tb + Vector((0, 0, 0.1945)), 0.028, 0.028, 0.001, 16)
-    solid(B, "chrome", lambda bm: box(bm, tb + Vector((0, 0, 0.11)) - wall_frame(sb_)[1] * 0.021, (0.008, 0.004, 0.022), wb(sb_), bevel=0.0))
+    # cabin pass (IMG_3136): the rubber torch LIES on the top shelf by the stair door; it is a real object the
+    # keeper can take in a blackout, so it has its own meshes (PROP_torch*: station hides them) and IA_torch.
+    # A 1970s two-D-cell rubber torch: knurled body, flared head, chrome bezel, reflector, glass, slide switch.
+    tr_, to_, tu_ = wall_frame(sb_)
+    tax = (tr_ * math.cos(math.radians(18)) - to_ * math.sin(math.radians(18))).normalized()   # slightly turned to the room
+    tilt = math.asin((0.031 - 0.0195) / 0.205)                     # head and tail both touch the board
+    tdir = (tax * math.cos(tilt) + tu_ * math.sin(tilt)).normalized()
+    tail = dp(sb_, 0.3, 1.4925 + 0.0195, sc - 0.12)
+    tb3 = basis_z(tdir, tu_)
+    prof = [(0.0, 0.0), (0.0165, 0.0), (0.0195, 0.004), (0.0195, 0.152), (0.021, 0.158), (0.029, 0.19),
+            (0.031, 0.203), (0.031, 0.206)]
+    solid(B, "rubber", lambda bm: lathe(bm, tail, tb3, prof, 24), prefix="PROP_torch")
+    for zk in (0.03, 0.045, 0.06, 0.075, 0.09, 0.105):              # moulded grip rings
+        solid(B, "rubber", lambda bm, zk=zk: torus(bm, tail + tdir * zk, 0.0196, 0.0012, 24, 4, tb3), prefix="PROP_torch")
+    solid(B, "chrome", lambda bm: lathe(bm, tail + tdir * 0.206, tb3, [(0.0335, 0.0), (0.0335, 0.012), (0.03, 0.014), (0.029, 0.012),
+                                                                    (0.029, 0.002), (0.0, 0.002)], 28), prefix="PROP_torch")
+    solid(B, "chrome", lambda bm: lathe(bm, tail + tdir * 0.196, tb3, [(0.004, 0.0), (0.006, 0.003), (0.027, 0.0185), (0.0, 0.0185)], 24),
+          prefix="PROP_torch")                                        # parabolic reflector behind the glass
+    cyl(B.bm("M_LL_Glass", "PROP_torchGlass"), tail + tdir * 0.2185, 0.0285, 0.0285, 0.0012, 28, tb3)
+    up_side = (tu_ - tdir * tdir.dot(tu_)).normalized()             # the switch faces up
+    solid(B, "chrome", lambda bm: box(bm, tail + tdir * 0.128 + up_side * 0.0198, (0.009, 0.004, 0.024),
+                                      basis(up_side.cross(tdir), up_side, tdir), bevel=0.0), prefix="PROP_torch")
+    solid(B, "chrome", lambda bm: torus(bm, tail - tdir * 0.004, 0.009, 0.0018, 16, 5, basis_z(up_side)), prefix="PROP_torch")  # lanyard ring
+    B.empty("IA_torch", tail + tdir * 0.105, (0.04, 0.04, 0.13), tb3)
     # (C) a shortbread tin on the west sill beside the kettle, its lid ajar
     bt = dp(-30.0, 0, 0.95, R_IN - 0.04)
     solid(B, "tin_red", lambda bm: cyl(bm, bt + Vector((0, 0, 0.035)), 0.085, 0.085, 0.07, 32))

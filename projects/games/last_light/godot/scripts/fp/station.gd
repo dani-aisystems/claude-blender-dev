@@ -69,7 +69,8 @@ var DEVICES := {
 	"console": {"kind": "focus", "prompt": "Operate the light console"},
 	"radio": {"kind": "focus", "prompt": "Use the radio"},
 	"radar": {"kind": "focus", "prompt": "Use the radio", "focus_id": "radio"},
-	"chart": {"kind": "focus", "prompt": "Study the chart"},
+	"chart": {"kind": "doc", "prompt": "Study the chart"},          # cabin pass: full-screen inspection
+	"torch": {"kind": "pickup", "prompt": "Pick up the torch", "idle": "The torch, for when the power fails"},
 	"logbook": {"kind": "doc", "prompt": "Write up the station log"},
 	"gen_panel": {"kind": "info", "prompt": "Check the generator"},
 	"battery": {"kind": "info", "prompt": "Check the battery"},
@@ -85,6 +86,10 @@ var DEVICES := {
 ## pressing it does anything follow the chapter and the door state.
 var docs_enabled := true
 var door_usable := true
+## The storage-shelf torch (cabin pass): PROP_torch* meshes and its IA body, hidden once the keeper takes it.
+var torch_taken := false
+var _torch_nodes: Array = []
+var _ia_bodies := {}                    # id -> StaticBody3D (so a taken item stops being targetable)
 
 
 func setup(k: KeeperSim) -> void:
@@ -116,6 +121,8 @@ func _bind(root: Node) -> void:
 			parts[nm] = {"node": n, "rest": n.transform, "angle": 0.0, "press": 0.0, "w_angle": 0.0, "w_press": 0.0}
 			if nm.begins_with("NDL_") or nm in MOVING_PARTS:
 				_no_shadow(n)
+		elif nm.begins_with("PROP_torch"):
+			_torch_nodes.append(n)
 		elif nm.begins_with("LMP_"):
 			_bind_lamp(n, nm.substr(4))
 		elif nm.begins_with("IA_"):
@@ -210,6 +217,7 @@ func _make_interactable(n: Node3D, id: String) -> void:
 	body.collision_layer = 1 << (INTERACT_LAYER - 1)
 	body.collision_mask = 0
 	body.set_meta("ia", id)
+	_ia_bodies[id] = body
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = Vector3(maxf(size.x, 0.04), maxf(size.y, 0.04), maxf(size.z, 0.04))
@@ -446,6 +454,8 @@ func describe(id: String) -> String:
 			return d["prompt"]
 		"door":
 			return door_prompt
+		"pickup":
+			return d["prompt"] if availability(id)["ok"] else d["idle"]
 		_:
 			return d["prompt"]
 
@@ -488,6 +498,9 @@ func availability(id: String) -> Dictionary:
 				return {"ok": false, "reason": ""}
 		"door":
 			if not door_usable:
+				return {"ok": false, "reason": ""}
+		"pickup":                         # Daniel: the torch is for the blackout (taken once, kept)
+			if torch_taken or sim.lights_on():
 				return {"ok": false, "reason": ""}
 	return {"ok": true, "reason": ""}
 
@@ -566,6 +579,15 @@ func use(id: String, action: String) -> Array:
 		if id == "charge" and sim.charge_on and sim.gen != KeeperSim.Gen.RUNNING:
 			ev.append({"type": "note", "device": id, "text": "Charging is on. Nothing will flow until the generator runs."})
 	return ev
+
+
+## The keeper took the torch from the shelf (or a load says he has it): hide it and stop targeting it.
+func set_torch_taken(v: bool) -> void:
+	torch_taken = v
+	for n in _torch_nodes:
+		(n as Node3D).visible = not v
+	if _ia_bodies.has("torch"):
+		(_ia_bodies["torch"] as StaticBody3D).collision_layer = 0 if v else 1 << (INTERACT_LAYER - 1)
 
 
 func door_position() -> Vector3:

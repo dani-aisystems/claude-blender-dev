@@ -39,7 +39,7 @@ Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (cur
 - **Bench done:** Medium +0–4 % median, inside budget rules; High desk +11 % median, at the threshold. See the ROADMAP for the suggested Stage 6 trim.
 
 ## Latest status (2026-11-05, Stage 2 approved by Daniel)
-- **Next: plan Stage 3 only** (dialogue, characters and story pacing). Inspect, propose and agree with Daniel; **no implementation** before he approves.
+- **Stage 3 plan approved in principle (2026-11-05), but Daniel said "don't begin": he has additions.** The plan and all his decisions are in `~/.claude/plans/the-last-light-stage3-draft.md`: fonts, OFL exception, portraits, phone, optional content, script review, ch1, ending card, file ownership. **Do not start 3A** until his additions are folded in and he says go.
 - **Commits (local, never pushed):** branding `0f18df3`; 2A `52bcb6f`; 2B `1359e44`; 2C `7a715c2`; 2D plus docs in the Stage 2 milestone commit.
 - **Plan:** `~/.claude/plans/the-last-light-soft-hearth.md`. Audit, decisions and per-iteration logs: ROADMAP "Stage 2 log".
 - **Tests at the stage end:**
