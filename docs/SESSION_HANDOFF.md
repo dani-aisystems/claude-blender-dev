@@ -31,6 +31,19 @@ The staged-polish session won't edit `build.py` (needed for bevels, smooth shadi
 
 Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (current stage and iteration, decisions, feedback log, next task), and with `docs/PROJECT_STATE.md`.
 
+## Latest status (2026-11-05, Stage 2 started)
+- **The Stage 2 plan is approved.** The plan is at `~/.claude/plans/the-last-light-soft-hearth.md`; the audit and decisions are in the ROADMAP "Stage 2 log".
+- **Branding** committed locally as `0f18df3`.
+- **The 6 leftover `watch_room_T_LL_{Barometer,Calendar,Diagram}` files** deleted (Daniel's OK).
+- **A parallel session is doing "Stage 1 iteration 5"** (desk micro-detail; uncommitted). Files are split between the sessions; see the ROADMAP top note. **Never stage its files.**
+- **The "before" capture is done:** `renders/last_light/s2a_before_*`, from a scratch worktree (since removed).
+- **Iteration 2A is done** (uncommitted) and its checkpoint has been presented. Details are in the ROADMAP Stage 2 log.
+- **Next:**
+  1. Daniel's verdict on 2A;
+  2. if approved, commit the Stage 2 hunks only. `station.gd` and `capture_fp.gd` also hold iteration 5 hunks, so stage them via a patch (`git diff` → edit → `git apply --cached`), never `git add` of the whole file;
+  3. then iteration 2B.
+- **Gotcha:** a parse error makes a headless `-s` test hang idle. Always run the suites under `timeout`.
+
 ## Latest status (2026-11-05, later)
 - **Stage 1 approved** and committed locally. Next: plan Stage 2 with Daniel (no implementation before he agrees the plan).
 - New working rules:

@@ -1,5 +1,5 @@
 {
- "_doc": "THE LAST LIGHT campaign. Beats run in order; 'when' is a StoryState expression (flag(), has_flag(), clue(), saved(), lost(), piloting(), lit_by_hand(), relation(), sim.*). Actions: talk, wait, objective, set/add/clue, ship, storm, clock, fault, battery, autosave, end_campaign; anything else is a presentation event (title, thought, timeskip, sky, phantom_echo, footsteps, knock, visitor_enter, document, music, sfx, hint_device, credits).",
+ "_doc": "THE LAST LIGHT campaign. Beats run in order; 'when' is a StoryState expression (flag(), has_flag(), clue(), saved(), lost(), piloting(), lit_by_hand(), relation(), sim.*). Actions: talk, wait, objective, set/add/clue, ship, storm, clock, fault, battery, autosave, end_campaign; anything else is a presentation event handled by game_fp (timeskip, sky, phantom_echo, footsteps, knock, door_open, visitor_enter, sfx, static, music); story_test rejects unknown names.",
  "chapters": [
   {"n": 1, "title": "The Watch", "subtitle": "North Point Light · Saturday 14 November 1971 · 16:20",
    "start": {"clock": 980, "clock_rate": 0.0, "storm": 0.12, "battery": 41, "fuel": 46},
@@ -8,7 +8,7 @@
     {"id": "look", "objective": "Get your bearings. (WASD to walk · mouse to look)", "when": "has_flag(\"moved\") and has_flag(\"looked\")",
      "hint": [25, "Move with W A S D. Look around with the mouse."], "do": [["wait", 1]]},
     {"id": "light_on", "objective": "Lighting-up time. Turn the MODE selector to AUTO at the light console (east wall).", "when": "sim.mode == 1",
-     "hint": [45, "The light console stands under the east window. Look at the MODE knob and press E."], "do": [["hint_device", ""], ["talk", "ch1_lit"]]},
+     "hint": [45, "The light console stands under the east window. Look at the MODE knob and press E."], "do": [["talk", "ch1_lit"]]},
     {"id": "lamp_normal", "objective": "Turn the LAMP selector up to NORMAL.", "when": "sim.intensity >= 1", "do": [["talk", "ch1_normal"]]},
     {"id": "battery", "objective": "Check the battery meter on the charger (west wall).", "when": "has_flag(\"used_battery\") or has_flag(\"used_power_panel\")",
      "hint": [40, "The charger is the grey cabinet on the west wall, left of the windows. Look at the BATTERY meter and press E."], "do": [["talk", "ch1_battery"]]},

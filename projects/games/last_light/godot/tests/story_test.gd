@@ -27,6 +27,7 @@ func _run() -> void:
 				lines += 1
 	print("DLG lines=%d" % lines)
 	_walk_all(db)
+	_check_beat_actions()
 	var args := {}
 	for a in OS.get_cmdline_user_args():
 		var kv := a.trim_prefix("--").split("=", true, 1)
@@ -42,6 +43,28 @@ func _run() -> void:
 
 ## DFS over choices for each conversation with a permissive state (all conditions evaluated for real
 ## against an empty state AND against a 'rich' state with typical flags set).
+## Stage 2: every beat "do" action is one the director runs or game_fp presents (no silent no-ops).
+func _check_beat_actions() -> void:
+	var data = JSON.parse_string(FileAccess.get_file_as_string("res://data/story/chapters.json"))
+	var known: Array = StoryDirector.ACTIONS + StoryDirector.PRESENTATION_EVENTS
+	var seen := 0
+	var stack: Array = [data]
+	while not stack.is_empty():
+		var o = stack.pop_back()
+		if o is Dictionary:
+			for k in o:
+				if k == "do" and o[k] is Array:
+					for a in o[k]:
+						seen += 1
+						if not (String(a[0]) in known):
+							fails.append("chapters.json: unknown beat action '%s'" % a[0])
+				else:
+					stack.append(o[k])
+		elif o is Array:
+			stack.append_array(o)
+	print("BEAT_ACTIONS checked=%d" % seen)
+
+
 func _walk_all(db: DialogueDB) -> void:
 	var paths := 0
 	for rich in [false, true]:

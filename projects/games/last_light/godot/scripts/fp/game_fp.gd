@@ -79,6 +79,10 @@ func start(seed_value: int, mode := "", attract_mode := false, story := false, s
 	ui.sim = sim
 	add_child(ui)
 	player.prompt_changed.connect(ui.set_prompt)
+	player.pressed.connect(ui.pulse)
+	ui.cursor_fn = player.cursor_pos
+	station.docs_enabled = story_mode          # documents and the door's story lines exist only in the campaign
+	station.door_usable = story_mode
 	player.focus_changed.connect(ui.set_focus)
 	player.focus_changed.connect(func(_id): refresh_mouse())
 	player.events.connect(_route)
@@ -158,7 +162,7 @@ func _on_story_event(name_: String, args: Array) -> void:
 		"sfx", "static", "music":
 			audio.story_cue(name_, args)
 		_:
-			pass
+			push_warning("story: unhandled presentation event '%s'" % name_)   # story_test keeps the data clean
 
 
 func radar_time() -> float:
@@ -204,6 +208,7 @@ func _on_doc(id: String) -> void:
 	if doc != "":
 		player.enabled = false
 		player.capture_mouse(false)
+		ui.clear_prompt()                   # the reading view has no crosshair target
 		presenter.open_document(doc)
 		director.state.flags["seen_" + doc] = 1
 
@@ -315,6 +320,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func set_paused(p: bool) -> void:
+	if p and player:
+		player.release_holds()             # the key-up would be lost under the pause menu
 	_paused = p
 	get_tree().paused = p
 	ui.show_pause(p, story_mode)
@@ -354,6 +361,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _track_player(delta: float) -> void:
+	_update_door_prompt()
 	if bot_mode != "":
 		# bot-driven runs (captures/autotest): satisfy interaction objectives the way the headless test does
 		for f in ["moved", "looked", "used_battery", "read_log_1971", "read_log_1953", "read_letter", "at_door", "at_radio"]:
@@ -378,6 +386,21 @@ func _track_player(delta: float) -> void:
 	if st.flags["at_door"] == 1:
 		st.flags["at_door_once"] = 1
 	st.flags["at_radio"] = 1 if _at_radio() else 0
+
+
+## The stair door's prompt follows the story (Stage 2: it said "Bolted for the night" even after the
+## ch4 door opened). Before ch4 pressing gives the keeper's line about the bolt; from ch4 the door is the
+## story's to open (dialogue), so it is shown without a key.
+func _update_door_prompt() -> void:
+	if station.door_open:
+		station.door_prompt = "The stair door stands open"
+		station.door_usable = false
+	elif director and director.state.chapter >= 4:
+		station.door_prompt = "The stair door  ·  bolted"
+		station.door_usable = false
+	else:
+		station.door_prompt = "Try the stair door"
+		station.door_usable = true
 
 
 func _route(events: Array) -> void:
@@ -411,6 +434,10 @@ func _ui_events(events: Array) -> void:
 					ui.add_subtitle(e["from"], e["text"], false)
 			"tx":
 				ui.add_subtitle("North Point", e["text"], true)
+			"refused", "note":                  # Stage 2: a press that can't work says why, once
+				var t: String = e.get("reason", e.get("text", ""))
+				if t != "":
+					ui.show_notice_once(t, 3.0)
 			"radio_busy":
 				ui.show_notice("Still transmitting…", 1.5)
 			"radio_dead":

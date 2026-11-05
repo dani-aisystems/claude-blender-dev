@@ -17,6 +17,14 @@ signal story_event(name_: String, args: Array)
 signal request_autosave
 signal campaign_finished(ending: Dictionary)
 
+## The beat-action contract (Stage 2): actions the director runs itself, and presentation events it
+## forwards to game_fp._on_story_event. story_test fails on any "do" name outside these two lists, so a
+## no-op like the retired hint_device cannot creep back in.
+const ACTIONS := ["talk", "wait", "objective", "set", "unset", "add", "clue", "ship", "storm", "clock", "fault",
+	"battery", "mode", "intensity", "autosave", "end_campaign"]
+const PRESENTATION_EVENTS := ["hint", "timeskip", "sky", "phantom_echo", "door_open", "visitor_enter", "knock",
+	"footsteps", "sfx", "static", "music"]
+
 var sim: KeeperSim
 var state := StoryState.new()
 var db := DialogueDB.new()
@@ -190,7 +198,7 @@ func _do(a: Array) -> void:
 		"end_campaign":
 			_finish_campaign()
 		_:
-			story_event.emit(name_, args)    # presentation: sfx, music, cine, door, hint_device ...
+			story_event.emit(name_, args)    # presentation: PRESENTATION_EVENTS, handled by game_fp
 
 
 func _route_sim(events: Array) -> void:

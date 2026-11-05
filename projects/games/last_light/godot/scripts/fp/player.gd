@@ -2,7 +2,10 @@ extends CharacterBody3D
 ## First-person keeper: walk (WASD), look (mouse), interact (E / left mouse) with a raycast on the
 ## interaction layer, and device views (focus) that ease the camera onto a console and free the cursor.
 
-signal prompt_changed(text: String)
+## The interaction state under the crosshair / cursor (Stage 2), for fp_ui:
+##   {state: "none" | "valid" | "unavailable", key, text, sub, in_view: bool, help: String}
+signal prompt_changed(info: Dictionary)
+signal pressed(accepted: bool)            # input received: the crosshair acknowledges every press
 signal focus_changed(id: String)          # "" when leaving a device view
 signal events(events: Array)
 signal logbook_requested
@@ -15,6 +18,7 @@ const REACH := 1.9
 const MOUSE_SENS := 0.0022
 const CONTAINER_KINDS := ["info", "focus"]   # big volumes around a whole cabinet / console
 const CONTAINER_DEPTH := 0.6                 # a control this far behind a container's surface wins
+const SWITCH_VIEW_DIST := 1.6                # device views whose eyes are this close switch directly (radio <-> chart)
 
 var station: Node                          # station.gd
 var camera: Camera3D
@@ -29,7 +33,10 @@ var _focus_from := Transform3D()
 var _focus_to := Transform3D()
 var _focus_t := 1.0
 var _holding := ""
-var _last_prompt := "-"
+var _last_prompt := {}
+## Device-view cursor that is not the OS pointer (Vector2.INF = follow the mouse). Captures set it to
+## hover a control without moving Daniel's pointer; the gamepad stick drives it (Stage 2C).
+var virtual_cursor := Vector2.INF
 
 
 func _ready() -> void:
@@ -103,20 +110,50 @@ func _press(_event: InputEvent) -> void:
 	var d: Dictionary = station.DEVICES.get(id, {})
 	if d.is_empty():
 		return
+	if not _actionable(id):
+		pressed.emit(false)
+		var av: Dictionary = station.availability(id)
+		if av["reason"] != "":
+			events.emit([{"type": "refused", "device": id, "reason": av["reason"]}])
+		return
 	match d["kind"]:
 		"focus":
-			if focused == "":
-				enter_focus(d.get("focus_id", id))
+			enter_focus(d.get("focus_id", id))
 		"logbook":
 			logbook_requested.emit()
 		"doc", "door":
 			doc_requested.emit(id)
 		"wheel":
-			if focused == "":
-				enter_focus("console")
+			if focused != "":
+				return                       # in the console view it turns with A / D, not by clicking
+			enter_focus("console")
 		_:
 			_holding = id
 			events.emit(station.use(id, "press"))
+	pressed.emit(true)
+
+
+## Would pressing on this control do something right now? Mirrors _press, so a prompt with a key is
+## never a dead end (Stage 2: the radio view used to offer "[Click] Study chart" and ignore the click).
+func _actionable(id: String) -> bool:
+	var d: Dictionary = station.DEVICES.get(id, {})
+	if d.is_empty() or not station.availability(id)["ok"]:
+		return false
+	match d["kind"]:
+		"focus":
+			return focused == "" or _can_switch(d.get("focus_id", id))
+		"wheel":
+			return true                      # free walk: opens the console; in the view: A / D (prompt says so)
+	return true
+
+
+## A device view can hand over directly to a neighbouring one (the radio and the chart share the desk).
+func _can_switch(to_id: String) -> bool:
+	if focused == "" or to_id == focused:
+		return false
+	var a: Dictionary = station.focus.get(focused, {})
+	var b: Dictionary = station.focus.get(to_id, {})
+	return a.has("eye") and b.has("eye") and (a["eye"] as Vector3).distance_to(b["eye"]) <= SWITCH_VIEW_DIST
 
 
 func _release() -> void:
@@ -125,10 +162,23 @@ func _release() -> void:
 		_holding = ""
 
 
+## Let go of everything held (START, the handwheel). Pause calls this: the key release would otherwise
+## be lost under the pause menu and the engine would keep cranking after resume.
+func release_holds() -> void:
+	_release()
+	events.emit(station.release_all())
+	if station.sim:
+		station.sim.set_wheel(0.0)
+
+
 func enter_focus(id: String) -> void:
 	var f: Dictionary = station.focus.get(id, {})
 	if not f.has("eye"):
 		return
+	if focused != "" and focused != id:      # direct switch between neighbouring views
+		events.emit(station.release_all())
+		if focused == "console":
+			station.sim.set_wheel(0.0)
 	focused = id
 	_focus_from = camera.global_transform
 	var eye: Vector3 = f["eye"]
@@ -208,13 +258,18 @@ func _ray_hit_id(from_mouse: bool) -> String:
 	var origin: Vector3
 	var dir: Vector3
 	if from_mouse:
-		var mp := get_viewport().get_mouse_position()
+		var mp := cursor_pos()
 		origin = camera.project_ray_origin(mp)
 		dir = camera.project_ray_normal(mp)
 	else:
 		origin = camera.global_position
 		dir = -camera.global_transform.basis.z
 	return pick(space, origin, dir, REACH + (1.2 if from_mouse else 0.0))
+
+
+## Where the device-view cursor is, in viewport pixels.
+func cursor_pos() -> Vector2:
+	return virtual_cursor if virtual_cursor.is_finite() else get_viewport().get_mouse_position()
 
 
 ## The control along a ray. Small controls (breakers, START, console knobs) sit INSIDE the larger
@@ -275,18 +330,29 @@ static func _is_occluder(c: Object) -> bool:
 
 
 func _update_prompt() -> void:
-	var id := _ray_hit_id(focused != "")
+	var in_view := focused != ""
+	var id := _ray_hit_id(in_view)
 	hovered = id
-	var text := ""
+	var info := {"state": "none", "key": "", "text": "", "sub": "", "in_view": in_view, "help": ""}
 	if id != "":
-		var key := "[Click]" if focused != "" else "[E]"
-		text = "%s  %s" % [key, station.describe(id)]
-		if station.DEVICES[id]["kind"] == "cycle":
-			text += "     [Right click] back"
-	elif focused != "":
-		text = "[Esc / Right click]  Step back"
+		var p: Dictionary = station.prompt_info(id, in_view)
+		var ok := _actionable(id)
+		info["text"] = p["text"]
+		info["sub"] = p["sub"]
+		info["key"] = p["key"] if ok else ""
+		info["state"] = "valid" if ok else "unavailable"
+	if in_view:
+		info["help"] = "[Esc / Right click]  Step back"
 		if focused == "console":
-			text = "[A / D] Turn handwheel     " + text
-	if text != _last_prompt:
-		_last_prompt = text
-		prompt_changed.emit(text)
+			info["help"] = "[A / D]  Turn the handwheel      " + info["help"]
+	if info != _last_prompt:
+		_last_prompt = info
+		prompt_changed.emit(info)
+
+
+## The prompt as one line (tests, logs): "[E]  Use the radio · sub".
+static func prompt_text(info: Dictionary) -> String:
+	if info.is_empty() or info["text"] == "":
+		return info.get("help", "")
+	var s: String = ("%s  %s" % [info["key"], info["text"]]) if info["key"] != "" else info["text"]
+	return s + ("  ·  " + info["sub"] if info["sub"] != "" else "")

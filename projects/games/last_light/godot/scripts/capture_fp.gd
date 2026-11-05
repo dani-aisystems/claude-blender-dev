@@ -6,7 +6,9 @@ extends Node
 ##       [--bot=expert] [--speed=4] [--quality=0|1|2] [--mode=story|watch]
 ##   Shot = [T@]VIEW[!STATE...]. T = sim seconds. STATE (forced for that shot, restored afterwards):
 ##     dark (room-lights breaker off), flash (lightning at a fixed bearing, captured at its peak),
-##     gen_off (generator stopped), dawn (dawn sky)
+##     gen_off (generator stopped), dawn (dawn sky), valve_shut (fuel valve closed)
+##   VIEW pp_<ia id> (Stage 2): the PLAYER stands 1.3 m from that control and looks at it, so the shot
+##     shows the real crosshair and prompt (e.g. 60@pp_start!gen_off!valve_shut)
 ##   --nohud hides the HUD / dialogue layers for room views (kept for "player" and "focus_*" shots).
 ##   --quality applies a preset to the whole run WITHOUT writing user://settings.cfg (presets only
 ##   take effect on scene load, so it cannot change per shot).
@@ -27,6 +29,19 @@ var results: Array = []
 var perf: Array = []
 var cam: Camera3D
 var _restore_state: Dictionary = {}
+var _cursor_ia := ""            # focus_<view>~<ia>: the player's virtual cursor tracks that control
+var _cursor_game: Node = null
+
+
+## Keeps the virtual cursor on the hovered control while the device-view camera eases in. The OS pointer
+## is never moved (capture runs must not touch Daniel's mouse).
+func _process(_delta: float) -> void:
+	if _cursor_ia == "" or _cursor_game == null or _cursor_game.player == null:
+		return
+	for b in _cursor_game.station.get_children():
+		if b is StaticBody3D and String(b.get_meta("ia", "")) == _cursor_ia:
+			_cursor_game.player.virtual_cursor = _cursor_game.player.camera.unproject_position(b.global_position)
+			return
 
 
 func _ready() -> void:
@@ -187,6 +202,9 @@ func _force(g, st: String) -> void:
 			_restore_state["dawn"] = g.outside.dawn
 			g.outside.set_sky("dawn")
 			g.outside.dawn = 1.0
+		"valve_shut":               # Stage 2: START refused with a reason
+			_restore_state["fuel_valve"] = g.sim.fuel_valve
+			g.sim.fuel_valve = false
 		"flash":
 			pass                        # triggered right before the save (see _flash_peak)
 		_:
@@ -198,6 +216,8 @@ func _unforce(g) -> void:
 		g._route(g.sim.set_breaker("lights", _restore_state["brk_lights"]))
 	if _restore_state.has("gen"):
 		g.sim.gen = _restore_state["gen"]
+	if _restore_state.has("fuel_valve"):
+		g.sim.fuel_valve = _restore_state["fuel_valve"]
 	if _restore_state.has("dawn"):
 		g.outside.dawn = _restore_state["dawn"]
 		g.outside.set_sky("night")
@@ -228,8 +248,14 @@ func _place(g, vname: String) -> void:
 		if cam:
 			cam.current = false
 		g.player.camera.current = true
-		g.player.enter_focus(vname.substr(6))
+		var fv := vname.substr(6).split("~")    # focus_console~mode: hover the MODE knob (Stage 2)
+		g.player.enter_focus(fv[0])
+		_cursor_ia = fv[1] if fv.size() > 1 else ""
+		_cursor_game = g
 		print("FOCUS ", g.player.focused)
+		return
+	if vname.begins_with("pp_"):
+		_pose_player(g, vname.substr(3))
 		return
 	var v := view(vname)
 	if v.is_empty():
@@ -246,6 +272,32 @@ func _place(g, vname: String) -> void:
 	cam.current = true
 	_cutaway(g, v[3])
 	_hud(g, not GameState.user_args.has("nohud"))
+
+
+## Stage 2: "pp_<ia id>" stands the PLAYER (not the capture camera) 1.3 m from that interaction volume,
+## towards the room centre, and looks at it, so the shot shows the real crosshair and prompt state.
+## Uses only player/station API that predates Stage 2, so the same view drives the "before" captures.
+func _pose_player(g, id: String) -> void:
+	var target := Vector3.INF
+	for b in g.station.get_children():
+		if b is StaticBody3D and String(b.get_meta("ia", "")) == id:
+			target = b.global_position
+			break
+	if target == Vector3.INF:
+		push_warning("capture: no interaction volume '%s'" % id)
+		return
+	if cam:
+		cam.current = false
+	g.player.camera.current = true
+	var inward := Vector3(-target.x, 0, -target.z).normalized()
+	var stand: Vector3 = target + inward * 1.3
+	g.player.global_position = Vector3(stand.x, g.player.global_position.y, stand.z)
+	g.player.velocity = Vector3.ZERO
+	var to: Vector3 = target - (g.player.global_position + Vector3(0, g.player.EYE, 0))
+	g.player._yaw = atan2(-to.x, -to.z)
+	g.player._pitch = atan2(to.y, Vector2(to.x, to.z).length())
+	g.player._apply_look()
+	_hud(g, true)
 
 
 func _hud(g, on: bool) -> void:
@@ -266,6 +318,8 @@ func _restore(g) -> void:
 		if g.player.focused != "":
 			g.player.leave_focus()
 		g.player.camera.current = true
+		g.player.virtual_cursor = Vector2.INF
+	_cursor_ia = ""
 
 
 ## Cutaway for plan/iso: hides the lighthouse shell above the room and the room's ceiling-only meshes.

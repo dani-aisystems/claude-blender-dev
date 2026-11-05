@@ -1,6 +1,11 @@
 # Roadmap: THE LAST LIGHT (living stage tracker)
 
 ## ⚠ Parallel sessions and file ownership (Daniel, 2026-11-04)
+**Update (2026-11-05, Stage 2 plan): split by file with the "Stage 1 iteration 5" desk-detail session.**
+- **Iteration 5 owns:** Blender (`build.py`, `documents.py`, `textures.py`, `spec.py`, `review_views.py`, `tex/`), the GLB and `godot/assets/docs`, the `station.gd` material and lighting sections (`_swap_materials` and above), and its own `capture_fp.gd` views (`cu_desk_l/r`, `cu_chart`, `cu_chair`).
+- **Stage 2 owns:** `player.gd`, `fp_ui.gd`, `game_fp.gd`, `input_setup.gd`, `dialogue_ui.gd`, `style.gd`, `settings.gd`, `chapters.json`, the `station.gd` interaction API section (`DEVICES` and `describe()` / `use()` and below), its own capture views, and the Stage 2 tests.
+- Neither session stages the other's files.
+
 **Update (1b checkpoint): Daniel handed `build.py` (all geometry) to the staged-polish session.** The geometry session's open items (optic drive, generator, stair door, storage, windows) are folded into Stage 1 iterations 2–3. Its Iteration A was **committed with Daniel's OK** in `5f22e63` (iteration 2 checkpoint).
 
 Two sessions worked on the cabin in parallel. **Daniel decided to split the work by layer.**
@@ -43,16 +48,16 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 ## Current position
 | | |
 |---|---|
-| **Stage** | 1, cabin lighting, materials and architecture |
-| **Iteration** | Stage 1 **approved by Daniel 2026-11-05** after iteration 1p. Stage 2 not started |
-| **Next actionable task** | Stage 2 (first-person interactions and gameplay): inspect, propose and agree the plan with Daniel **before** implementing |
+| **Stage** | 2, first-person interactions and gameplay |
+| **Iteration** | 2A (interaction foundations) **done, checkpoint presented**, awaiting Daniel. The plan is at `~/.claude/plans/the-last-light-soft-hearth.md`; branding committed `0f18df3` |
+| **Next actionable task** | Daniel's 2A verdict. If approved: a local commit of the Stage 2 files only (the iteration 5 hunks in `station.gd` / `capture_fp.gd` stay unstaged), then iteration 2B (radio panel and discovery) |
 
 ## Stages
 | # | Stage | Status |
 |---|---|---|
 | 0 | Critical fixes and regression baseline | ✅ **approved by Daniel 2026-11-04** (iteration 0.2) |
 | 1 | Cabin lighting, materials and architecture | ✅ **approved by Daniel 2026-11-05** (iterations 1.0, 1a, 1b, 2, 3, 3b, 4, 1p) |
-| 2 | First-person interactions and gameplay | ⬜ |
+| 2 | First-person interactions and gameplay | 🟡 plan approved 2026-11-05; iteration 2A next |
 | 3 | Dialogue, characters and story pacing | ⬜ |
 | 4 | Outside world and major story events | ⬜ |
 | 5 | Sound and cinematic presentation | ⬜ |
@@ -330,6 +335,83 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
   - **Daniel (2026-11-05): Stage 1 approved.** The remaining gap (Medium about 1 ms over 16.7 ms, High 1–3 ms over 25 ms) is **tracked for Stage 6** final optimisation. Untested trims: softer shadow filtering, SSIL off on Medium, 6 shadowed lamps on High, plus the exterior costs (ocean, rain, fog).
   - **Ruled out:** the radar SubViewport. A 7 ms reading appeared only when the window was occluded; with the window visible the frame was unchanged at 28.0 ms.
   - **Stale files (deleted 2026-11-05 with Daniel's OK):** `blender/tex/T_LL_Calendar.png`, `T_LL_Diagram.png` and `T_LL_Barometer.png`. They were superseded by the atlas and nothing references them.
+
+## Stage 2 log
+- **Plan (2026-11-05), approved.** The full audit is at `~/.claude/plans/the-last-light-soft-hearth.md`.
+  - **P0:**
+    - a pad can't look (right stick unbound) or use device views, replies or the radio panel (all mouse- or keyboard-only);
+    - the vessel buttons rebuild every 30 frames and can drop clicks (LIKELY).
+  - **P1:**
+    - dead `[Click] Study chart` prompt in the radio view;
+    - Space or pad A re-sends the last radio order (focused button, LIKELY);
+    - the door prompt never changes after ch4;
+    - silent failures (START while running, charging with the generator off, info items);
+    - pausing while holding START keeps cranking (LIKELY);
+    - a one-state crosshair;
+    - inconsistent prompt wording.
+  - **P2:**
+    - 60 Hz physics with no interpolation on a 120 Hz display (judder, LIKELY);
+    - mouse sensitivity scales with window size (LIKELY);
+    - Tab and wheel undiscoverable;
+    - no head-bob option;
+    - `hint_device` is a no-op.
+  - **Not an issue:** the A/`boost` overlap (`boost` is v1-only), walk numbers, focus enter and exit, save/load reset, the Stage 0 fixes.
+- **Daniel's decisions (2026-11-05):**
+  - split files with iteration 5 (see the top note);
+  - branding committed separately (`0f18df3`);
+  - the 6 leftover `watch_room_T_LL_{Barometer,Calendar,Diagram}.png(.import)` files deleted;
+  - **full playable gamepad**;
+  - crosshair **quiet dot → ring**: dim dot; ring plus prompt when valid; dashed grey ring plus the reason when unavailable; no out-of-range cue; a ring cursor in device views;
+  - **retire `hint_device`**;
+  - feel: physics interpolation, `screen_relative` look and a head-bob option, with movement numbers unchanged until his playtest;
+  - captures approved: 1 "before" run (worktree of `39fc0e7`) plus 1 per checkpoint plus 1 at the stage end, via `tools/godot_bg`. No benchmarks.
+- **Iteration 2A (2026-11-05), interaction foundations. Done; checkpoint presented, awaiting Daniel.**
+  - **`station.gd` (interaction API only):**
+    - wording pass (verb + object; "Switch the MAIN breaker off" replaces "Open MAIN breaker"; info items read "Check the battery" with the live reading as a sub-line);
+    - `availability(id)` → {ok, reason};
+    - `prompt_info(id, in_view)`;
+    - `use()` refuses an unavailable press with its reason. START is refused when running, running down, too hot, the day-tank is empty or the valve is shut;
+    - charging ON with the engine stopped adds a note.
+  - **`player.gd`:**
+    - `prompt_changed(info)` carries state (none / valid / unavailable), key, text, sub and help;
+    - `_actionable()` mirrors `_press`, so a key is never shown for a press that does nothing;
+    - direct view switching between neighbouring device views (radio ↔ chart; eyes ≤ 1.6 m apart);
+    - `release_holds()`;
+    - `virtual_cursor` / `cursor_pos()` for device-view picking without the OS pointer (captures now; the pad in 2C).
+  - **`fp_ui.gd`:**
+    - quiet dot → ring crosshair (warm ring when valid; dashed grey when unavailable; a bloom on each press);
+    - in device views, a ring cursor with the prompt beside it, plus a bottom help line;
+    - serif sub-line in dimmed parchment; 5 px soft outline on prompt text;
+    - `show_notice_once` (no repeat within 3 s).
+  - **`game_fp.gd`:**
+    - refusal and note notices;
+    - pause releases holds;
+    - the door prompt follows the story (ch < 4 "Try the stair door"; ch ≥ 4 "bolted", no key; open "stands open");
+    - unknown story events warn.
+  - **`hint_device` retired:** removed from `chapters.json`. `StoryDirector.ACTIONS` / `PRESENTATION_EVENTS` are now the contract, and `story_test` checks all 131 beat actions against it.
+  - **Capture tooling:**
+    - `pp_<ia id>` player-pose views;
+    - the `!valve_shut` state;
+    - `focus_<view>~<ia>` hovers a control with the virtual cursor.
+  - **Tests (headless, `taskpolicy -b`):**
+    - regress 60/60 (new R5: 16 checks);
+    - interaction 134/134 (6 known document-sound warnings);
+    - qa_sweep 948/948;
+    - story 0 failures;
+    - sim_v2 no gate failures;
+    - run_tests 95/95;
+    - pytest 18/18.
+  - **Evidence:**
+    - `renders/last_light/s2a_before_*` (scratch worktree of `39fc0e7`) vs `s2a_*`;
+    - sheets `s2a_vs_before_prompts.png` (centre crops) and `s2a_vs_before_views.png`;
+    - typography fix verified in `s2a2_check_crops.png` (a second, 3-shot window).
+  - **Known confound:** the after frames include the parallel iteration 5 desk props.
+  - **Lesson:** a GDScript parse error makes a `-s` test script hang idle (it never reaches `quit()`). Run suites under `timeout`.
+- **Iterations:**
+  - **2A interaction foundations:** prompt state and availability, refusal reasons, wording, door, focus switching, pause releasing holds, `hint_device`;
+  - **2B radio panel and discovery:** keyed vessel update, button focus, tips for Tab and the wheel;
+  - **2C input and feel:** pad, interpolation, sensitivity, head bob;
+  - **2D QA and stage report.**
 
 ## Stage 1: cabin (planned; starts after Stage 0 approval)
 1. **1.0 Review:** infrastructure logic, story anchors and the tier table, written into `REFERENCE_SPEC.md`.

@@ -11,9 +11,22 @@ signal menu_requested
 const COMMANDS := [["confirm", "Confirm position"], ["port", "Turn port 30°"], ["starboard", "Turn starboard 30°"],
 	["slow", "Reduce / resume speed"], ["hold", "Hold position"], ["maintain", "Maintain course"]]
 
+const XH_VALID := Color(1.0, 0.96, 0.88, 0.85)      # warm white ring: "this does something"
+const XH_UNAVAIL := Color(0.72, 0.72, 0.70, 0.55)   # grey dashed ring: "not now"
+const XH_SHADE := Color(0.0, 0.0, 0.0, 0.28)        # keeps the ring readable on the cream walls
+const SUB_INK := Color(0.86, 0.82, 0.72, 0.78)      # readings, reasons and help: dimmed parchment, same family as INK
+
 var sim: KeeperSim
 var crosshair: Control
+var tip: VBoxContainer          # the prompt and its sub-line, under the crosshair or beside the cursor
 var prompt: Label
+var prompt_sub: Label
+var help: Label                 # device views: how to step back / turn the handwheel
+var prompt_info := {}           # last player.prompt_changed info
+var _xh_ring := 0.0             # 0 = rest dot, 1 = ring
+var _xh_grey := 0.0             # 0 = valid colour, 1 = unavailable (dashed grey)
+var _xh_pulse := 0.0            # input received
+var _notice_last := {}          # text -> ticks_msec it was last shown (refusals are not repeated)
 var subs: VBoxContainer
 var notice: Label
 var radio_panel: PanelContainer
@@ -26,6 +39,7 @@ var end_panel: Control
 var fade: ColorRect
 var selected_ship := -1
 var number_keys_taken_fn: Callable          # true while dialogue replies own the number keys
+var cursor_fn: Callable                     # player.cursor_pos: the device-view cursor (mouse or virtual)
 var _notice_t := 0.0
 var _sub_items: Array = []
 
@@ -38,20 +52,30 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	crosshair = Control.new()
-	crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	crosshair.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	crosshair.draw.connect(func():
-		crosshair.draw_circle(Vector2.ZERO, 2.5, Color(1, 1, 1, 0.75))
-		crosshair.draw_arc(Vector2.ZERO, 6.0, 0, TAU, 24, Color(0, 0, 0, 0.35), 1.0))
+	crosshair.draw.connect(_draw_crosshair)
 	root.add_child(crosshair)
+	tip = VBoxContainer.new()
+	tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tip.add_theme_constant_override("separation", 2)
+	root.add_child(tip)
 	prompt = UIStyle.label("", 22, UIStyle.INK, UIStyle.serif())
-	prompt.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	prompt.offset_left = -500
-	prompt.offset_right = 500
-	prompt.offset_top = 40
-	prompt.offset_bottom = 80
-	root.add_child(prompt)
+	tip.add_child(prompt)
+	prompt_sub = UIStyle.label("", 18, SUB_INK, UIStyle.serif())
+	tip.add_child(prompt_sub)
+	_tip_free_walk()
+	help = UIStyle.label("", 17, SUB_INK, UIStyle.serif())
+	for l in [prompt, prompt_sub, help]:     # a soft dark edge: prompts sit over bright gauge dials
+		l.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.03, 0.55))
+		l.add_theme_constant_override("outline_size", 5)
+	help.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	help.offset_left = -600
+	help.offset_right = 600
+	help.offset_top = -40
+	help.offset_bottom = -14
+	root.add_child(help)
 	subs = VBoxContainer.new()
 	subs.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	subs.offset_left = 220
@@ -135,12 +159,36 @@ func _build_logbook(root: Control) -> void:
 
 # ------------------------------------------------------------------ API
 
-func set_prompt(text: String) -> void:
-	prompt.text = text
+## player.prompt_changed: {state, key, text, sub, in_view, help}. Free walk: under the crosshair, centred.
+## Device views: beside the cursor, and the step-back help sits at the bottom of the screen.
+func set_prompt(info: Dictionary) -> void:
+	var was_view: bool = prompt_info.get("in_view", false)
+	prompt_info = info
+	var t: String = info.get("text", "")
+	var k: String = info.get("key", "")
+	prompt.text = ("%s  %s" % [k, t]) if k != "" and t != "" else t
+	prompt.modulate.a = 1.0 if info.get("state", "") != "unavailable" else 0.62
+	prompt_sub.text = info.get("sub", "")
+	prompt_sub.visible = prompt_sub.text != ""
+	help.text = info.get("help", "")
+	var in_view: bool = info.get("in_view", false)
+	if in_view != was_view:
+		if in_view:
+			_tip_in_view()
+		else:
+			_tip_free_walk()
+
+
+func clear_prompt() -> void:
+	set_prompt({})
+
+
+## The crosshair acknowledges a press (accepted: a brief bloom; refused: the grey ring flickers).
+func pulse(_accepted: bool) -> void:
+	_xh_pulse = 1.0
 
 
 func set_focus(id: String) -> void:
-	crosshair.visible = id == ""
 	radio_panel.visible = id == "radio"
 	if id == "radio":
 		_refresh_vessels()
@@ -149,6 +197,78 @@ func set_focus(id: String) -> void:
 func show_notice(text: String, seconds := 4.0) -> void:
 	notice.text = text
 	_notice_t = seconds
+
+
+## A notice the player triggers by pressing (refusals, consequences): the same text is not repeated
+## within `cooldown` seconds, so hammering E on a shut-valve START shows the reason once.
+func show_notice_once(text: String, seconds := 3.0, cooldown := 3.0) -> void:
+	var now := Time.get_ticks_msec()
+	if _notice_last.has(text) and now - int(_notice_last[text]) < int(cooldown * 1000.0):
+		return
+	_notice_last[text] = now
+	show_notice(text, seconds)
+
+
+func _tip_free_walk() -> void:
+	tip.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	tip.offset_left = -500
+	tip.offset_right = 500
+	tip.offset_top = 28
+	tip.offset_bottom = 90
+	for l in [prompt, prompt_sub]:
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+func _tip_in_view() -> void:
+	tip.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	for l in [prompt, prompt_sub]:
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_place_tip()
+
+
+## Device views: the prompt sits just right of and below the cursor, flipped to the left / above near
+## the screen edges so it never runs off.
+func _place_tip() -> void:
+	var vp := get_viewport().get_visible_rect().size
+	var m := _cursor()
+	var sz := tip.get_combined_minimum_size()
+	var p := m + Vector2(26, 14)
+	if p.x + sz.x > vp.x - 16:
+		p.x = m.x - 26 - sz.x
+	if p.y + sz.y > vp.y - 50:
+		p.y = m.y - 14 - sz.y
+	tip.position = p
+	tip.size = sz
+
+
+## Where the crosshair is drawn: the screen centre in free walk, the cursor in device views.
+func _cursor() -> Vector2:
+	if prompt_info.get("in_view", false):
+		return cursor_fn.call() if cursor_fn.is_valid() else get_viewport().get_mouse_position()
+	return get_viewport().get_visible_rect().size * 0.5
+
+
+func _draw_crosshair() -> void:
+	var c := _cursor()
+	var in_view: bool = prompt_info.get("in_view", false)
+	var col := XH_VALID.lerp(XH_UNAVAIL, _xh_grey)
+	if not in_view:                            # rest dot, fading out as the ring opens
+		var a := (1.0 - _xh_ring) * 0.55
+		if a > 0.01:
+			crosshair.draw_circle(c, 2.6, Color(0, 0, 0, a * 0.5))
+			crosshair.draw_circle(c, 2.0, Color(1, 1, 1, a))
+	if _xh_ring < 0.02:
+		return
+	var r := lerpf(3.0, 9.0, _xh_ring) + 2.5 * _xh_pulse
+	var alpha := _xh_ring * col.a
+	if _xh_grey < 0.5:
+		crosshair.draw_arc(c, r, 0.0, TAU, 40, Color(XH_SHADE, XH_SHADE.a * _xh_ring), 3.2, true)
+		crosshair.draw_arc(c, r, 0.0, TAU, 40, Color(col, alpha), 1.5, true)
+	else:
+		for i in 10:                           # dashed: ten short arcs
+			var a0 := TAU * i / 10.0
+			crosshair.draw_arc(c, r, a0, a0 + TAU / 20.0, 6, Color(XH_SHADE, XH_SHADE.a * _xh_ring), 3.2, true)
+			crosshair.draw_arc(c, r, a0, a0 + TAU / 20.0, 6, Color(col, alpha), 1.5, true)
 
 
 func toggle_logbook() -> bool:
@@ -232,6 +352,13 @@ func _process(delta: float) -> void:
 
 
 func _process_body(delta: float) -> void:
+	var xs: String = prompt_info.get("state", "none")
+	_xh_ring = move_toward(_xh_ring, 0.0 if xs == "none" else 1.0, delta / 0.09)
+	_xh_grey = move_toward(_xh_grey, 1.0 if xs == "unavailable" else 0.0, delta / 0.09)
+	_xh_pulse = maxf(0.0, _xh_pulse - delta * 6.0)
+	crosshair.queue_redraw()
+	if prompt_info.get("in_view", false):
+		_place_tip()
 	_notice_t -= delta
 	notice.modulate.a = clampf(_notice_t, 0.0, 1.0)
 	for it in _sub_items:

@@ -3,6 +3,9 @@ extends SceneTree
 ##  R1  mouse look is restored after picking a dialogue reply in free-walk (and NOT inside a device view)
 ##  R2  dialogue choices never overlap the radio command panel (several window aspect ratios)
 ##  R3  input under the pause menu does not advance dialogue, pick choices, or run the typewriter
+##  R4  speakerless narration inside a radio conversation shows as a thought, not a blank transmission
+##  R5  Stage 2A interaction state: prompt keys, refusals with reasons (once), the door prompt, no dead
+##      prompts in device views (radio -> chart switches), pause releases a held START
 ##   godot --path godot -s res://tests/regress_test.gd            (windowed: all checks)
 ##   godot --headless --path godot -s res://tests/regress_test.gd (R1 mouse checks SKIPPED: the headless
 ##                                                                  display server ignores mouse modes)
@@ -57,8 +60,98 @@ func _run() -> void:
 	await _r2_overlap()
 	await _r3_pause()
 	await _r4_thought_in_radio()
+	await _r5_interaction_state()
 	print("REGRESS_RESULT ", JSON.stringify({"passed": passes, "failed": fails.size(), "failures": fails, "skipped": skips}))
 	quit(1 if fails.size() > 0 else 0)
+
+
+## Stage 2A: interaction state, refusals with reasons, no dead prompts, door prompt, pause releases holds.
+func _r5_interaction_state() -> void:
+	print("R5 interaction state (Stage 2A)")
+	var st: Node3D = g.station
+	var k: KeeperSim = g.sim
+	# a) valid prompt in free walk carries the interact key
+	var p: Dictionary = st.prompt_info("radio", false)
+	_check(p["ok"] and p["key"] == "[E]" and p["text"] == "Use the radio", "radio prompt is '[E]  Use the radio' (%s)" % p)
+	# b) START with the valve shut: unavailable, the reason is the valve, and a press is refused (no crank)
+	k.gen = KeeperSim.Gen.OFF
+	k.fuel_valve = false
+	k.start_held = false
+	p = st.prompt_info("start", false)
+	_check(not p["ok"] and p["key"] == "" and p["sub"] == "The fuel valve is shut.", "START with the valve shut: no key, reason shown (%s)" % p)
+	var ev: Array = st.use("start", "press")
+	_check(ev.size() == 1 and ev[0]["type"] == "refused" and k.gen == KeeperSim.Gen.OFF and not k.start_held,
+		"START press with the valve shut is refused and does not crank (%s)" % [ev])
+	k.gen = KeeperSim.Gen.RUNNING
+	_check(st.availability("start")["reason"] == "The generator is already running.", "START while running says so")
+	k.gen = KeeperSim.Gen.OFF
+	k.fuel_valve = true
+	_check(st.availability("start")["ok"], "START with the valve open and the engine stopped is available")
+	# c) the refusal notice is shown once, not on every press
+	g.ui.notice.text = ""
+	g._route([{"type": "refused", "device": "start", "reason": "Test reason."}])
+	var first: String = g.ui.notice.text
+	g.ui.notice.text = ""
+	g._route([{"type": "refused", "device": "start", "reason": "Test reason."}])
+	_check(first == "Test reason." and g.ui.notice.text == "", "a repeated refusal within 3 s is not shown again")
+	# d) charging on with the generator stopped explains why nothing flows
+	k.charge_on = false
+	ev = st.use("charge", "press")
+	_check(ev.any(func(e): return e["type"] == "note"), "charging ON with the engine stopped adds a note")
+	k.charge_on = false
+	# e) the door prompt follows the story: ch1 usable, ch4 bolted (no key), open (no key)
+	g.director.state.chapter = 1
+	st.door_open = false
+	g._update_door_prompt()
+	_check(st.prompt_info("door", false)["key"] == "[E]", "door in ch1: '[E]  Try the stair door'")
+	g.director.state.chapter = 4
+	g._update_door_prompt()
+	p = st.prompt_info("door", false)
+	_check(p["key"] == "" and "bolted" in p["text"], "door in ch4 before the story opens it: no key (%s)" % p)
+	st.door_open = true
+	g._update_door_prompt()
+	_check(st.prompt_info("door", false)["text"] == "The stair door stands open", "open door says so")
+	st.door_open = false
+	g.director.state.chapter = 1
+	g._update_door_prompt()
+	# f) device views: every control the cursor can reach either acts on a click or shows no key; the
+	#    chart seen from the radio view switches straight to the chart view (it used to be a dead prompt)
+	for view in ["radio", "console", "chart"]:
+		g.player.enter_focus(view)
+		await _frames(40)
+		var ids := {}
+		var space: PhysicsDirectSpaceState3D = g.player.get_world_3d().direct_space_state
+		var vp: Vector2 = g.player.get_viewport().get_visible_rect().size
+		for ix in 32:
+			for iy in 18:
+				var sp := Vector2((ix + 0.5) / 32.0 * vp.x, (iy + 0.5) / 18.0 * vp.y)
+				var id: String = g.player.pick(space, g.player.camera.project_ray_origin(sp), g.player.camera.project_ray_normal(sp), g.player.REACH + 1.2)
+				if id != "":
+					ids[id] = true
+		var dead: Array = []
+		for id in ids:                            # the key the player would see (player._update_prompt rule)
+			var key: String = st.prompt_info(id, true)["key"] if g.player._actionable(id) else ""
+			if key == "[Click]" and st.DEVICES[id]["kind"] == "focus" and not g.player._can_switch(st.DEVICES[id].get("focus_id", id)):
+				dead.append(id)
+		_check(dead.is_empty(), "%s view: no clickable prompt that does nothing (reachable: %s)" % [view, ids.keys()])
+		if view == "radio" and ids.has("chart"):
+			_check(g.player._can_switch("chart"), "radio view -> chart is a direct switch")
+			g.player.enter_focus("chart")
+			await _frames(5)
+			_check(g.player.focused == "chart", "clicking the chart from the radio view opens the chart view")
+		g.player.leave_focus()
+		await _frames(40)
+	# g) pause while holding START stops the crank (the key-up is lost under the pause menu)
+	k.gen = KeeperSim.Gen.OFF
+	k.fuel_valve = true
+	g.player._holding = "start"
+	g._route(st.use("start", "press"))
+	var cranking := k.gen == KeeperSim.Gen.CRANKING and k.start_held
+	g.set_paused(true)
+	await _frames(2)
+	_check(cranking and not k.start_held and k.gen != KeeperSim.Gen.CRANKING, "pause while holding START stops cranking (was cranking=%s)" % cranking)
+	g.set_paused(false)
+	await _frames(2)
 
 
 func _choices(mode: String) -> void:

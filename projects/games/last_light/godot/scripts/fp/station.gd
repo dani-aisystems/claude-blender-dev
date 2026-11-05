@@ -35,7 +35,7 @@ var _rx_flash := 0.0
 var _flicker := 0.0
 var _hold_id := ""
 var door_open := false
-var door_prompt := "Stair door. Bolted for the night."
+var door_prompt := "Try the stair door"     # game_fp keeps it in step with the chapter and the door
 var outside: Node3D                     # set by game_fp: storm, dawn and lightning for the window lights
 var windows: Array = []                 # [{light: SpotLight3D, out: Vector3}] one per window bay
 var probe: ReflectionProbe
@@ -46,39 +46,45 @@ var probe_mode := "b"                   # a: capture once + scale; b: re-capture
 var _probe_key := ""
 var _probe_recapture := 0
 
-## id -> descriptor. kind: toggle | hold | cycle | focus | wheel. "focus_only" ids only respond in a device view.
+## id -> descriptor. kind: toggle | hold | cycle | focus | wheel | info | doc | door.
+## Prompt wording (Stage 2): verb + object in sentence case; panel labels (MAIN, OFF/AUTO/MANUAL) stay in
+## capitals because that is what is painted on the equipment.
 var DEVICES := {
-	"fuel_valve": {"kind": "toggle", "on": "Close fuel valve", "off": "Open fuel valve",
+	"fuel_valve": {"kind": "toggle", "on": "Close the fuel valve", "off": "Open the fuel valve",
 		"get": func(k): return k.fuel_valve, "set": func(k, v): return k.set_fuel_valve(v)},
-	"start": {"kind": "hold", "prompt": "Hold to start generator"},
-	"charge": {"kind": "toggle", "on": "Switch charging OFF", "off": "Switch charging ON",
+	"start": {"kind": "hold", "prompt": "Hold to crank the generator", "prompt_toggle": "Crank the generator"},
+	"charge": {"kind": "toggle", "on": "Switch charging off", "off": "Switch charging on",
 		"get": func(k): return k.charge_on, "set": func(k, v): return k.set_charge(v)},
-	"brk_main": {"kind": "toggle", "on": "Open MAIN breaker", "off": "Reset MAIN breaker",
+	"brk_main": {"kind": "toggle", "on": "Switch the MAIN breaker off", "off": "Reset the MAIN breaker",
 		"get": func(k): return k.main_breaker, "set": func(k, v): return k.set_breaker("main", v)},
-	"brk_lights": {"kind": "toggle", "on": "Room lights OFF", "off": "Room lights ON",
+	"brk_lights": {"kind": "toggle", "on": "Switch the room lights off", "off": "Switch the room lights on",
 		"get": func(k): return k.brk_lights, "set": func(k, v): return k.set_breaker("lights", v)},
-	"brk_radar": {"kind": "toggle", "on": "Radar OFF", "off": "Radar ON",
+	"brk_radar": {"kind": "toggle", "on": "Switch the radar off", "off": "Switch the radar on",
 		"get": func(k): return k.brk_radar, "set": func(k, v): return k.set_breaker("radar", v)},
 	"mode": {"kind": "cycle", "names": ["OFF", "AUTO", "MANUAL"], "prompt": "Light mode",
 		"get": func(k): return k.mode, "set": func(k, v): return k.set_mode(v)},
 	"intensity": {"kind": "cycle", "names": ["LOW", "NORMAL", "HIGH"], "prompt": "Lamp intensity",
 		"get": func(k): return k.intensity, "set": func(k, v): return k.set_intensity(v)},
-	"handwheel": {"kind": "wheel", "prompt": "Turn handwheel  (hold A / D)"},
-	"console": {"kind": "focus", "prompt": "Operate light console"},
-	"radio": {"kind": "focus", "prompt": "Use radio"},
-	"radar": {"kind": "focus", "prompt": "Use radio", "focus_id": "radio"},
-	"chart": {"kind": "focus", "prompt": "Study chart"},
+	"handwheel": {"kind": "wheel", "prompt": "Turn the handwheel"},
+	"console": {"kind": "focus", "prompt": "Operate the light console"},
+	"radio": {"kind": "focus", "prompt": "Use the radio"},
+	"radar": {"kind": "focus", "prompt": "Use the radio", "focus_id": "radio"},
+	"chart": {"kind": "focus", "prompt": "Study the chart"},
 	"logbook": {"kind": "doc", "prompt": "Write up the station log"},
-	"gen_panel": {"kind": "info", "prompt": "Generator"},
-	"battery": {"kind": "info", "prompt": "Battery"},
+	"gen_panel": {"kind": "info", "prompt": "Check the generator"},
+	"battery": {"kind": "info", "prompt": "Check the battery"},
 	"archive": {"kind": "doc", "prompt": "Search the old station logs"},
 	"drawer": {"kind": "doc", "prompt": "Open the desk drawer"},
 	"photo": {"kind": "doc", "prompt": "Look at the photograph"},
 	"note": {"kind": "doc", "prompt": "Read the note on the console"},
 	"forecast": {"kind": "doc", "prompt": "Read the teleprinter forecast"},
 	"door": {"kind": "door", "prompt": "The stair door"},
-	"power_panel": {"kind": "info", "prompt": "Distribution"},
+	"power_panel": {"kind": "info", "prompt": "Check the distribution board"},
 }
+## Set by game_fp (Stage 2): documents only open in the story campaign; the door's prompt and whether
+## pressing it does anything follow the chapter and the door state.
+var docs_enabled := true
+var door_usable := true
 
 
 func setup(k: KeeperSim) -> void:
@@ -421,6 +427,7 @@ func _bind_radar(n: MeshInstance3D) -> void:
 
 # ------------------------------------------------------------------ interaction API (player calls these)
 
+## The action text for a control (what pressing it does), without the key.
 func describe(id: String) -> String:
 	var d: Dictionary = DEVICES.get(id, {})
 	if d.is_empty():
@@ -431,31 +438,92 @@ func describe(id: String) -> String:
 		"cycle":
 			var names: Array = d["names"]
 			return "%s: %s  →  %s" % [d["prompt"], names[d["get"].call(sim)], names[(d["get"].call(sim) + 1) % names.size()]]
-		"info":
-			return info_text(id)
+		"hold":
+			if not Settings.v["hold_to_crank"]:
+				return "Stop cranking" if sim.start_held else d["prompt_toggle"]
+			return d["prompt"]
 		"door":
 			return door_prompt
 		_:
 			return d["prompt"]
 
 
+## The live reading shown under an info control's prompt (no need to press anything to read it).
 func info_text(id: String) -> String:
 	match id:
 		"gen_panel":
-			var st: String = ["stopped", "cranking", "running", "stopping"][sim.gen]
-			return "Generator %s · fuel %d L · temp %d%%" % [st, int(sim.fuel), int(sim.gen_temp)]
+			var st: String = ["Stopped", "Cranking", "Running", "Running down"][sim.gen]
+			return "%s  ·  fuel %d L  ·  engine %d °C" % [st, int(sim.fuel), int(sim.gen_temp)]
 		"power_panel":
-			return "Battery %d%% · draw %.2f %%/s%s" % [int(sim.battery), sim.demand, "" if sim.main_breaker else " · MAIN TRIPPED"]
+			return "Battery %d %%  ·  draw %.2f %%/s%s" % [int(sim.battery), sim.demand, "" if sim.main_breaker else "  ·  MAIN TRIPPED"]
 		"battery":
-			return "Battery %d%%%s" % [int(sim.battery), "  ·  charging" if sim.charge_flow > 0.0 else ""]
+			return "%d %%%s" % [int(sim.battery), "  ·  charging" if sim.charge_flow > 0.0 else ""]
 	return ""
 
 
-## action: "press" (E / LMB down), "release", "next", "prev". Returns sim events.
+## Can this control be used right now? {ok, reason}. A reason is shown only when the keeper would know
+## it by looking (a shut valve, a running engine); story-gated things are unavailable without a reason.
+func availability(id: String) -> Dictionary:
+	var d: Dictionary = DEVICES.get(id, {})
+	if d.is_empty():
+		return {"ok": false, "reason": ""}
+	match d["kind"]:
+		"hold":
+			if Settings.v["hold_to_crank"] or not sim.start_held:
+				match sim.gen:
+					KeeperSim.Gen.RUNNING:
+						return {"ok": false, "reason": "The generator is already running."}
+					KeeperSim.Gen.STOPPING:
+						return {"ok": false, "reason": "Wait for the engine to run down."}
+				if sim.gen_overheated and sim.gen_temp > sim.cfg.temp_restart:
+					return {"ok": false, "reason": "Still too hot to restart. Let it cool."}
+				if sim.fuel <= 0.0:
+					return {"ok": false, "reason": "The day-tank is empty."}
+				if not sim.fuel_valve:
+					return {"ok": false, "reason": "The fuel valve is shut."}
+		"doc":
+			if not docs_enabled:
+				return {"ok": false, "reason": ""}
+		"door":
+			if not door_usable:
+				return {"ok": false, "reason": ""}
+	return {"ok": true, "reason": ""}
+
+
+## Everything the HUD needs for one control: {text, sub, ok, reason, key}. in_view = inside a device view
+## (the mouse or pad cursor clicks); free-walk uses the interact key.
+func prompt_info(id: String, in_view: bool) -> Dictionary:
+	var d: Dictionary = DEVICES.get(id, {})
+	if d.is_empty():
+		return {}
+	var av := availability(id)
+	var key := "[Click]" if in_view else "[E]"
+	var sub := ""
+	match d["kind"]:
+		"info":
+			sub = info_text(id)
+		"cycle":
+			sub = "[Right click] turn it back"
+		"wheel":
+			if in_view:
+				key = "[A / D]"           # the handwheel turns with the keys, not by clicking it
+	if not av["ok"]:
+		key = ""
+		if av["reason"] != "":
+			sub = av["reason"]
+	return {"text": describe(id), "sub": sub, "ok": av["ok"], "reason": av["reason"], "key": key}
+
+
+## action: "press" (E / LMB down), "release", "next", "prev". Returns sim events. A press on an
+## unavailable control is refused with its reason instead (game_fp shows it once, not every press).
 func use(id: String, action: String) -> Array:
 	var d: Dictionary = DEVICES.get(id, {})
 	if d.is_empty():
 		return []
+	if action == "press":
+		var av := availability(id)
+		if not av["ok"]:
+			return [{"type": "refused", "device": id, "reason": av["reason"]}]
 	var ev: Array = []
 	match d["kind"]:
 		"toggle":
@@ -484,6 +552,8 @@ func use(id: String, action: String) -> Array:
 				_hold_id = ""
 	if not ev.is_empty():
 		ev.append({"type": "click", "device": id})
+		if id == "charge" and sim.charge_on and sim.gen != KeeperSim.Gen.RUNNING:
+			ev.append({"type": "note", "device": id, "text": "Charging is on. Nothing will flow until the generator runs."})
 	return ev
 
 
