@@ -21,6 +21,8 @@ var v := {
 	"vol_master": 0.9, "vol_music": 0.6, "vol_sfx": 0.85, "vol_dialogue": 0.9, "vol_ambient": 0.8,
 	# controls
 	"mouse_sens": 1.0, "invert_y": false,
+	"stick_sens": 1.0,           # Stage 2C: gamepad look and device-view cursor speed
+	"head_bob": true,            # Stage 2C: subtle walking head motion (off for comfort)
 	# accessibility
 	"subtitles": true, "subtitle_size": 1.0, "text_speed": 42.0, "reduce_flashing": false,
 	"hold_to_crank": true,       # START button: hold (true) or press-to-toggle cranking (false)

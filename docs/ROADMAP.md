@@ -49,8 +49,8 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | | |
 |---|---|
 | **Stage** | 2, first-person interactions and gameplay |
-| **Iteration** | 2A approved and committed `52bcb6f`. **2B done, checkpoint presented**, awaiting Daniel. The plan is at `~/.claude/plans/the-last-light-soft-hearth.md`; branding committed `0f18df3` |
-| **Next actionable task** | Daniel's 2B verdict. If approved: commit the Stage 2 hunks only (`station.gd`, `capture_fp.gd` and ROADMAP also hold iteration 5 hunks), then 2C (gamepad and feel) |
+| **Iteration** | 2A `52bcb6f` and 2B `1359e44` approved and committed. **2C (gamepad and feel) done, checkpoint presented**, awaiting Daniel. The plan is at `~/.claude/plans/the-last-light-soft-hearth.md`; branding `0f18df3` |
+| **Next actionable task** | Daniel's 2C verdict. If approved: commit the Stage 2 hunks only, then 2D (full workstation pass, windowed regress for the real mouse-mode checks, stage report) |
 
 ## Stages
 | # | Stage | Status |
@@ -520,6 +520,45 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
     - run_tests 95/95;
     - pytest 18/18.
   - **Evidence:** `renders/last_light/s2b_*`; sheet `s2b_vs_s2a.png` (the 2A frames are the "before"; the bot's story timing drifted, so the objective text differs).
+- **Iteration 2B approved by Daniel (2026-11-05); committed `1359e44`.** Tips stay per machine. He has no controller right now, so pad feel is NOT TESTED by a human.
+- **Iteration 2C (2026-11-05), gamepad and feel. Done; checkpoint presented, awaiting Daniel.**
+  - **`input_setup.gd`:** bindings by context:
+    - `PAD_FP`: A interact, B back, X transcript, Y logbook, LB/RB turn, L3 sprint, Start pause, left stick move, right stick look;
+    - `PAD_V1`: boost moved from A to RT;
+    - `PAD_SHARED`: d-pad handwheel;
+    - `PAD_UI`: `ui_accept` A, `ui_cancel` B, d-pad (the engine defaults did not let A press a focused reply);
+    - `stick()`: radial deadzone 0.15 with a quadratic curve;
+    - `glyph()` / `key()` / `resolve()`: keyboard, Xbox or PlayStation names (auto-detected from the pad name);
+    - `pad_active`, and `pad_forced` for captures.
+  - **`player.gd`:**
+    - the camera is top-level, drawn at the body position interpolated between physics ticks (`_pos_prev` / `_pos_cur`, `Engine.get_physics_interpolation_fraction`), with look applied immediately. Placements snap (`_snap_if_placed`);
+    - **deviation from the plan:** no global `physics_interpolation`, which would have made every node animated in `_process` (gauges, ships, door, optic, capture cameras) step at 60 Hz;
+    - mouse look uses `screen_relative` in points (`MOUSE_SENS` 0.0028 rad/pt, the old fullscreen feel on a 1512-pt display);
+    - right-stick look at 2.6 rad/s × "Gamepad look sensitivity" (pitch 70 %);
+    - the device-view pad cursor (`virtual_cursor`, 900 px/s) presses room controls by ray and on-screen buttons through `fp_ui.click_at`;
+    - B steps back; LB/RB turn knobs, or change vessel in the radio view;
+    - the "Head bob" option.
+  - **`fp_ui.gd`:**
+    - `cycle_vessel()`, `click_at()`;
+    - the pad cursor shows a dot in device views;
+    - the Tab tip and radio legend follow the device; pad B resumes from pause.
+  - **Other UI and data:**
+    - `dialogue_ui.gd`: the first reply takes focus on the pad;
+    - `story_presenter.gd`: hints resolve `{interact}` / `{move}` / `{look}` / `{turn_back}` / `{wheel}` tokens; X toggles the transcription; B closes documents. The `chapters.json` hints are tokenised, and `story_test` checks they resolve for both devices;
+    - `main_fp.gd` Options: "Gamepad look sensitivity", "Head bob while walking", and a three-column controls table (keyboard and mouse / gamepad).
+  - **Tests:**
+    - regress 82/82 (new R7: 15 checks, driving the real input path with `Input.parse_input_event` pad events);
+    - interaction 134/134 (6 known warnings);
+    - qa_sweep 948/948;
+    - story 0 failures;
+    - sim_v2 no gate failures;
+    - run_tests 95/95;
+    - pytest 18/18.
+  - **Evidence:** `renders/last_light/s2c_pad_*` vs the 2A/2B keyboard frames; sheet `s2c_pad_vs_kbm.png`.
+  - **Found by looking:**
+    - the pad cursor was invisible when not over a control (now a dot);
+    - the radio legend kept keyboard text (now follows the device);
+    - captures need `pad_forced`, because Daniel's real mouse flipped `s2c_pad2` back to keyboard.
 - **Iterations:**
   - **2A interaction foundations:** prompt state and availability, refusal reasons, wording, door, focus switching, pause releasing holds, `hint_device`;
   - **2B radio panel and discovery:** keyed vessel update, button focus, tips for Tab and the wheel;

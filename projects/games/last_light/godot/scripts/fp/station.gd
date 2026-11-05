@@ -499,21 +499,25 @@ func prompt_info(id: String, in_view: bool) -> Dictionary:
 	if d.is_empty():
 		return {}
 	var av := availability(id)
-	var key := "[Click]" if in_view else "[E]"
+	var key := InputSetup.key("click" if in_view else "interact")     # glyphs follow keyboard or pad (2C)
 	var sub := ""
 	match d["kind"]:
 		"info":
 			sub = info_text(id)
 		"cycle":                          # one-time tips (Stage 2B): gone once the player has used them
 			var tips: Array = []
-			if in_view and Settings.tip_wanted("wheel"):
-				tips.append("[Wheel] turn")
-			if Settings.tip_wanted("back"):
-				tips.append("[Right click] turn it back")
+			if InputSetup.pad_active:
+				if Settings.tip_wanted("wheel") or Settings.tip_wanted("back"):
+					tips.append("%s turn" % InputSetup.key("turn"))
+			else:
+				if in_view and Settings.tip_wanted("wheel"):
+					tips.append("%s turn" % InputSetup.key("turn"))
+				if Settings.tip_wanted("back"):
+					tips.append("%s turn it back" % InputSetup.key("turn_back"))
 			sub = "  ·  ".join(tips)
 		"wheel":
 			if in_view:
-				key = "[A / D]"           # the handwheel turns with the keys, not by clicking it
+				key = InputSetup.key("handwheel")   # the handwheel turns with A / D or the stick, not a click
 	if not av["ok"]:
 		key = ""
 		if av["reason"] != "":

@@ -53,6 +53,13 @@ func _check_beat_actions() -> void:
 		var o = stack.pop_back()
 		if o is Dictionary:
 			for k in o:
+				if k == "hint" and o[k] is Array and o[k].size() == 2:
+					for pad in [false, true]:           # Stage 2C: glyph tokens resolve for both devices
+						InputSetup.pad_active = pad
+						var r: String = InputSetup.resolve(String(o[k][1]))
+						if "{" in r or "}" in r:
+							fails.append("chapters.json: unresolved hint token in '%s'" % r)
+					InputSetup.pad_active = false
 				if k == "do" and o[k] is Array:
 					for a in o[k]:
 						seen += 1

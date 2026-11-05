@@ -6,6 +6,9 @@ extends SceneTree
 ##  R4  speakerless narration inside a radio conversation shows as a thought, not a blank transmission
 ##  R5  Stage 2A interaction state: prompt keys, refusals with reasons (once), the door prompt, no dead
 ##      prompts in device views (radio -> chart switches), pause releases a held START
+##  R6  Stage 2B radio panel: stable vessel buttons, a click across a refresh, Space after an order, tips
+##  R7  Stage 2C gamepad and camera: no shared pad inputs, right-stick look and deadzone, A / B / LB / RB,
+##      the device-view pad cursor (room controls and screen buttons), reply focus, glyphs, head bob
 ##   godot --path godot -s res://tests/regress_test.gd            (windowed: all checks)
 ##   godot --headless --path godot -s res://tests/regress_test.gd (R1 mouse checks SKIPPED: the headless
 ##                                                                  display server ignores mouse modes)
@@ -62,6 +65,7 @@ func _run() -> void:
 	await _r4_thought_in_radio()
 	await _r5_interaction_state()
 	await _r6_radio_panel()
+	await _r7_gamepad_and_camera()
 	print("REGRESS_RESULT ", JSON.stringify({"passed": passes, "failed": fails.size(), "failures": fails, "skipped": skips}))
 	quit(1 if fails.size() > 0 else 0)
 
@@ -259,6 +263,162 @@ func _r6_radio_panel() -> void:
 	settings.v["tips"] = saved_tips
 	g.player.leave_focus()
 	await _frames(40)
+
+
+func _pad_button(b: JoyButton, down := true) -> void:
+	var e := InputEventJoypadButton.new()
+	e.button_index = b
+	e.pressed = down
+	e.pressure = 1.0 if down else 0.0
+	Input.parse_input_event(e)
+
+
+func _pad_axis(a: JoyAxis, v: float) -> void:
+	var e := InputEventJoypadMotion.new()
+	e.axis = a
+	e.axis_value = v
+	Input.parse_input_event(e)
+
+
+func _tap(b: JoyButton) -> void:
+	_pad_button(b, true)
+	await _frames(2)
+	_pad_button(b, false)
+	await _frames(2)
+
+
+func _ia_pos(id: String) -> Vector3:
+	for b in g.station.get_children():
+		if b is StaticBody3D and String(b.get_meta("ia", "")) == id:
+			return b.global_position
+	return Vector3.INF
+
+
+## Stage 2C: pad bindings have no overlaps, right-stick look with a deadzone, A / B / LB / RB, the
+## device-view pad cursor (room controls and on-screen buttons), pad focus on replies, glyphs, and the
+## interpolated camera.
+func _r7_gamepad_and_camera() -> void:
+	print("R7 gamepad and camera (Stage 2C)")
+	var settings: Node = root.get_node("Settings")
+	settings.persist = false
+	# a) no two first-person actions share a pad input; v1 boost is off A
+	var seen := {}
+	var dup: Array = []
+	for action in InputSetup.PAD_FP:
+		var b: Array = InputSetup.PAD_FP[action]
+		var key := ("b%d" % b[1]) if b[0] == "button" else ("a%d%s" % [b[1], "+" if b[2] > 0 else "-"])
+		if seen.has(key):
+			dup.append("%s/%s" % [seen[key], action])
+		seen[key] = action
+	_check(dup.is_empty(), "no two first-person actions share a pad input (%s)" % [dup])
+	var boost_on_a := InputMap.action_get_events("boost").any(func(e): return e is InputEventJoypadButton and e.button_index == JOY_BUTTON_A)
+	_check(not boost_on_a, "v1 boost no longer shares A with interact")
+	# b) right-stick look: a small deflection inside the deadzone does nothing, a full one turns
+	g.player.focused = ""
+	var y0: float = g.player._yaw
+	_pad_axis(JOY_AXIS_RIGHT_X, 0.1)
+	await _frames(20)
+	var y_small: float = g.player._yaw
+	_pad_axis(JOY_AXIS_RIGHT_X, 1.0)
+	await _frames(20)
+	var y_full: float = g.player._yaw
+	_pad_axis(JOY_AXIS_RIGHT_X, 0.0)
+	await _frames(5)
+	var y_rest: float = g.player._yaw
+	await _frames(10)
+	_check(is_equal_approx(y0, y_small) and absf(y_full - y0) > 0.1 and is_equal_approx(y_rest, g.player._yaw),
+		"right stick: deadzone %.4f, full turn %.2f rad in 20 frames, stops on release" % [y_small - y0, y_full - y0])
+	_check(InputSetup.pad_active, "a pad input switches the prompts to pad glyphs")
+	_check(g.station.prompt_info("radio", false)["key"] == "[A]", "pad prompt key is [A] (%s)" % g.station.prompt_info("radio", false)["key"])
+	# c) pad A uses the control under the crosshair (free walk): aim at the radar breaker
+	var p := _ia_pos("brk_radar")
+	var inward := Vector3(-p.x, 0, -p.z).normalized()
+	g.player.global_position = Vector3(p.x + inward.x * 1.2, g.player.global_position.y, p.z + inward.z * 1.2)
+	var to: Vector3 = p - (g.player.global_position + Vector3(0, g.player.EYE, 0))
+	g.player._yaw = atan2(-to.x, -to.z)
+	g.player._pitch = atan2(to.y, Vector2(to.x, to.z).length())
+	g.player._apply_look()
+	await _frames(6)
+	var radar0: bool = g.sim.brk_radar
+	await _tap(JOY_BUTTON_A)
+	_check(g.sim.brk_radar != radar0, "pad A switches the radar breaker under the crosshair (hovered=%s)" % g.player.hovered)
+	g._route(g.sim.set_breaker("radar", radar0))
+	# camera follows the body exactly after a placement (no interpolation smear)
+	var cam_err: float = g.player.camera.global_position.distance_to(g.player.global_position + Vector3(0, g.player.EYE + g.player._bob_y, 0))
+	_check(cam_err < 0.01, "camera sits at the eye right after a placement (%.3f m)" % cam_err)
+	# d) device view: the pad cursor picks the MODE knob, A turns it, LB turns it back, B steps back
+	g.player.enter_focus("console")
+	await _frames(40)
+	_check(g.player.virtual_cursor.is_finite(), "entering a device view on the pad starts the pad cursor")
+	g.player.virtual_cursor = g.player.camera.unproject_position(_ia_pos("mode"))
+	await _frames(3)
+	var m0: int = g.sim.mode
+	await _tap(JOY_BUTTON_A)
+	var m1: int = g.sim.mode
+	await _tap(JOY_BUTTON_LEFT_SHOULDER)
+	_check(m1 == (m0 + 1) % 3 and g.sim.mode == m0, "pad cursor + A turns MODE (%d -> %d), LB turns it back (%d)" % [m0, m1, g.sim.mode])
+	var c0: Vector2 = g.player.virtual_cursor
+	_pad_axis(JOY_AXIS_RIGHT_X, 1.0)
+	await _frames(15)
+	_pad_axis(JOY_AXIS_RIGHT_X, 0.0)
+	await _frames(2)
+	_check(g.player.virtual_cursor.x > c0.x + 40.0, "right stick moves the device-view cursor (%.0f -> %.0f px)" % [c0.x, g.player.virtual_cursor.x])
+	await _tap(JOY_BUTTON_B)
+	await _frames(30)
+	_check(g.player.focused == "", "pad B steps back out of the device view")
+	# e) radio view: the pad cursor presses an on-screen order button; RB picks the next vessel
+	g.player.enter_focus("radio")
+	await _frames(40)
+	g.ui._refresh_vessels()
+	var sent := [0]
+	var counter := func(_id, _cmd): sent[0] += 1
+	g.ui.command_requested.connect(counter)
+	var order: Button = null
+	for c in g.ui.radio_panel.find_children("*", "Button", true, false):
+		if String(c.text).contains("Maintain course"):
+			order = c
+	g.player.virtual_cursor = order.get_global_rect().get_center()
+	await _tap(JOY_BUTTON_A)
+	g.ui.command_requested.disconnect(counter)
+	_check(sent[0] == 1, "pad cursor + A presses the radio order under it (sent %d)" % sent[0])
+	var s0: int = g.ui.selected_ship
+	await _tap(JOY_BUTTON_RIGHT_SHOULDER)
+	_check(g.ui.sim.active_ships().size() < 2 or g.ui.selected_ship != s0, "RB selects the next vessel in the radio view")
+	g.player.leave_focus()
+	await _frames(30)
+	# f) dialogue replies take pad focus; A picks the focused reply
+	var picked := [-1]
+	var on_pick := func(i): picked[0] = i
+	dlg.choice_made.connect(on_pick)
+	_choices("person")
+	await _frames(4)
+	var focus_owner := root.gui_get_focus_owner()
+	var first_focused: bool = focus_owner != null and dlg.choice_box.get_child_count() > 0 and focus_owner == dlg.choice_box.get_child(0)
+	await _tap(JOY_BUTTON_A)
+	dlg.choice_made.disconnect(on_pick)
+	_check(first_focused and picked[0] == 0, "pad: the first reply has focus and A picks it (focused=%s, picked=%d)" % [first_focused, picked[0]])
+	if dlg.is_active():
+		dlg.close()
+	# g) head bob off keeps the eye level
+	settings.v["head_bob"] = false
+	g.player.velocity = Vector3(1.6, 0, 0)
+	for i in 20:
+		g.player._process(1.0 / 60.0)
+	_check(absf(g.player._bob_y) < 0.0005 and absf(g.player._roll) < 0.0001, "Head bob off: no bob or roll while walking")
+	settings.v["head_bob"] = true
+	g.player.velocity = Vector3.ZERO
+	# back to keyboard and mouse for anything after this
+	var k := InputEventKey.new()
+	k.keycode = KEY_SHIFT
+	k.physical_keycode = KEY_SHIFT
+	k.pressed = true
+	Input.parse_input_event(k)
+	await _frames(2)
+	var ku := k.duplicate()
+	ku.pressed = false
+	Input.parse_input_event(ku)
+	await _frames(2)
+	_check(not InputSetup.pad_active and g.station.prompt_info("radio", false)["key"] == "[E]", "a key press switches back to keyboard glyphs")
 
 
 func _choices(mode: String) -> void:

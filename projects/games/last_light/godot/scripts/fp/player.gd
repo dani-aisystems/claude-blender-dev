@@ -1,6 +1,8 @@
 extends CharacterBody3D
-## First-person keeper: walk (WASD), look (mouse), interact (E / left mouse) with a raycast on the
-## interaction layer, and device views (focus) that ease the camera onto a console and free the cursor.
+## First-person keeper: walk (WASD / left stick), look (mouse / right stick), interact (E / left mouse /
+## pad A) with a raycast on the interaction layer, and device views (focus) that ease the camera onto a
+## console and free the cursor (mouse, or a virtual cursor on the right stick; B / Esc steps back).
+## The camera is top-level: position interpolated between physics ticks, look applied immediately.
 
 ## The interaction state under the crosshair / cursor (Stage 2), for fp_ui:
 ##   {state: "none" | "valid" | "unavailable", key, text, sub, in_view: bool, help: String}
@@ -15,7 +17,10 @@ const EYE := 1.65
 const WALK := 1.6
 const SPRINT := 2.6
 const REACH := 1.9
-const MOUSE_SENS := 0.0022
+## Mouse look in radians per logical screen point (Stage 2C: from event.screen_relative, so it no
+## longer changes with the window size). 0.0028 matches the old feel in fullscreen on a 1512-pt display.
+const MOUSE_SENS := 0.0028
+const TELEPORT := 0.5                        # a jump this large between physics ticks is a placement, not motion
 const CONTAINER_KINDS := ["info", "focus"]   # big volumes around a whole cabinet / console
 const CONTAINER_DEPTH := 0.6                 # a control this far behind a container's surface wins
 const SWITCH_VIEW_DIST := 1.6                # device views whose eyes are this close switch directly (radio <-> chart)
@@ -37,6 +42,15 @@ var _last_prompt := {}
 ## Device-view cursor that is not the OS pointer (Vector2.INF = follow the mouse). Captures set it to
 ## hover a control without moving Daniel's pointer; the gamepad stick drives it (Stage 2C).
 var virtual_cursor := Vector2.INF
+var gui_click_fn: Callable                   # fp_ui.click_at: the pad cursor presses screen buttons too
+var vessel_cycle_fn: Callable                # fp_ui.cycle_vessel: LB / RB in the radio view
+## Camera smoothing (Stage 2C): the body moves on 60 Hz physics ticks but frames come faster or out of
+## step (120 Hz display, Medium at ~55-60 fps). The camera is top-level and drawn at the body position
+## interpolated between the last two ticks; look rotation is applied at once (no added latency).
+var _pos_prev := Vector3.ZERO
+var _pos_cur := Vector3.ZERO
+var _bob_y := 0.0
+var _roll := 0.0
 
 
 func _ready() -> void:
@@ -59,7 +73,10 @@ func _ready() -> void:
 	camera.near = 0.03
 	camera.far = 1200.0
 	head.add_child(camera)
+	camera.top_level = true                 # placed by _sync_camera (interpolated position, live look)
 	camera.current = true
+	_pos_prev = global_position
+	_pos_cur = global_position
 
 
 func place(t: Transform3D, look_at_point := Vector3.ZERO) -> void:
@@ -80,16 +97,30 @@ func capture_mouse(on: bool) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not enabled:
 		return
-	if event is InputEventMouseMotion and focused == "" and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		var sens: float = MOUSE_SENS * float(Settings.v["mouse_sens"])
-		var inv := -1.0 if Settings.v["invert_y"] else 1.0
-		_yaw -= event.relative.x * sens
-		_pitch = clampf(_pitch - event.relative.y * sens * inv, -1.45, 1.45)
-		_apply_look()
+	if event is InputEventMouseMotion:
+		if focused != "" and event.relative.length() > 0.5 and not InputSetup.pad_forced:
+			virtual_cursor = Vector2.INF       # the real mouse moved: it drives the device-view cursor again
+		if focused == "" and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			var sens: float = MOUSE_SENS * float(Settings.v["mouse_sens"])
+			var inv := -1.0 if Settings.v["invert_y"] else 1.0
+			var d: Vector2 = event.screen_relative / maxf(DisplayServer.screen_get_scale(), 1.0)
+			_yaw -= d.x * sens
+			_pitch = clampf(_pitch - d.y * sens * inv, -1.45, 1.45)
+			_apply_look()
 	elif event.is_action_pressed("interact") or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed):
 		_press(event)
 	elif event.is_action_released("interact") or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed):
 		_release()
+	elif event.is_action_pressed("back"):     # pad B (keyboard: Esc and right click, below / in game_fp)
+		if focused != "":
+			leave_focus()
+	elif event.is_action_pressed("turn_prev") or event.is_action_pressed("turn_next"):
+		var nxt := event.is_action_pressed("turn_next")
+		var hid := _ray_hit_id(focused != "")
+		if hid != "" and station.DEVICES[hid]["kind"] == "cycle":
+			_turn(hid, "next" if nxt else "prev", "wheel" if focused != "" else ("back" if not nxt else "wheel"))
+		elif focused == "radio" and vessel_cycle_fn.is_valid():
+			vessel_cycle_fn.call(1 if nxt else -1)
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 		if focused != "":
 			leave_focus()
@@ -104,6 +135,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _press(_event: InputEvent) -> void:
+	# pad cursor in a device view: on-screen buttons (radio panel) first, then the room's controls
+	if focused != "" and virtual_cursor.is_finite() and gui_click_fn.is_valid() and gui_click_fn.call(virtual_cursor):
+		pressed.emit(true)
+		return
 	var id := _ray_hit_id(focused != "")
 	if id == "":
 		return
@@ -195,6 +230,8 @@ func enter_focus(id: String) -> void:
 	_focus_to = Transform3D(Basis.looking_at(at - eye, Vector3.UP), eye)
 	_focus_t = 0.0
 	velocity = Vector3.ZERO
+	if InputSetup.pad_active:                 # the pad cursor starts in the middle of the view
+		virtual_cursor = get_viewport().get_visible_rect().size * 0.5
 	capture_mouse(false)
 	focus_changed.emit(id)
 
@@ -215,22 +252,69 @@ func leave_focus() -> void:
 func _apply_look() -> void:
 	rotation.y = _yaw
 	head.rotation.x = _pitch
+	_snap_if_placed()
+	_sync_camera()
+
+
+## A placement (spawn, load, capture pose, test aim) is not motion: don't interpolate across it.
+## Walking only moves the body inside _physics_process, which records _pos_cur right after
+## move_and_slide, so any difference here means the position was set from outside.
+func _snap_if_placed() -> void:
+	if not global_position.is_equal_approx(_pos_cur):
+		_pos_prev = global_position
+		_pos_cur = global_position
+
+
+## Where the free-walk eye is this frame: the body interpolated between physics ticks, plus head bob.
+func _home() -> Transform3D:
+	var p := _pos_prev.lerp(_pos_cur, Engine.get_physics_interpolation_fraction())
+	return Transform3D(Basis.from_euler(Vector3(_pitch, _yaw, _roll)), p + Vector3(0, EYE + _bob_y, 0))
+
+
+func _sync_camera() -> void:
+	if _focus_t < 1.0:
+		var e := ease(_focus_t, -2.2)
+		camera.global_transform = _focus_from.interpolate_with(_focus_to if focused != "" else _home(), e)
+	elif focused != "":
+		camera.global_transform = _focus_to
+	else:
+		camera.global_transform = _home()
+
+
+## Per rendered frame: pad look and the device-view cursor, head bob, the camera (Stage 2C).
+func _process(delta: float) -> void:
+	if not enabled:
+		return
+	_snap_if_placed()
+	if focused == "":
+		var s := InputSetup.stick("look_left", "look_right", "look_up", "look_down")
+		if s != Vector2.ZERO:
+			var k: float = InputSetup.LOOK_SPEED * float(Settings.v.get("stick_sens", 1.0)) * delta
+			var inv := -1.0 if Settings.v["invert_y"] else 1.0
+			_yaw -= s.x * k
+			_pitch = clampf(_pitch - s.y * k * 0.7 * inv, -1.45, 1.45)
+			rotation.y = _yaw
+			head.rotation.x = _pitch
+		# subtle head motion (Options: Head bob)
+		var hs := Vector2(velocity.x, velocity.z).length()
+		_bob += delta * hs * 5.2
+		var bob_on: bool = Settings.v.get("head_bob", true) and hs > 0.2
+		_bob_y = lerpf(_bob_y, sin(_bob) * 0.018 if bob_on else 0.0, minf(1.0, delta * 10.0))
+		_roll = lerpf(_roll, cos(_bob * 0.5) * 0.004 if bob_on else 0.0, minf(1.0, delta * 8.0))
+	else:
+		var c := InputSetup.stick("look_left", "look_right", "look_up", "look_down")
+		if c != Vector2.ZERO:
+			var vp := get_viewport().get_visible_rect().size
+			var from := virtual_cursor if virtual_cursor.is_finite() else get_viewport().get_mouse_position()
+			virtual_cursor = (from + c * InputSetup.CURSOR_SPEED * float(Settings.v.get("stick_sens", 1.0)) * delta).clamp(Vector2.ZERO, vp)
+	if _focus_t < 1.0:
+		_focus_t = minf(1.0, _focus_t + delta / 0.45)
+	_sync_camera()
 
 
 func _physics_process(delta: float) -> void:
 	if not enabled:
 		return
-	# camera blend for device views
-	if _focus_t < 1.0:
-		_focus_t = minf(1.0, _focus_t + delta / 0.45)
-		var e := ease(_focus_t, -2.2)
-		var home := head.global_transform
-		if focused != "":
-			camera.global_transform = _focus_from.interpolate_with(_focus_to, e)
-		else:
-			camera.global_transform = _focus_from.interpolate_with(home, e)
-			if _focus_t >= 1.0:
-				camera.transform = Transform3D()
 	if focused != "":
 		if focused == "console":
 			var axis := Input.get_axis("move_left", "move_right")
@@ -253,12 +337,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y = 0.0
 	move_and_slide()
-	# subtle head motion
-	var hs := Vector2(velocity.x, velocity.z).length()
-	_bob += delta * hs * 5.2
-	var target_y := EYE + (sin(_bob) * 0.018 if hs > 0.2 else 0.0)
-	head.position.y = lerpf(head.position.y, target_y, minf(1.0, delta * 10.0))
-	camera.rotation.z = lerpf(camera.rotation.z, (cos(_bob * 0.5) * 0.004 if hs > 0.2 else 0.0), minf(1.0, delta * 8.0))
+	_pos_prev = _pos_cur if global_position.distance_to(_pos_cur) <= TELEPORT else global_position
+	_pos_cur = global_position
 	_update_prompt()
 
 
@@ -351,9 +431,9 @@ func _update_prompt() -> void:
 		info["key"] = p["key"] if ok else ""
 		info["state"] = "valid" if ok else "unavailable"
 	if in_view:
-		info["help"] = "[Esc / Right click]  Step back"
+		info["help"] = "%s  Step back" % InputSetup.key("step_back")
 		if focused == "console":
-			info["help"] = "[A / D]  Turn the handwheel      " + info["help"]
+			info["help"] = "%s  Turn the handwheel      %s" % [InputSetup.key("handwheel"), info["help"]]
 	if info != _last_prompt:
 		_last_prompt = info
 		prompt_changed.emit(info)

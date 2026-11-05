@@ -125,7 +125,7 @@ func bind(d: StoryDirector) -> void:
 
 
 func show_hint(t: String) -> void:
-	hint.text = t
+	hint.text = InputSetup.resolve(t)     # {interact} {move} ... -> keyboard or pad glyphs (Stage 2C)
 	_hint_t = 14.0
 
 
@@ -161,7 +161,7 @@ func open_document(id: String) -> void:
 	_doc_open = id
 	doc_tex.texture = load("res://assets/docs/%s.png" % id)
 	doc_text.text = docs[id]["text"]
-	doc_title.text = "%s        [T] transcription · [E] / [Esc] close" % docs[id]["title"]
+	doc_title.text = "%s        %s transcription · %s / %s close" % [docs[id]["title"], InputSetup.key("transcript"), InputSetup.key("interact"), InputSetup.key("back")]
 	_transcript = false
 	doc_text.visible = false
 	doc_tex.visible = true
@@ -176,14 +176,14 @@ func is_document_open() -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if not doc_root.visible:
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_T:
-			_transcript = not _transcript
-			doc_text.visible = _transcript
-			doc_tex.modulate.a = 0.15 if _transcript else 1.0
-			get_viewport().set_input_as_handled()
-			return
-	if event.is_action_pressed("interact") or event.is_action_pressed("pause") or (event is InputEventMouseButton and event.pressed):
+	if event.is_action_pressed("transcript"):    # T, or pad X (Stage 2C)
+		_transcript = not _transcript
+		doc_text.visible = _transcript
+		doc_tex.modulate.a = 0.15 if _transcript else 1.0
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("interact") or event.is_action_pressed("pause") or event.is_action_pressed("back") \
+			or (event is InputEventMouseButton and event.pressed):
 		doc_root.visible = false
 		var id := _doc_open
 		_doc_open = ""

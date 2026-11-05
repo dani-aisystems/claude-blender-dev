@@ -81,6 +81,8 @@ func start(seed_value: int, mode := "", attract_mode := false, story := false, s
 	player.prompt_changed.connect(ui.set_prompt)
 	player.pressed.connect(ui.pulse)
 	ui.cursor_fn = player.cursor_pos
+	player.gui_click_fn = ui.click_at
+	player.vessel_cycle_fn = ui.cycle_vessel
 	station.docs_enabled = story_mode          # documents and the door's story lines exist only in the campaign
 	station.door_usable = story_mode
 	player.focus_changed.connect(ui.set_focus)
@@ -114,6 +116,7 @@ func _setup_story(save: Dictionary) -> void:
 	presenter.dialogue.at_radio_fn = _at_radio
 	presenter.dialogue.mouse_restore_fn = refresh_mouse
 	ui.number_keys_taken_fn = presenter.dialogue.has_open_choices
+	ui.reply_root_fn = func(): return presenter.dialogue.choice_box
 	presenter.dialogue.apply_settings(Settings.v["text_speed"], Settings.v["subtitle_size"])
 	Settings.changed.connect(_on_settings_changed)     # method (not lambda): auto-disconnects when freed
 	presenter.dialogue.blip.connect(func(kind): audio.ui_blip(kind))
@@ -302,8 +305,40 @@ func _apply_save(d: Dictionary) -> void:
 
 # ------------------------------------------------------------------ loop
 
+## Which device the player is using (Stage 2C): prompts and hints show its glyphs, and a gamepad gets
+## the device-view cursor and focus on dialogue replies. Sticks count only past a clear deflection.
+func _input(event: InputEvent) -> void:
+	if InputSetup.pad_forced:
+		return
+	var pad := InputSetup.pad_active
+	if event is InputEventJoypadButton and event.pressed:
+		pad = true
+	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.4:
+		pad = true
+	elif event is InputEventKey and event.pressed:
+		pad = false
+	elif event is InputEventMouseButton and event.pressed:
+		pad = false
+	elif event is InputEventMouseMotion and event.relative.length() > 2.0:
+		pad = false
+	if pad and (event is InputEventJoypadButton or event is InputEventJoypadMotion):
+		InputSetup.pad_name = Input.get_joy_name(event.device)
+	if pad != InputSetup.pad_active:
+		InputSetup.pad_active = pad
+		if ui:
+			ui._refresh_vessels()             # the Tab tip shows the right glyph
+		if pad and presenter:
+			presenter.dialogue.focus_first_choice()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if attract or _ended or player == null:
+		return
+	if event.is_action_pressed("back") and ui.logbook.visible:     # pad B closes the logbook too
+		ui.toggle_logbook()
+		player.enabled = true
+		refresh_mouse()
+		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("pause"):
 		if presenter and presenter.is_document_open():
@@ -463,7 +498,7 @@ func _ui_events(events: Array) -> void:
 				if not story_mode:
 					ui.show_notice("A grinding shudder from above: the rotation motor has jammed.", 5.0)
 			"logbook":
-				ui.show_notice("New entry in the keeper's log  (L)", 4.0)
+				ui.show_notice("New entry in the keeper's log  (%s)" % InputSetup.glyph("logbook"), 4.0)
 			"ship_saved":
 				if not story_mode:
 					ui.show_notice("%s is safe. +%d" % [e["name"], e["points"]], 4.0)

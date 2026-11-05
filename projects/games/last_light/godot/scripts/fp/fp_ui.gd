@@ -41,8 +41,10 @@ var selected_ship := -1
 var _vessel_btns := {}          # ship id -> Button (kept across refreshes)
 var _no_vessels: Label
 var tab_tip: Label
+var radio_legend: Label
 var number_keys_taken_fn: Callable          # true while dialogue replies own the number keys
 var cursor_fn: Callable                     # player.cursor_pos: the device-view cursor (mouse or virtual)
+var reply_root_fn: Callable                 # dialogue reply buttons' container (pad cursor can press them)
 var _notice_t := 0.0
 var _sub_items: Array = []
 
@@ -139,7 +141,8 @@ func _build_radio(root: Control) -> void:
 		var b := _panel_button("%d   %s" % [i + 1, c[1]], 40, 20)
 		b.pressed.connect(func(): _send(c[0]))
 		v.add_child(b)
-	v.add_child(UIStyle.label("Tab: next vessel · 1-6: send · the radar shows labelled vessels", 13, UIStyle.DIM))
+	radio_legend = UIStyle.label("", 13, UIStyle.DIM)    # text follows keyboard or pad (_refresh_vessels)
+	v.add_child(radio_legend)
 
 
 func _build_logbook(root: Control) -> void:
@@ -260,7 +263,9 @@ func _draw_crosshair() -> void:
 	var c := _cursor()
 	var in_view: bool = prompt_info.get("in_view", false)
 	var col := XH_VALID.lerp(XH_UNAVAIL, _xh_grey)
-	if not in_view:                            # rest dot, fading out as the ring opens
+	# rest dot, fading out as the ring opens. In device views only for the pad cursor: the mouse has the
+	# OS pointer, the pad has nothing else to steer by (seen in the s2c_pad capture)
+	if not in_view or InputSetup.pad_active:
 		var a := (1.0 - _xh_ring) * 0.55
 		if a > 0.01:
 			crosshair.draw_circle(c, 2.6, Color(0, 0, 0, a * 0.5))
@@ -302,6 +307,37 @@ func add_subtitle(from: String, text: String, outgoing: bool) -> void:
 		_sub_items.remove_at(0)
 
 
+## Next (+1) or previous (-1) vessel on the channel: Tab, and the pad's RB / LB in the radio view.
+func cycle_vessel(dir: int) -> void:
+	var act := sim.active_ships()
+	if act.is_empty():
+		return
+	var i := 0
+	for j in act.size():
+		if act[j].id == selected_ship:
+			i = j
+	selected_ship = act[posmod(i + dir, act.size())].id
+	Settings.tip_used("tab")
+	_refresh_vessels()
+
+
+## The pad cursor pressed at `pos` (viewport px): press the on-screen button under it, if any.
+## Covers the radio panel and dialogue replies; returns false when the press belongs to the room.
+func click_at(pos: Vector2) -> bool:
+	var roots: Array = [radio_panel]
+	if reply_root_fn.is_valid():
+		roots.append(reply_root_fn.call())
+	for r in roots:
+		if r == null or not (r as Control).is_visible_in_tree():
+			continue
+		for b in (r as Node).find_children("*", "Button", true, false):
+			var btn := b as Button
+			if btn.is_visible_in_tree() and not btn.disabled and btn.get_global_rect().has_point(pos):
+				btn.pressed.emit()
+				return true
+	return false
+
+
 func _send(cmd: String) -> void:
 	if selected_ship < 0:
 		show_notice("No vessel selected.", 2.0)
@@ -336,6 +372,9 @@ func _refresh_vessels() -> void:
 			_vessel_btns.erase(sid)
 	_no_vessels.visible = act.is_empty()
 	tab_tip.visible = act.size() >= 2 and Settings.tip_wanted("tab")
+	tab_tip.text = "      %s  ·  next vessel" % InputSetup.glyph("next_vessel")
+	radio_legend.text = ("RB / LB: next vessel · point and press %s to send · the radar shows labelled vessels" % InputSetup.glyph("interact")) \
+		if InputSetup.pad_active else "Tab: next vessel · 1-6: send · the radar shows labelled vessels"
 	if act.is_empty():
 		selected_ship = -1
 		return
@@ -364,18 +403,13 @@ func _refresh_vessels() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if get_tree().paused:                    # this layer processes during pause for its menu: no orders
+		if pause_panel and event.is_action_pressed("back"):
+			resume_requested.emit()          # pad B resumes, like Start (Stage 2C)
+			get_viewport().set_input_as_handled()
 		return
 	if radio_panel.visible and event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_TAB:
-			var act := sim.active_ships()
-			if not act.is_empty():
-				var i := 0
-				for j in act.size():
-					if act[j].id == selected_ship:
-						i = j
-				selected_ship = act[(i + 1) % act.size()].id
-				Settings.tip_used("tab")
-				_refresh_vessels()
+			cycle_vessel(1)
 			get_viewport().set_input_as_handled()
 		elif event.keycode >= KEY_1 and event.keycode <= KEY_6:
 			if number_keys_taken_fn.is_valid() and number_keys_taken_fn.call():

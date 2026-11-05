@@ -386,16 +386,24 @@ func _open_options() -> void:
 	var ct := _tab(tabs, "Controls")
 	_opt_slider(ct, "Mouse sensitivity", "mouse_sens", 0.3, 2.5, 0.05)
 	_opt_toggle(ct, "Invert Y axis", "invert_y")
+	_opt_slider(ct, "Gamepad look sensitivity", "stick_sens", 0.3, 2.5, 0.05)
+	_opt_toggle(ct, "Head bob while walking", "head_bob")
 	_opt_toggle(ct, "Hold E to crank the generator (off: press once to crank)", "hold_to_crank")
-	ct.add_child(UIStyle.label("Key bindings", 22, UIStyle.AMBER, UIStyle.serif()))
-	for b in [["Walk", "W A S D / arrows"], ["Look", "Mouse"], ["Use / talk / advance", "E · left click · Space"], ["Choose a reply", "1 – 4"],
-			["Walk faster", "Shift"], ["Station log", "L"], ["Step back / pause", "Esc · right click"], ["Turn handwheel (console)", "A / D"],
-			["Radio: next vessel / send", "Tab / 1 – 6"], ["Document transcription", "T"], ["Fullscreen", "F11"]]:
+	ct.add_child(UIStyle.label("Controls", 22, UIStyle.AMBER, UIStyle.serif()))
+	for b in [["", "Keyboard and mouse", "Gamepad"], ["Walk", "W A S D / arrows", "Left stick"], ["Look", "Mouse", "Right stick"],
+			["Use / talk / advance", "E · left click · Space", "A"], ["Choose a reply", "1 – 4 · click", "D-pad + A"],
+			["Walk faster", "Shift", "Left stick click"], ["Station log", "L", "Y"], ["Step back", "Esc · right click", "B"],
+			["Pause", "Esc", "Start"], ["Selector knobs", "Wheel · right click", "LB / RB"],
+			["Turn handwheel (console)", "A / D", "Left stick · D-pad"], ["Device views: point and click", "Mouse", "Right stick + A"],
+			["Radio: next vessel / send", "Tab / 1 – 6", "RB / point + A"], ["Document transcription", "T", "X"], ["Fullscreen", "F11", "—"]]:
 		var row := HBoxContainer.new()
 		var a := UIStyle.label(b[0], 19)
-		a.custom_minimum_size = Vector2(420, 0)
+		a.custom_minimum_size = Vector2(380, 0)
 		row.add_child(a)
-		row.add_child(UIStyle.label(b[1], 19, UIStyle.DIM))
+		var kb := UIStyle.label(b[1], 19, UIStyle.DIM if b[0] != "" else UIStyle.AMBER)
+		kb.custom_minimum_size = Vector2(330, 0)
+		row.add_child(kb)
+		row.add_child(UIStyle.label(b[2], 19, UIStyle.DIM if b[0] != "" else UIStyle.AMBER))
 		ct.add_child(row)
 	var ac := _tab(tabs, "Accessibility")
 	_opt_toggle(ac, "Show ship radio chatter subtitles (story dialogue always shows)", "subtitles")

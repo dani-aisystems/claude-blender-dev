@@ -52,6 +52,9 @@ func _ready() -> void:
 	var args: Dictionary = GameState.user_args
 	if not args.has("audio"):         # previews are silent (Daniel); --audio to hear them
 		AudioServer.set_bus_mute(0, true)
+	if args.has("pad"):               # Stage 2C: show the gamepad glyphs and pad cursor (no pad needed)
+		InputSetup.pad_active = true
+		InputSetup.pad_forced = true
 	if args.has("quality"):
 		Settings.v["quality"] = clampi(int(args["quality"]), 0, 2)     # in memory only: no settings file write
 	if args.has("render_res"):

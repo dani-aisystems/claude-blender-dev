@@ -218,6 +218,14 @@ func _refresh_choices() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_freed_mouse = true
 	_layout_choices()
+	if InputSetup.pad_active:
+		focus_first_choice()
+
+
+## Gamepad (Stage 2C): the first reply takes focus so the d-pad moves between replies and A picks one.
+func focus_first_choice() -> void:
+	if choice_box.get_child_count() > 0 and get_viewport().gui_get_focus_owner() == null:
+		(choice_box.get_child(0) as Control).grab_focus.call_deferred()
 
 
 ## Keep the reply stack 14 px above the top of the visible speech block (radio panel or subtitles).
