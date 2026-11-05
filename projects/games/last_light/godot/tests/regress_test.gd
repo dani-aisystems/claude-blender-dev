@@ -61,6 +61,7 @@ func _run() -> void:
 	await _r3_pause()
 	await _r4_thought_in_radio()
 	await _r5_interaction_state()
+	await _r6_radio_panel()
 	print("REGRESS_RESULT ", JSON.stringify({"passed": passes, "failed": fails.size(), "failures": fails, "skipped": skips}))
 	quit(1 if fails.size() > 0 else 0)
 
@@ -152,6 +153,112 @@ func _r5_interaction_state() -> void:
 	_check(cranking and not k.start_held and k.gen != KeeperSim.Gen.CRANKING, "pause while holding START stops cranking (was cranking=%s)" % cranking)
 	g.set_paused(false)
 	await _frames(2)
+
+
+func _mouse(pos: Vector2, down: bool) -> void:
+	var m := InputEventMouseMotion.new()
+	m.position = pos
+	m.global_position = pos
+	root.push_input(m)
+	var e := InputEventMouseButton.new()
+	e.button_index = MOUSE_BUTTON_LEFT
+	e.pressed = down
+	e.position = pos
+	e.global_position = pos
+	root.push_input(e)
+
+
+func _vessel_buttons() -> Array:
+	return g.ui.vessel_list.get_children().filter(func(c): return c is Button and not c.is_queued_for_deletion())
+
+
+## Stage 2B: the vessel list keeps its buttons (hover, focus, clicks survive the periodic refresh),
+## and a clicked order button does not keep focus (Space / Enter / pad A would send it again).
+func _r6_radio_panel() -> void:
+	print("R6 radio panel (Stage 2B)")
+	var settings: Node = root.get_node("Settings")
+	if "persist" in settings:
+		settings.persist = false               # tips counted here must not reach user://settings.cfg
+	for n in ["Testboat One", "Testboat Two"]:
+		g._route(g.sim.spawn_story_ship({"name": n, "kind": "fishing", "bearing": 20, "aim": 24, "hold": true, "protected": true}))
+	g.player.enter_focus("radio")
+	await _frames(40)
+	g.ui._refresh_vessels()
+	await _frames(2)
+	var before := _vessel_buttons().map(func(b): return b.get_instance_id())
+	await _frames(125)                         # four 30-frame refresh cycles
+	var after := _vessel_buttons().map(func(b): return b.get_instance_id())
+	_check(before.size() >= 2 and before == after, "vessel buttons keep their identity across refreshes (%d buttons)" % before.size())
+	# a click whose press and release straddle a refresh still selects the vessel
+	var act: Array = g.sim.active_ships()
+	var target_id: int = act[1].id if act.size() > 1 else -1
+	g.ui.selected_ship = act[0].id
+	g.ui._refresh_vessels()
+	await _frames(2)
+	var btn: Button = _vessel_buttons()[1]
+	var pos: Vector2 = btn.get_global_rect().get_center()
+	while Engine.get_process_frames() % 30 != 28:
+		await process_frame
+	_mouse(pos, true)
+	await _frames(4)                           # the refresh lands between press and release
+	_mouse(pos, false)
+	await _frames(2)
+	_check(g.ui.selected_ship == target_id, "a click across a list refresh selects the vessel (selected %d, wanted %d)" % [g.ui.selected_ship, target_id])
+	# Space after clicking an order must not send it again
+	var sent := [0]
+	var counter := func(_id, _cmd): sent[0] += 1
+	g.ui.command_requested.connect(counter)
+	var order: Button = null
+	for c in g.ui.radio_panel.find_children("*", "Button", true, false):
+		if String(c.text).contains("Hold position"):
+			order = c
+	var opos: Vector2 = order.get_global_rect().get_center()
+	_mouse(opos, true)
+	await _frames(2)
+	_mouse(opos, false)
+	await _frames(2)
+	var after_click: int = sent[0]
+	var sp := InputEventKey.new()
+	sp.keycode = KEY_SPACE
+	sp.physical_keycode = KEY_SPACE
+	sp.pressed = true
+	root.push_input(sp)
+	var spu := sp.duplicate()
+	spu.pressed = false
+	root.push_input(spu)
+	await _frames(3)
+	_check(after_click == 1 and sent[0] == 1, "Space after clicking an order does not send it again (click sent %d, total %d)" % [after_click, sent[0]])
+	g.ui.command_requested.disconnect(counter)
+	# one-time tips: shown until the control has been used twice, then gone (counted in memory only here)
+	var saved_tips: Dictionary = settings.v["tips"].duplicate()
+	settings.v["tips"] = {}
+	g.ui._refresh_vessels()
+	var tab_shown: bool = g.ui.tab_tip.visible
+	for i in 2:
+		var t := InputEventKey.new()
+		t.keycode = KEY_TAB
+		t.physical_keycode = KEY_TAB
+		t.pressed = true
+		root.push_input(t)
+		var tu := t.duplicate()
+		tu.pressed = false
+		root.push_input(tu)
+		await _frames(2)
+	_check(tab_shown and not g.ui.tab_tip.visible, "Tab tip shows with two vessels and retires after two uses (shown=%s, now=%s)" % [tab_shown, g.ui.tab_tip.visible])
+	g.player.leave_focus()
+	await _frames(40)
+	g.player.enter_focus("console")
+	await _frames(40)
+	var sub0: String = g.station.prompt_info("mode", true)["sub"]
+	g.player._turn("mode", "next", "wheel")
+	g.player._turn("mode", "prev", "wheel")
+	var sub1: String = g.station.prompt_info("mode", true)["sub"]
+	_check("[Wheel]" in sub0 and not ("[Wheel]" in sub1) and "Right click" in sub1, "knob tip: '%s' -> '%s' after two wheel turns" % [sub0, sub1])
+	_check(not FileAccess.file_exists("user://settings.cfg") or not FileAccess.get_file_as_string("user://settings.cfg").contains("wheel"),
+		"tips counted by tests are not written to settings.cfg")
+	settings.v["tips"] = saved_tips
+	g.player.leave_focus()
+	await _frames(40)
 
 
 func _choices(mode: String) -> void:

@@ -25,7 +25,13 @@ var v := {
 	"subtitles": true, "subtitle_size": 1.0, "text_speed": 42.0, "reduce_flashing": false,
 	"hold_to_crank": true,       # START button: hold (true) or press-to-toggle cranking (false)
 	"settings_rev": 2,           # 2: Medium became the default preset (Stage 1 iteration 1p, Daniel 2026-11-05)
+	# Stage 2: how often the player has used a control that has a one-time tip (tab, wheel, back);
+	# a tip retires once its control has been used TIP_RETIRE times
+	"tips": {},
 }
+const TIP_RETIRE := 2
+## false: never write settings.cfg (tests, captures and bot runs must not change Daniel's preferences)
+var persist := true
 
 
 func _ready() -> void:
@@ -61,7 +67,22 @@ func load_settings() -> void:
 		v["settings_rev"] = 2
 
 
+## Is the tip for this control still useful (the player hasn't used the control often enough yet)?
+func tip_wanted(name_: String) -> bool:
+	return int(v["tips"].get(name_, 0)) < TIP_RETIRE
+
+
+## The player used a control that has a tip. Counted until the tip retires; saved so it stays retired.
+func tip_used(name_: String) -> void:
+	if not tip_wanted(name_):
+		return
+	v["tips"][name_] = int(v["tips"].get(name_, 0)) + 1
+	save_settings()
+
+
 func save_settings() -> void:
+	if not persist or GameState.user_args.has("capture") or GameState.user_args.has("autotest"):
+		return
 	var cf := ConfigFile.new()
 	for k in v:
 		cf.set_value("s", k, v[k])

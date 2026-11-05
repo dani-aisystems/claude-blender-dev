@@ -49,8 +49,8 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | | |
 |---|---|
 | **Stage** | 2, first-person interactions and gameplay |
-| **Iteration** | 2A (interaction foundations) **done, checkpoint presented**, awaiting Daniel. The plan is at `~/.claude/plans/the-last-light-soft-hearth.md`; branding committed `0f18df3` |
-| **Next actionable task** | Daniel's 2A verdict. If approved: a local commit of the Stage 2 files only (the iteration 5 hunks in `station.gd` / `capture_fp.gd` stay unstaged), then iteration 2B (radio panel and discovery) |
+| **Iteration** | 2A approved and committed `52bcb6f`. **2B done, checkpoint presented**, awaiting Daniel. The plan is at `~/.claude/plans/the-last-light-soft-hearth.md`; branding committed `0f18df3` |
+| **Next actionable task** | Daniel's 2B verdict. If approved: commit the Stage 2 hunks only (`station.gd`, `capture_fp.gd` and ROADMAP also hold iteration 5 hunks), then 2C (gamepad and feel) |
 
 ## Stages
 | # | Stage | Status |
@@ -365,7 +365,7 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
   - **retire `hint_device`**;
   - feel: physics interpolation, `screen_relative` look and a head-bob option, with movement numbers unchanged until his playtest;
   - captures approved: 1 "before" run (worktree of `39fc0e7`) plus 1 per checkpoint plus 1 at the stage end, via `tools/godot_bg`. No benchmarks.
-- **Iteration 2A (2026-11-05), interaction foundations. Done; checkpoint presented, awaiting Daniel.**
+- **Iteration 2A (2026-11-05), interaction foundations. Approved by Daniel; committed `52bcb6f`.** His decisions: keep refusing START with a shut valve (rather than crank-and-fail); keep live gauge readings under the prompt.
   - **`station.gd` (interaction API only):**
     - wording pass (verb + object; "Switch the MAIN breaker off" replaces "Open MAIN breaker"; info items read "Check the battery" with the live reading as a sub-line);
     - `availability(id)` → {ok, reason};
@@ -407,6 +407,26 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
     - typography fix verified in `s2a2_check_crops.png` (a second, 3-shot window).
   - **Known confound:** the after frames include the parallel iteration 5 desk props.
   - **Lesson:** a GDScript parse error makes a `-s` test script hang idle (it never reaches `quit()`). Run suites under `timeout`.
+- **Iteration 2B (2026-11-05), radio panel and control discovery. Done; checkpoint presented, awaiting Daniel.**
+  - **Confirmed first:** regress R6 failed 3/3 on the 2A code, so A3 (dropped vessel clicks) and B2 (Space re-sends the last order) are CONFIRMED, not just LIKELY.
+  - **`fp_ui.gd`:**
+    - `_refresh_vessels()` is a keyed update: one button per ship id, text updated in place, nodes added or removed only when the fleet changes;
+    - radio-panel buttons use `FOCUS_NONE` (`_panel_button`). Stage 2C gives them focus only while a pad drives the panel;
+    - an amber "Tab · next vessel" tip beside the Vessel header when two or more vessels are on the channel.
+  - **Tips:**
+    - `Settings.tip_wanted` / `tip_used`, kept in `settings.cfg` under `"tips"`; each retires after 2 uses (`TIP_RETIRE`);
+    - `Settings.persist = false`, and capture or autotest runs never write the file;
+    - knob prompts show "[Wheel] turn · [Right click] turn it back" until each control has been used (`player._turn`).
+  - **Capture:** `!fleet2` adds a test vessel until two are on the channel (not restored; put it last).
+  - **Tests:**
+    - regress 66/66 (new R6: 6 checks);
+    - interaction 134/134 (6 known warnings);
+    - qa_sweep 948/948;
+    - story 0 failures;
+    - sim_v2 no gate failures;
+    - run_tests 95/95;
+    - pytest 18/18.
+  - **Evidence:** `renders/last_light/s2b_*`; sheet `s2b_vs_s2a.png` (the 2A frames are the "before"; the bot's story timing drifted, so the objective text differs).
 - **Iterations:**
   - **2A interaction foundations:** prompt state and availability, refusal reasons, wording, door, focus switching, pause releasing holds, `hint_device`;
   - **2B radio panel and discovery:** keyed vessel update, button focus, tips for Tab and the wheel;

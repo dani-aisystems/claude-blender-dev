@@ -502,8 +502,13 @@ func prompt_info(id: String, in_view: bool) -> Dictionary:
 	match d["kind"]:
 		"info":
 			sub = info_text(id)
-		"cycle":
-			sub = "[Right click] turn it back"
+		"cycle":                          # one-time tips (Stage 2B): gone once the player has used them
+			var tips: Array = []
+			if in_view and Settings.tip_wanted("wheel"):
+				tips.append("[Wheel] turn")
+			if Settings.tip_wanted("back"):
+				tips.append("[Right click] turn it back")
+			sub = "  ·  ".join(tips)
 		"wheel":
 			if in_view:
 				key = "[A / D]"           # the handwheel turns with the keys, not by clicking it

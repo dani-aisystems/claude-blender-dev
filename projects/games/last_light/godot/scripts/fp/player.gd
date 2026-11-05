@@ -94,11 +94,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if focused != "":
 			leave_focus()
 		elif hovered != "":
-			events.emit(station.use(hovered, "prev"))
+			_turn(hovered, "prev", "back")
 	elif event is InputEventMouseButton and event.pressed and focused != "" and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 		var id := _ray_hit_id(true)
 		if id != "":
-			events.emit(station.use(id, "next" if event.button_index == MOUSE_BUTTON_WHEEL_UP else "prev"))
+			_turn(id, "next" if event.button_index == MOUSE_BUTTON_WHEEL_UP else "prev", "wheel")
 	elif event.is_action_pressed("logbook"):
 		logbook_requested.emit()
 
@@ -154,6 +154,15 @@ func _can_switch(to_id: String) -> bool:
 	var a: Dictionary = station.focus.get(focused, {})
 	var b: Dictionary = station.focus.get(to_id, {})
 	return a.has("eye") and b.has("eye") and (a["eye"] as Vector3).distance_to(b["eye"]) <= SWITCH_VIEW_DIST
+
+
+## Turn a selector knob one step with the wheel or right click; using it retires that tip.
+func _turn(id: String, action: String, tip: String) -> void:
+	var ev: Array = station.use(id, action)
+	if not ev.is_empty():
+		Settings.tip_used(tip)
+		pressed.emit(true)
+	events.emit(ev)
 
 
 func _release() -> void:

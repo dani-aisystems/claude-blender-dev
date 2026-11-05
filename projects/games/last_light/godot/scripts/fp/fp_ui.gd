@@ -38,6 +38,9 @@ var pause_panel: Control
 var end_panel: Control
 var fade: ColorRect
 var selected_ship := -1
+var _vessel_btns := {}          # ship id -> Button (kept across refreshes)
+var _no_vessels: Label
+var tab_tip: Label
 var number_keys_taken_fn: Callable          # true while dialogue replies own the number keys
 var cursor_fn: Callable                     # player.cursor_pos: the device-view cursor (mouse or virtual)
 var _notice_t := 0.0
@@ -119,16 +122,21 @@ func _build_radio(root: Control) -> void:
 	v.add_child(UIStyle.label("VHF  ·  Channel 16", 26, UIStyle.AMBER, UIStyle.serif()))
 	radio_status = UIStyle.label("", 16, UIStyle.DIM)
 	v.add_child(radio_status)
-	v.add_child(UIStyle.label("Vessel", 15, UIStyle.DIM))
+	var vh := HBoxContainer.new()
+	vh.add_child(UIStyle.label("Vessel", 15, UIStyle.DIM))
+	tab_tip = UIStyle.label("      Tab  ·  next vessel", 15, UIStyle.AMBER)   # one-time tip (Settings.tip_wanted)
+	tab_tip.visible = false
+	vh.add_child(tab_tip)
+	v.add_child(vh)
 	vessel_list = VBoxContainer.new()
 	vessel_list.add_theme_constant_override("separation", 4)
 	v.add_child(vessel_list)
+	_no_vessels = UIStyle.label("— no vessels on the channel —", 18, UIStyle.DIM)
+	vessel_list.add_child(_no_vessels)
 	v.add_child(UIStyle.label("Instruction", 15, UIStyle.DIM))
 	for i in COMMANDS.size():
 		var c: Array = COMMANDS[i]
-		var b := UIStyle.button("%d   %s" % [i + 1, c[1]])
-		b.custom_minimum_size = Vector2(380, 40)
-		b.add_theme_font_size_override("font_size", 20)
+		var b := _panel_button("%d   %s" % [i + 1, c[1]], 40, 20)
 		b.pressed.connect(func(): _send(c[0]))
 		v.add_child(b)
 	v.add_child(UIStyle.label("Tab: next vessel · 1-6: send · the radar shows labelled vessels", 13, UIStyle.DIM))
@@ -301,27 +309,57 @@ func _send(cmd: String) -> void:
 	command_requested.emit(selected_ship, cmd)
 
 
+## Radio-panel buttons are clicked with the mouse: they must not keep keyboard focus afterwards, or
+## Space / Enter (ui_accept) would press the last order again (Stage 2B, confirmed by regress R6).
+## Stage 2C gives them focus only while a gamepad is driving the panel.
+func _panel_button(text: String, h: int, font_size: int) -> Button:
+	var b := UIStyle.button(text)
+	b.custom_minimum_size = Vector2(380, h)
+	b.add_theme_font_size_override("font_size", font_size)
+	b.focus_mode = Control.FOCUS_NONE
+	return b
+
+
+## Keyed update (Stage 2B): one button per ship id, created when a ship joins the channel and removed when
+## it leaves; otherwise only its text changes. Rebuilding every 30 frames dropped clicks whose press and
+## release straddled a rebuild and threw away hover (regress R6).
 func _refresh_vessels() -> void:
-	for c in vessel_list.get_children():
-		c.queue_free()
 	var act := sim.active_ships()
+	var ids := {}
+	for s in act:
+		ids[s.id] = true
+	for sid in _vessel_btns.keys():
+		if not ids.has(sid):
+			var old: Button = _vessel_btns[sid]
+			vessel_list.remove_child(old)
+			old.queue_free()
+			_vessel_btns.erase(sid)
+	_no_vessels.visible = act.is_empty()
+	tab_tip.visible = act.size() >= 2 and Settings.tip_wanted("tab")
 	if act.is_empty():
-		vessel_list.add_child(UIStyle.label("— no vessels on the channel —", 18, UIStyle.DIM))
 		selected_ship = -1
 		return
-	if sim.find_ship(selected_ship) == null or not sim.find_ship(selected_ship).is_active():
+	if not ids.has(selected_ship):
 		selected_ship = act[0].id
-	for s in act:
+	for i in act.size():
+		var s = act[i]
+		var b: Button = _vessel_btns.get(s.id)
+		if b == null:
+			b = _panel_button("", 36, 19)
+			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			var sid: int = s.id
+			b.pressed.connect(func():
+				selected_ship = sid
+				Settings.tip_used("tab")       # choosing a vessel directly also shows the player knows the list
+				_refresh_vessels())
+			vessel_list.add_child(b)
+			_vessel_btns[s.id] = b
 		var state := "in the channel" if s.state == FleetShip.State.PILOTING else ("MAYDAY" if s.mayday_sent else ("holding" if s.hold else ""))
-		var b := UIStyle.button(("▶ " if s.id == selected_ship else "   ") + s.name + ("   · " + state if state != "" else ""))
-		b.custom_minimum_size = Vector2(380, 36)
-		b.add_theme_font_size_override("font_size", 19)
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		var sid := s.id
-		b.pressed.connect(func():
-			selected_ship = sid
-			_refresh_vessels())
-		vessel_list.add_child(b)
+		var t: String = ("▶ " if s.id == selected_ship else "   ") + s.name + ("   · " + state if state != "" else "")
+		if b.text != t:
+			b.text = t
+		if b.get_index() != i + 1:             # child 0 is the "no vessels" label
+			vessel_list.move_child(b, i + 1)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -336,6 +374,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					if act[j].id == selected_ship:
 						i = j
 				selected_ship = act[(i + 1) % act.size()].id
+				Settings.tip_used("tab")
 				_refresh_vessels()
 			get_viewport().set_input_as_handled()
 		elif event.keycode >= KEY_1 and event.keycode <= KEY_6:

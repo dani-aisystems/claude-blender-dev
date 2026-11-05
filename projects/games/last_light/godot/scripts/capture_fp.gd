@@ -6,7 +6,8 @@ extends Node
 ##       [--bot=expert] [--speed=4] [--quality=0|1|2] [--mode=story|watch]
 ##   Shot = [T@]VIEW[!STATE...]. T = sim seconds. STATE (forced for that shot, restored afterwards):
 ##     dark (room-lights breaker off), flash (lightning at a fixed bearing, captured at its peak),
-##     gen_off (generator stopped), dawn (dawn sky), valve_shut (fuel valve closed)
+##     gen_off (generator stopped), dawn (dawn sky), valve_shut (fuel valve closed),
+##     fleet2 (adds a test vessel until two are on the channel; not restored, so put it last)
 ##   VIEW pp_<ia id> (Stage 2): the PLAYER stands 1.3 m from that control and looks at it, so the shot
 ##     shows the real crosshair and prompt (e.g. 60@pp_start!gen_off!valve_shut)
 ##   --nohud hides the HUD / dialogue layers for room views (kept for "player" and "focus_*" shots).
@@ -202,6 +203,9 @@ func _force(g, st: String) -> void:
 			_restore_state["dawn"] = g.outside.dawn
 			g.outside.set_sky("dawn")
 			g.outside.dawn = 1.0
+		"fleet2":                   # Stage 2: at least two vessels on the channel (radio panel Tab tip);
+			while g.sim.active_ships().size() < 2:   # not restored: put such shots last
+				g._route(g.sim.spawn_story_ship({"name": "Capture Test", "kind": "fishing", "bearing": 30, "aim": 30, "hold": true, "protected": true}))
 		"valve_shut":               # Stage 2: START refused with a reason
 			_restore_state["fuel_valve"] = g.sim.fuel_valve
 			g.sim.fuel_valve = false
