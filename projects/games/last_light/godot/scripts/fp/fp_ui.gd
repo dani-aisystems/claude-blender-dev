@@ -9,8 +9,10 @@ signal restart_requested
 signal menu_requested
 signal backlog_requested                   # Stage 3A: "Dialogue history" in the pause menu, or H / View while paused
 signal call_requested(call_id: String)     # Stage 3B: an optional radio call ("Call Kittiwake")
+signal options_requested                   # brief item 4: Options from the pause menu (main_fp's screen)
 
-const COMMANDS := [["confirm", "Confirm position"], ["port", "Turn port 30°"], ["starboard", "Turn starboard 30°"],
+# brief item 27: port / starboard carry a plain gloss (the ship's own left / right); the radio words stay
+const COMMANDS := [["confirm", "Confirm position"], ["port", "Turn port 30° (left)"], ["starboard", "Turn starboard 30° (right)"],
 	["slow", "Reduce / resume speed"], ["hold", "Hold position"], ["maintain", "Maintain course"]]
 
 const XH_VALID := Color(1.0, 0.96, 0.88, 0.85)      # warm white ring: "this does something"
@@ -530,28 +532,45 @@ func _process_body(delta: float) -> void:
 
 # ------------------------------------------------------------------ pause / end
 
-signal save_requested(slot: String)
-
-
 var _story_pause := false
+var _confirm_panel: Control = null
 
 
+## Brief item 4 (2026-11-06): no manual saving (the game saves itself at every beat, chapter and quit).
+## Story pause: Resume · Transcript · Options · Main menu (asks first). Watch mode keeps its log and restart.
 func show_pause(on: bool, story := false) -> void:
 	_story_pause = story
 	if on and pause_panel == null:
 		var buttons: Array = [["Resume", func(): resume_requested.emit()]]
 		if story:
-			buttons.append(["Dialogue history   ·   %s" % InputSetup.glyph("history"), func(): backlog_requested.emit()])
-			for slot in ["1", "2", "3"]:
-				buttons.append(["Save to slot %s   ·   %s" % [slot, SaveSystem.summary(slot)], func(): save_requested.emit(slot)])
+			buttons.append(["Transcript   ·   %s" % InputSetup.glyph("history"), func(): backlog_requested.emit()])
 		else:
 			buttons.append(["Keeper's log", func(): toggle_logbook()])
 			buttons.append(["Restart the night", func(): restart_requested.emit()])
-		buttons.append(["Main menu", func(): menu_requested.emit()])
-		pause_panel = _modal("Paused", "", buttons)
+		buttons.append(["Options", func():
+			pause_panel.visible = false          # main_fp shows its Options screen; closing it brings this back
+			options_requested.emit()])
+		buttons.append(["Main menu", func(): _confirm_menu() if story else menu_requested.emit()])
+		pause_panel = _modal("Paused", "The game saves automatically." if story else "", buttons)
 	elif not on and pause_panel:
 		pause_panel.queue_free()
 		pause_panel = null
+		_close_confirm()
+
+
+func _confirm_menu() -> void:
+	pause_panel.visible = false
+	_confirm_panel = _modal("Return to the title?", "You will continue from the last automatic save.",
+		[["Stay", func():
+			_close_confirm()
+			pause_panel.visible = true
+			focus_pause()], ["Return to the title", func(): menu_requested.emit()]])
+
+
+func _close_confirm() -> void:
+	if _confirm_panel and is_instance_valid(_confirm_panel):
+		_confirm_panel.queue_free()
+	_confirm_panel = null
 
 
 ## Give the pause menu's first button the focus again (after the dialogue history closes over it).

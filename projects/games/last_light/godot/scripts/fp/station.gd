@@ -491,6 +491,50 @@ func info_text(id: String) -> String:
 	return ""
 
 
+## Brief item 16 (2026-11-06): what Callum makes of a check (E on an info control), from the live sim state.
+## Short keeper's thoughts; they say what the state means and, when something is wrong, what to do.
+func inspect_line(id: String) -> String:
+	match id:
+		"gen_panel":
+			if sim.gen == KeeperSim.Gen.CRANKING:
+				return "Turning over. Keep holding START."
+			if sim.gen == KeeperSim.Gen.RUNNING:
+				if sim.gen_temp >= sim.cfg.temp_warn:
+					return "Running hot, %d degrees. Ease off the charge and let her cool." % int(sim.gen_temp)
+				if not sim.charge_on:
+					return "Running, but nothing's going to the cells. CHARGE is off at the charger."
+				return "Running sweet. %d litres in the day-tank, %d degrees." % [int(sim.fuel), int(sim.gen_temp)]
+			if sim.gen_overheated and sim.gen_temp > sim.cfg.temp_restart:
+				return "Still too hot to start. She'll want to be under %d degrees." % int(sim.cfg.temp_restart)
+			if sim.fuel <= 0.01:
+				return "The day-tank's dry."
+			if not sim.fuel_valve:
+				return "Stopped. The fuel valve's shut: open it, then hold START."
+			return "Stopped. The valve's open. Hold START till she catches."
+		"battery":
+			var b := int(sim.battery)
+			if b <= 0:
+				return "Flat. Nothing in them at all. The engine will have to charge them."
+			if sim.charge_flow > 0.0:
+				return "%d percent, and coming up." % b
+			if sim.battery < sim.cfg.battery_warn:
+				return "%d percent. Low. They want charging." % b
+			return "%d percent. Holding." % b
+		"power_panel":
+			if not sim.main_breaker:
+				return "MAIN has tripped. Reset it once the load's down."
+			if sim.battery <= 0.0:
+				return "Everything's on and nothing's live. The cells are flat."
+			if not sim.brk_lights:
+				return "The lights breaker's off."
+			return "MAIN's in. Drawing %.2f a second off the cells." % sim.demand
+		"radar":
+			if not sim.radar_on():
+				return "Dark. No power to the set." if not sim.powered() else "Switched off at the board."
+			return "Sweeping. I work the ships from the radio."
+	return ""
+
+
 ## Can this control be used right now? {ok, reason}. A reason is shown only when the keeper would know
 ## it by looking (a shut valve, a running engine); story-gated things are unavailable without a reason.
 func availability(id: String) -> Dictionary:

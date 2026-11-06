@@ -19,6 +19,8 @@ var doc_text: RichTextLabel
 var doc_title: Label
 var docs := {}
 var caption: Label                       # 3B: sound captions outside conversations ("[Footsteps on the stair]")
+var thought: Label                       # brief item 16: Callum's short, non-blocking thought when checking a device
+var _thought_tw: Tween
 var _caption_tw: Tween
 ## 3B ending card (§15.5): warm black, the ending's title, the epilogue lines one at a time.
 var ending_root: Control
@@ -157,6 +159,17 @@ func _ready() -> void:
 	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	caption.modulate.a = 0.0
 	root.add_child(caption)
+	thought = UIStyle.label("", 22, UIStyle.INK, UIStyle.serif_italic())
+	thought.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	thought.offset_left = -620
+	thought.offset_right = 620
+	thought.offset_top = -170
+	thought.offset_bottom = -120
+	thought.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	thought.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	thought.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	thought.modulate.a = 0.0
+	root.add_child(thought)
 	fade = ColorRect.new()
 	fade.color = Color(0, 0, 0, 0)
 	fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -257,6 +270,21 @@ func timeskip(clock_text: String) -> void:
 	tw.tween_property(card, "modulate:a", 0.0, 0.5)
 	tw.tween_property(fade, "color:a", 0.0, 1.1)
 	tw.tween_callback(_release)
+
+
+## Item 16: a device check's thought. It never waits for a key (it fades by itself) and is skipped while a
+## story line is on screen, so it can't talk over the story. Returns true if it was shown.
+func show_thought(t: String) -> bool:
+	if t == "" or dialogue.is_active() or _ending_open:
+		return false
+	thought.text = t
+	if _thought_tw:
+		_thought_tw.kill()
+	_thought_tw = create_tween()
+	_thought_tw.tween_property(thought, "modulate:a", 0.95, 0.25)
+	_thought_tw.tween_interval(2.6 + t.length() * 0.035)
+	_thought_tw.tween_property(thought, "modulate:a", 0.0, 0.6)
+	return true
 
 
 ## A sound caption outside a conversation: small capitals, low centre, about three seconds.

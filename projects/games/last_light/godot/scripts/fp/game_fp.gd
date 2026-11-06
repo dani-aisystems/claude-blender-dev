@@ -8,6 +8,7 @@ extends Node3D
 signal finished(stats: Dictionary)
 signal quit_to_menu
 signal campaign_over(ending: Dictionary)
+signal options_requested                  # brief item 4: Options from the pause menu (main_fp owns the screen)
 
 var sim := KeeperSim.new()
 var station: Node3D
@@ -102,7 +103,7 @@ func start(seed_value: int, mode := "", attract_mode := false, story := false, s
 	ui.resume_requested.connect(func(): set_paused(false))
 	ui.restart_requested.connect(func(): finished.emit({"restart": true}))
 	ui.menu_requested.connect(func(): quit_to_menu.emit())
-	ui.save_requested.connect(_manual_save)
+	ui.options_requested.connect(func(): options_requested.emit())
 	ui.backlog_requested.connect(func(): open_backlog(true))
 	if story_mode:
 		_setup_story(save)
@@ -143,6 +144,7 @@ func _setup_story(save: Dictionary) -> void:
 	ui.add_child(backlog)                  # fp_ui processes during pause; drawn above the pause menu
 	director.story_event.connect(_on_story_event)
 	director.request_autosave.connect(func(): autosave())
+	director.beat_autosave.connect(func(): autosave(true))       # item 4: every beat entry, quietly
 	director.campaign_finished.connect(_on_campaign_finished)
 	director.line_shown.connect(func(item): audio.on_line(item))
 	director.line_shown.connect(func(_item): ui.fade_subtitles())      # item 26: one voice on screen
@@ -338,24 +340,11 @@ func save_dict() -> Dictionary:
 		"station": {"door_open": station.door_open, "visitor": visitor_fig != null}}
 
 
-func _manual_save(slot: String) -> void:
-	if not can_save():
-		ui.show_notice("You can't save in the middle of a scene. Try again in a moment.", 3.0)
-		return
-	if SaveSystem.exists(slot) and not ui.has_meta("confirm_" + slot):
-		ui.set_meta("confirm_" + slot, true)
-		ui.show_notice("Slot %s already holds a save. Choose it again to overwrite." % slot, 3.5)
-		return
-	ui.remove_meta("confirm_" + slot)
-	if SaveSystem.write(slot, save_dict()):
-		ui.show_notice("Saved to slot %s." % slot, 2.5)
-		set_paused(false)
-
-
-func autosave() -> void:
+func autosave(quiet := false) -> void:
 	if story_mode and bot_mode == "" and director != null and director.can_autosave() and not _ended:
 		SaveSystem.write("auto", save_dict())
-		ui.show_notice("Progress saved.", 2.0)
+		if not quiet:
+			ui.show_notice("Progress saved.", 2.0)
 
 
 func _apply_save(d: Dictionary) -> void:
@@ -556,6 +545,8 @@ func _track_player(delta: float) -> void:
 func _take_torch(on: bool) -> void:
 	player.give_torch(on)
 	station.set_torch_taken(true)
+	if director:
+		director.on_player_event("torch_taken")    # item 8: the opening checklist's first step
 	if ui and Settings.tip_wanted("torch"):
 		ui.show_notice("The keeper's torch.  %s switches it on and off." % InputSetup.key("torch"), 5.0)
 		Settings.tip_used("torch")
@@ -609,6 +600,9 @@ func _route(events: Array) -> void:
 		for e in events:
 			if e["type"] == "inspect":
 				director.on_player_event("used_" + String(e["device"]))
+				var line: String = station.inspect_line(String(e["device"]))
+				if presenter and presenter.show_thought(line):
+					director.log_thought(line)             # item 16: the check's answer, kept in the transcript
 	if ui:
 		_ui_events(events)
 	if not story_mode:
@@ -636,6 +630,11 @@ func _ui_events(events: Array) -> void:
 				ui.show_notice("The radio is dead: no power.", 2.5)
 			"gen_crank_fail":
 				ui.show_notice("It turns over but won't catch. Is the fuel valve open?" if e["why"] == "valve" else "Out of diesel.")
+			"gen_start":
+				ui.show_notice_once("The engine catches and settles.", 2.5)       # item 16
+			"gen_crank_stop":
+				if sim.gen != KeeperSim.Gen.RUNNING:
+					ui.show_notice_once("Let go too soon: hold START until the engine catches.", 3.0)
 			"gen_too_hot":
 				ui.show_notice("The engine is still too hot to restart.")
 			"gen_hot":

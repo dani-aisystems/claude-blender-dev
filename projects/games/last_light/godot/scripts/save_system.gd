@@ -1,11 +1,12 @@
 extends Node
-## Autoload "SaveSystem": JSON save slots in user://saves/. Slot "auto" is written at chapter starts and
-## after major beats; slots 1-3 are manual. Saves are taken only between story beats (never mid-dialogue),
-## so loading can never replay half a scene or duplicate an event.
+## Autoload "SaveSystem": JSON save slots in user://saves/. Brief item 4 (2026-11-06): saving is automatic
+## only. Slot "auto" is written at every beat entry, chapter start and quit; the one before it is kept as
+## "auto_prev", so a bad moment is never the only save. Slots 1-3 are old manual saves: still listed and
+## loadable if they exist, never written. Saves are taken only between story beats (never mid-dialogue).
 
 const DIR := "user://saves"
 const VERSION := 1
-const SLOTS := ["auto", "1", "2", "3"]
+const SLOTS := ["auto", "auto_prev", "1", "2", "3"]
 
 
 func _ready() -> void:
@@ -17,6 +18,8 @@ func path(slot: String) -> String:
 
 
 func write(slot: String, data: Dictionary) -> bool:
+	if slot == "auto" and FileAccess.file_exists(path("auto")):
+		DirAccess.copy_absolute(ProjectSettings.globalize_path(path("auto")), ProjectSettings.globalize_path(path("auto_prev")))
 	data["version"] = VERSION
 	data["saved_at"] = Time.get_datetime_string_from_system(false, true)
 	data["unix"] = Time.get_unix_time_from_system()

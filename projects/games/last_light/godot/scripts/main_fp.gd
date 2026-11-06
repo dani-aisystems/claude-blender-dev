@@ -39,12 +39,12 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("pause") and game and get_tree().paused:
-		game.set_paused(false)
+	if event.is_action_pressed("pause") and panel and is_instance_valid(panel):
+		_close_panel()                     # Options opened from the pause menu: Esc goes back to the pause menu
 		get_viewport().set_input_as_handled()
 		return
-	if event.is_action_pressed("pause") and panel and is_instance_valid(panel):
-		_close_panel()
+	if event.is_action_pressed("pause") and game and get_tree().paused:
+		game.set_paused(false)
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("fullscreen"):
@@ -246,6 +246,7 @@ func start_game(bot_mode: String, story := true, save: Dictionary = {}) -> void:
 			SaveSystem.write("auto", game.save_dict())
 		show_menu())
 	game.campaign_over.connect(_on_campaign_over)
+	game.options_requested.connect(_open_options)
 
 
 func _on_finished(stats: Dictionary) -> void:
@@ -299,6 +300,10 @@ func _close_panel() -> void:
 	if panel and is_instance_valid(panel):
 		panel.queue_free()
 	panel = null
+	# Options opened from the in-game pause menu (item 4): return to it
+	if game and is_instance_valid(game) and get_tree().paused and game.ui and game.ui.pause_panel:
+		game.ui.pause_panel.visible = true
+		game.ui.focus_pause()
 
 
 func _confirm(text: String, yes: Callable) -> void:
@@ -321,9 +326,12 @@ func _confirm(text: String, yes: Callable) -> void:
 func _open_load() -> void:
 	var v := _panel("Load game")
 	for slot in SaveSystem.SLOTS:
+		if slot not in ["auto", "auto_prev"] and not SaveSystem.exists(slot):
+			continue                       # item 4: old manual saves are listed only if one exists
 		var row := HBoxContainer.new()
 		v.add_child(row)
-		var b := UIStyle.button(("Autosave" if slot == "auto" else "Slot " + slot) + "    " + SaveSystem.summary(slot))
+		var label: String = {"auto": "Latest autosave", "auto_prev": "Previous autosave"}.get(slot, "Old save (slot %s)" % slot)
+		var b := UIStyle.button(label + "    " + SaveSystem.summary(slot))
 		b.custom_minimum_size = Vector2(820, 56)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		UIStyle.track(b, 20)
@@ -332,7 +340,7 @@ func _open_load() -> void:
 			_close_panel()
 			load_slot(slot))
 		row.add_child(b)
-		if SaveSystem.exists(slot) and slot != "auto":
+		if SaveSystem.exists(slot) and slot not in ["auto", "auto_prev"]:
 			var del := UIStyle.button("Delete")
 			del.custom_minimum_size = Vector2(110, 56)
 			del.pressed.connect(func(): _confirm("Delete save slot %s?" % slot, func():
@@ -393,7 +401,8 @@ func _open_options() -> void:
 	_opt_toggle(ct, "Hold E to crank the generator (off: press once to crank)", "hold_to_crank")
 	ct.add_child(UIStyle.label("Controls", 22, UIStyle.AMBER, UIStyle.serif()))
 	for b in [["", "Keyboard and mouse", "Gamepad"], ["Walk", "W A S D / arrows", "Left stick"], ["Look", "Mouse", "Right stick"],
-			["Use / talk / advance", "E · left click · Space", "A"], ["Choose a reply", "1 – 4 · click", "D-pad + A"],
+			["Use", "E · left click", "A"], ["Continue dialogue", "Space", "RT"],
+			["Choose a reply", "1 – 4 (click in a device view)", "D-pad + A"],
 			["Walk faster", "Shift", "Left stick click"], ["Station log", "L", "Y"], ["Step back", "Esc · right click", "B"],
 			["Pause", "Esc", "Start"], ["Selector knobs", "Wheel · right click", "LB / RB"],
 			["Turn handwheel (console)", "A / D", "Left stick · D-pad"], ["Device views: point and click", "Mouse", "Right stick + A"],

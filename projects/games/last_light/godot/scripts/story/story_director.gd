@@ -15,6 +15,7 @@ signal chapter_started(n: int, title: String, subtitle: String)
 signal chapter_finished(n: int)
 signal story_event(name_: String, args: Array)
 signal request_autosave
+signal beat_autosave                   # brief item 4: a quiet autosave at every beat entry (no manual saves)
 signal campaign_finished(ending: Dictionary)
 ## Stage 3B: the presenter runs the chapter change as fade out -> (midpoint: the chapter switches under
 ## black) -> fade in -> card, and calls transition_midpoint() / transition_done(). Headless, nothing waits.
@@ -241,6 +242,8 @@ func _enter_beat() -> void:
 	if b.has("objective"):
 		state.objective = b["objective"]
 		objective_changed.emit(state.objective)
+	if can_autosave() and _hold != 1 and _pending_chapter == 0:
+		beat_autosave.emit()             # entering a beat re-runs it on load, so this is always a clean point
 
 
 func _process(delta: float) -> void:
@@ -580,6 +583,12 @@ func log_radio(from: String, text: String, outgoing: bool) -> void:
 	state.history.append({"speaker": "CALLUM" if outgoing else from.to_upper(), "name": "Callum" if outgoing else from,
 		"text": text, "mode": "radio", "look": "radio", "chapter": state.chapter, "conv": "",
 		"clock": sim.clock_text() if sim else ""})
+
+
+## Item 16: a device-check thought, kept in the transcript like any thought line.
+func log_thought(text: String) -> void:
+	state.history.append({"speaker": "", "name": "", "text": text, "mode": "thought", "look": "thought",
+		"chapter": state.chapter, "conv": "", "clock": sim.clock_text() if sim else ""})
 
 
 ## Item 26: ships whose arrival a story conversation already speaks (the sim's own "we have the channel

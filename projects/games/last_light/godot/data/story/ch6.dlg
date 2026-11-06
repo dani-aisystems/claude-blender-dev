@@ -113,7 +113,7 @@ MORAG: ...North Point, Stornoway. Received and logged. Every word.
 -> END
 = silence
 ! set kept_lie=1
-[if has_flag("admitted_to_morag")] MORAG: ...Three hours ago you told me the light was out before she struck.
+[if has_flag("admitted_to_morag")] MORAG: ...Hours ago you told me the light was out before she struck.
 [if has_flag("admitted_to_morag")] MORAG: I'll not put that in my log, Callum. You'll have to.
 MORAG: ...Roger, North Point. Nothing to report.
 MORAG: Stornoway out.
