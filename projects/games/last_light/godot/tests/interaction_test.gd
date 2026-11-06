@@ -19,6 +19,14 @@ const WORKSTATIONS := {
 	"console": ["console", "mode", "intensity", "handwheel"],
 	"door": ["door"],
 	"desk": ["chart", "radar", "logbook", "drawer", "forecast", "photo", "note", "archive"],
+	# Stage 3B examinations: the dead phone, the tide tables (and the Grant's), the vapour kit, and the 1953
+	# photograph under the door (door kept shut) or on the desk (Ross came in)
+	"story": ["phone", "tide_tables", "vapour", "photo53", "photo53desk"],
+}
+## Story state a device needs before it exists (3B): the photographs appear only on their story path.
+const STORY_SETUP := {
+	"photo53": {"chapter": 4, "clues": ["photo_1953"], "flags": {}},
+	"photo53desk": {"chapter": 5, "clues": [], "flags": {"door_open": 1}},
 }
 const PART := {"fuel_valve": "PT_fuel_valve", "start": "PT_start", "brk_main": "PT_brk_main", "brk_lights": "PT_brk_lights",
 	"brk_radar": "PT_brk_radar", "charge": "PT_charge", "mode": "PT_mode", "intensity": "PT_intensity",
@@ -69,6 +77,8 @@ func _run() -> void:
 	for ws in WORKSTATIONS:
 		print("WORKSTATION ", ws)
 		for dev in WORKSTATIONS[ws]:
+			_story_setup(dev)
+			await _frames(15)                       # game_fp refreshes the story props every 0.2 s
 			await _reach(ws, dev)
 			await _operate(ws, dev)
 	await _save_roundtrip()
@@ -78,6 +88,20 @@ func _run() -> void:
 	if out:
 		out.store_string(JSON.stringify(summary, " "))
 	quit(1 if fails > 0 else 0)
+
+
+func _story_setup(dev: String) -> void:
+	var st: StoryState = g.director.state
+	st.clues.erase("photo_1953")
+	st.flags.erase("door_open")
+	st.chapter = 1
+	if STORY_SETUP.has(dev):
+		var s: Dictionary = STORY_SETUP[dev]
+		st.chapter = int(s["chapter"])
+		for c in s["clues"]:
+			st.clues[c] = true
+		for f in s["flags"]:
+			st.flags[f] = s["flags"][f]
 
 
 # ------------------------------------------------------------------ #1 approach + #2 prompt
@@ -314,7 +338,12 @@ func _operate(ws: String, dev: String) -> void:
 			g._on_doc(dev)
 			await _frames(2)
 			var opened: bool = g.presenter.is_document_open()
-			var hinted: bool = not opened and g.presenter.hint.text != ""
+			var talked: bool = g.director.is_talking()      # 3B: an examination can be a thought instead
+			var hinted: bool = not opened and not talked and g.presenter.hint.text != ""
+			if talked:
+				g.director._talking = false
+				g.director.runner.active = false
+				g.presenter.dialogue.close()
 			var doc_sound := _audio_count() > snd_before
 			for i in 3:                               # E closes; some documents chain (1953 log -> clipping)
 				if not g.presenter.is_document_open():
@@ -330,8 +359,9 @@ func _operate(ws: String, dev: String) -> void:
 				Input.parse_input_event(u)
 				await _frames(3)
 			var closed: bool = not g.presenter.is_document_open() and g.player.enabled
-			state_ok = (opened or hinted) and closed
-			state_note = "%s, closed with E and control returned=%s" % ["document opened" if opened else ("hint shown (chapter-gated)" if hinted else "NOTHING happened"), closed]
+			state_ok = (opened or hinted or talked) and closed
+			state_note = "%s, closed with E and control returned=%s" % ["document opened" if opened else ("thought played" if talked \
+				else ("hint shown (chapter-gated)" if hinted else "NOTHING happened")), closed]
 			_row(ws, dev, "sound", "PASS" if doc_sound else "WARN", "paper sound on open" if doc_sound else "no sound when a document opens (logged for Stage 5)")
 		"door":
 			g._on_doc("door")                         # bolted: a hint, no state change by design

@@ -14,6 +14,10 @@ extends SceneTree
 ##      "Ross" in names, history or backlog), line looks (in-room speakers, sound captions), a typewriter
 ##      that lays out once and waits behind fades and documents, objective tokens, one text scale for all
 ##      roles, and the dialogue history (pauses, never advances, mouse and pad focus restored)
+##  R10 Stage 3B narrative mechanics: the story jam (any mode, no MAIN trip, never cleared by a power loss,
+##      freed only by hand: OFF + handwheel back), Ross's beam assist, transitions that hold the story and
+##      block dialogue input under black, the ending card, optional calls that defer the next beat's talk,
+##      no early "Alasdair Ross", the stair-door bolt and the 1953 photograph props
 ##   godot --path godot -s res://tests/regress_test.gd            (windowed: all checks)
 ##   godot --headless --path godot -s res://tests/regress_test.gd (R1 mouse checks SKIPPED: the headless
 ##                                                                  display server ignores mouse modes)
@@ -78,6 +82,7 @@ func _run() -> void:
 	await _r7_gamepad_and_camera()
 	await _r8_cabin_reliability()
 	await _r9_dialogue_foundation()
+	await _r10_narrative_mechanics()
 	print("REGRESS_RESULT ", JSON.stringify({"passed": passes, "failed": fails.size(), "failures": fails, "skipped": skips}))
 	quit(1 if fails.size() > 0 else 0)
 
@@ -122,9 +127,20 @@ func _r5_interaction_state() -> void:
 	g._update_door_prompt()
 	_check(st.prompt_info("door", false)["key"] == "[E]", "door in ch1: '[E]  Try the stair door'")
 	g.director.state.chapter = 4
+	g.director.state.beat = 0
 	g._update_door_prompt()
 	p = st.prompt_info("door", false)
-	_check(p["key"] == "" and "bolted" in p["text"], "door in ch4 before the story opens it: no key (%s)" % p)
+	_check(p["key"] == "" and p["text"] == "The stair door", "door in ch4 before the boat is alongside: no key (%s)" % p)
+	g.director.state.beat = 2                      # 3B: from `hail` the keeper may bolt it
+	g._update_door_prompt()
+	p = st.prompt_info("door", false)
+	_check(p["key"] == "[E]" and "bolt" in p["text"], "door in ch4 once she's alongside: '[E]  Draw the bolt' (%s)" % p)
+	g.director.state.flags["bolted"] = 1
+	g._update_door_prompt()
+	p = st.prompt_info("door", false)
+	_check(p["key"] == "" and "bolted" in p["text"], "bolted door: no key (%s)" % p)
+	g.director.state.flags.erase("bolted")
+	g.director.state.beat = 0
 	st.door_open = true
 	g._update_door_prompt()
 	_check(st.prompt_info("door", false)["text"] == "The stair door stands open", "open door says so")
@@ -1004,3 +1020,182 @@ Ross said: not a speaker line
 	# the history must never write the mouse mode (R8's single-owner rule)
 	var src := FileAccess.get_file_as_string("res://scripts/ui/backlog_ui.gd")
 	_check(not src.contains("mouse_mode"), "backlog_ui never touches Input.mouse_mode")
+
+
+## Stage 3B: the narrative mechanics behind the approved script (STAGE3_NARRATIVE_MASTER §18).
+func _r10_narrative_mechanics() -> void:
+	print("R10 narrative mechanics (Stage 3B)")
+	# --- a) the story jam: binds on the tooth in any mode, no MAIN trip, survives a power loss (ch2 race)
+	var k := KeeperSim.new()
+	k.setup(KeeperConfig.new(), LayoutData.load_file(), {"ships": [], "faults": []}, 3)
+	k.story_mode = true
+	k.battery = 90
+	k.set_mode(KeeperSim.Mode.AUTO)
+	k.set_intensity(1)
+	var ev := k.trigger_fault("jam", ["story"])
+	_check(k.jammed and k.story_jam and ev.size() == 1 and absf(rad_to_deg(k.bearing) - 46.0) < 0.5,
+		"a story jam binds at once with the repeater on 046 (%.1f°)" % rad_to_deg(k.bearing))
+	var cleared := false
+	for i in 600:                                   # 10 s in AUTO
+		for e in k.step(1.0 / 60.0):
+			cleared = cleared or e["type"] == "jam_cleared"
+	_check(k.main_breaker and k.jammed and not cleared, "10 s jammed in AUTO: MAIN does not trip, the jam holds")
+	k.trigger_fault("trip")
+	for i in 120:
+		for e in k.step(1.0 / 60.0):
+			cleared = cleared or e["type"] == "jam_cleared"
+	_check(k.jammed and not cleared, "losing MAIN does not clear a story jam (the ch2 race)")
+	k.set_breaker("main", true)
+	k.set_mode(KeeperSim.Mode.MANUAL)
+	var b0 := k.bearing
+	k.set_wheel(1.0)
+	for i in 120:
+		k.step(1.0 / 60.0)
+	_check(absf(k.bearing - b0) < 0.001, "MANUAL on the tooth: the handwheel is rigid")
+	k.set_mode(KeeperSim.Mode.OFF)
+	for i in 120:
+		k.step(1.0 / 60.0)
+	_check(k.jammed and absf(k.bearing - b0) < 0.001, "OFF: the wheel will not drive her forward past the tooth")
+	k.set_wheel(-1.0)
+	for i in 240:
+		for e in k.step(1.0 / 60.0):
+			cleared = cleared or (e["type"] == "jam_cleared")
+	_check(cleared and not k.jammed and rad_to_deg(k.bearing) < 46.0 - k.cfg.jam_back_deg + 0.5,
+		"backing the handwheel past the tooth frees it (%.1f°)" % rad_to_deg(k.bearing))
+	k.set_wheel(0.0)
+	# --- b) Ross on the handwheel keeps the beam on the ship in MANUAL (lit_by_hand)
+	k.spawn_story_ship({"name": "Iona Star", "kind": "steamer", "bearing": 66, "aim": 30, "speed_mul": 0.55, "hold": true, "protected": true,
+		"range": 150.0})                              # inside the hand beam's reach
+	var st := StoryState.new()
+	st.sim = k
+	k.set_mode(KeeperSim.Mode.MANUAL)
+	k.assist = true
+	for i in 360:
+		k.step(1.0 / 60.0)
+	_check(st.lit_by_hand("Iona Star"), "Ross assist: the beam is held on the Iona Star in MANUAL")
+	k.set_mode(KeeperSim.Mode.AUTO)
+	_check(not st.lit_by_hand("Iona Star"), "the assist is only a MANUAL thing")
+	# --- c) transitions hold the story; nothing types or advances under black
+	var d: StoryDirector = g.director
+	d._do(["timeskip", 1110, "18:30"])
+	_check(d.is_held(), "a timeskip holds the story")
+	dlg.show_line({"mode": "person", "speaker": "MORAG", "text": "This line must wait for the fade to lift."})
+	await _frames(70)                                 # the screen is black by now (1.0 s fade)
+	_key(KEY_E)
+	await _frames(3)
+	_check(g.presenter.fade.color.a > 0.5 and dlg._shown < 1.0, "under black: no typing, and E does not finish the line")
+	var t := 0
+	while d.is_held() and t < 400:
+		await process_frame
+		t += 1
+	_check(not d.is_held() and g.presenter.fade.color.a < 0.05, "the hold is released when the fade has lifted (%d frames)" % t)
+	dlg.close()
+	# --- d) the ending card: title, the lines one by one, input moves it on, then it releases the story
+	var lines := ["The Board opened a new inquiry in the spring.", "North Point Light. Fifteenth of November, nineteen seventy-one.", "The light was kept."]
+	var done := [false]
+	g.presenter.show_ending("correction", "Correction", lines)
+	await _frames(5)
+	_check(g.presenter.ending_root.visible and g.presenter.is_screen_held(), "the ending card covers the screen and holds dialogue")
+	_check(g.presenter.ending_title.text.begins_with("C O R R E C T I O N"), "the title is set in spaced capitals (%s)" % g.presenter.ending_title.text)
+	t = 0
+	while g.presenter.is_ending_open() and t < 2400:
+		if t > 30 and t % 25 == 0:
+			_key(KEY_E)
+		await process_frame
+		t += 1
+	_check(not g.presenter.is_ending_open() and g.presenter.ending_box.get_child_count() == lines.size(),
+		"every epilogue line was shown, then the card released (%d frames)" % t)
+	g.presenter.ending_root.visible = false
+	g.presenter.ending_bg.color.a = 0.0
+	g.presenter.dialogue.visible = true
+	# --- e) optional calls: offered between their beats, deferring the next beat's talk until they end
+	var k2 := KeeperSim.new()
+	k2.setup(KeeperConfig.new(), LayoutData.load_file(), {"ships": [], "faults": []}, 5)
+	k2.story_mode = true
+	var d2 := StoryDirector.new()
+	root.add_child(d2)
+	d2.setup(k2, true)
+	d2.state.chapter = 2
+	d2.state.beat = 4                                  # second_call: wait 8, then the Mary Ellen talks
+	d2._enter_beat()
+	var ids: Array = d2.available_calls().map(func(c): return String(c["id"]))
+	_check(ids.has("opt_ch2_rory") and ids.has("opt_ch2_morag"), "ch2 after Gannet: Rory and Morag can be called (%s)" % [ids])
+	d2.state.beat = 6
+	_check(d2.available_calls().is_empty(), "the calls close once the archive beat has run")
+	d2.state.beat = 4
+	_check(d2.request_call("opt_ch2_morag") and d2.optional_running() == "opt_ch2_morag", "a call starts from the panel")
+	var convs := {}
+	for i in 900:                                     # 15 s: the Mary Ellen would have spoken by now
+		d2._process(1.0 / 60.0)
+		if d2.is_talking():
+			convs[String(d2.runner.conv.get("id", ""))] = true
+		if not d2.is_talking() and i > 10:
+			break
+	_check(not convs.has("ch2_mary_ellen") and d2.state.clue("sister_boat"), "the beat's talk waits for the optional call (%s)" % [convs.keys()])
+	for i in 900:
+		d2._process(1.0 / 60.0)
+		if d2.is_talking():
+			convs[String(d2.runner.conv.get("id", ""))] = true
+	_check(convs.has("ch2_mary_ellen"), "then the Mary Ellen calls")
+	_check(not d2.available_calls().any(func(c): return c["id"] == "opt_ch2_morag"), "a call is offered once")
+	d2.queue_free()
+	g.director.state.chapter = 2
+	g.director.state.beat = 4
+	g.ui._refresh_calls()
+	_check(g.ui.calls_box.visible and g.ui.calls_list.get_child_count() == 2, "the radio panel lists both calls")
+	g.director.state.chapter = 1
+	g.director.state.beat = 0
+	g.ui._refresh_calls()
+	_check(not g.ui.calls_box.visible, "no calls, no 'Call a station' box")
+	# --- f) nobody sees "Alasdair Ross" before his name is spoken: ch4 door kept shut, then ch5's first line
+	var st3 := StoryState.new()
+	var r := DialogueRunner.new(g.director.db, st3)
+	r.start("ch4_door")
+	var shown: Array = []
+	var item := r.advance()
+	while item["type"] != "end":
+		if item["type"] == "choice":
+			var pick := 0
+			for c in item["choices"]:
+				if "Keep the door shut" in String(c["text"]):
+					pick = int(c["index"])
+			item = r.choose(pick)
+			continue
+		if item["type"] == "line":
+			shown.append(String(item["name"]))
+		item = r.advance()
+	r.start("ch5_ross")
+	item = r.advance()
+	while item["type"] != "line" or String(item["name"]) == "":     # past Callum's opening thought
+		item = r.advance()
+	var first_name: String = item["name"]                           # "Alasdair Ross. Master of the Mary Ellen..."
+	item = r.advance()
+	while item["type"] != "line" or String(item["name"]) == "":
+		item = r.advance()
+	_check(not shown.has("Alasdair Ross") and first_name != "Alasdair Ross" and String(item["name"]) == "Alasdair Ross",
+		"his name shows only after he says it (door: %s, ch5: %s -> %s)" % [shown, first_name, item["name"]])
+	_check(not JSON.stringify(st3.history.slice(0, -1)).contains("Alasdair Ross\""), "the history never stored the name before it was known")
+	# --- g) the bolt, and h) the photograph props
+	var gs: StoryState = g.director.state
+	gs.chapter = 4
+	gs.beat = 2
+	g.station.door_open = false
+	g._use_door()
+	await _frames(2)
+	_check(gs.has_flag("bolted") and g.director.is_talking(), "drawing the bolt sets `bolted` and says so")
+	g.director._talking = false
+	dlg.close()
+	gs.flags.erase("bolted")
+	gs.clues["photo_1953"] = true
+	g._update_story_props()
+	_check(g.station.story_prop_shown("photo53") and not g.station.story_prop_shown("photo53desk"), "door kept shut: the photograph lies inside the door")
+	gs.clues.erase("photo_1953")
+	gs.flags["door_open"] = 1
+	gs.chapter = 5
+	g._update_story_props()
+	_check(g.station.story_prop_shown("photo53desk") and not g.station.story_prop_shown("photo53"), "door opened: from ch5 he has left it on the desk")
+	gs.flags.erase("door_open")
+	gs.chapter = 1
+	gs.beat = 0
+	g._update_story_props()
+

@@ -81,6 +81,12 @@ var DEVICES := {
 	"forecast": {"kind": "doc", "prompt": "Read the teleprinter forecast"},
 	"coat_note": {"kind": "doc", "prompt": "Read the note in the coat pocket"},   # cabin pass
 	"door": {"kind": "door", "prompt": "The stair door"},
+	# Stage 3B examinations (STAGE3_NARRATIVE_MASTER §11.2): thoughts and documents, story mode only
+	"phone": {"kind": "doc", "prompt": "Try the telephone"},
+	"tide_tables": {"kind": "doc", "prompt": "Look at the Admiralty Tide Tables"},
+	"vapour": {"kind": "doc", "prompt": "Look at the old vapour burner"},
+	"photo53": {"kind": "doc", "prompt": "Pick up the photograph"},
+	"photo53desk": {"kind": "doc", "prompt": "Look at the photograph he left"},
 	"power_panel": {"kind": "info", "prompt": "Check the distribution board"},
 }
 ## Set by game_fp (Stage 2): documents only open in the story campaign; the door's prompt and whether
@@ -91,6 +97,9 @@ var door_usable := true
 var torch_taken := false
 var _torch_nodes: Array = []
 var _ia_bodies := {}                    # id -> StaticBody3D (so a taken item stops being targetable)
+## Stage 3B: props that exist only once the story puts them there (the 1953 photograph under the door or
+## on the desk). key -> meshes; the IA body of the same key is targetable only while shown.
+var _story_props := {"photo53": [], "photo53desk": []}
 
 
 func setup(k: KeeperSim) -> void:
@@ -103,6 +112,8 @@ func setup(k: KeeperSim) -> void:
 	_make_probe()
 	_make_fog_cut()
 	apply_shadow_preset()
+	for key in _story_props:
+		set_story_prop(key, false)
 
 
 func _bind(root: Node) -> void:
@@ -124,6 +135,8 @@ func _bind(root: Node) -> void:
 				_no_shadow(n)
 		elif nm.begins_with("PROP_torch"):
 			_torch_nodes.append(n)
+		elif nm.begins_with("PROP_photo53"):
+			_story_props["photo53desk" if nm.begins_with("PROP_photo53desk") else "photo53"].append(n)
 		elif nm.begins_with("LMP_"):
 			_bind_lamp(n, nm.substr(4))
 		elif nm.begins_with("IA_"):
@@ -589,6 +602,19 @@ func set_torch_taken(v: bool) -> void:
 		(n as Node3D).visible = not v
 	if _ia_bodies.has("torch"):
 		(_ia_bodies["torch"] as StaticBody3D).collision_layer = 0 if v else 1 << (INTERACT_LAYER - 1)
+
+
+## Show or hide a story prop and make it (un)targetable (3B).
+func set_story_prop(key: String, shown: bool) -> void:
+	for n in _story_props.get(key, []):
+		(n as Node3D).visible = shown
+	if _ia_bodies.has(key):
+		(_ia_bodies[key] as StaticBody3D).collision_layer = (1 << (INTERACT_LAYER - 1)) if shown else 0
+
+
+func story_prop_shown(key: String) -> bool:
+	var ns: Array = _story_props.get(key, [])
+	return not ns.is_empty() and (ns[0] as Node3D).visible
 
 
 func door_position() -> Vector3:

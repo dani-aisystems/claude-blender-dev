@@ -49,8 +49,8 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | | |
 |---|---|
 | **Stage** | 3, dialogue, characters and story pacing |
-| **Iteration** | **3A approved by Daniel 2026-11-06** (local commit). 3B is waiting on his read of the master script |
-| **Next actionable task** | Wait for Daniel's notes on, or approval of, `projects/games/last_light/STAGE3_NARRATIVE_MASTER.md`. Then 3B: transcribe the script into `.dlg` / `chapters.json` / `docs.json`; ch1 at 11 beats; the ch2/ch6 jam (sim S1–S5); transitions; ending cards; optional content; the tests in §18.4. **Approved plan (revision 2, with Daniel's 2026-11-05 decisions):** `~/.claude/plans/the-last-light-stage3-plan-r2.md`. No `.dlg` / `chapters.json` rewrite until Daniel approves the master script |
+| **Iteration** | **3B approved by Daniel 2026-11-06** (local commit). Next: plan 3C (portraits) at its gate. 3A approved and committed (`dc87818`). Master script **approved by Daniel 2026-11-06** with fixes F1–F7 |
+| **Next actionable task** | Plan **3C** (character portraits and presentation) and get Daniel's approval before building. Fold into the 3C capture run: the Calls box and the sound caption (the 3B leftovers) |
 
 ## Stages
 | # | Stage | Status |
@@ -58,7 +58,7 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | 0 | Critical fixes and regression baseline | ✅ **approved by Daniel 2026-11-04** (iteration 0.2) |
 | 1 | Cabin lighting, materials and architecture | ✅ **approved by Daniel 2026-11-05** (iterations 1.0, 1a, 1b, 2, 3, 3b, 4, 1p) |
 | 2 | First-person interactions and gameplay | ✅ **approved by Daniel 2026-11-05** (iterations 2A–2D) |
-| 3 | Dialogue, characters and story pacing | 🟡 plan revision 2 approved 2026-11-05; 3A in progress |
+| 3 | Dialogue, characters and story pacing | 🟡 3A and 3B approved (local commits); 3C next |
 | 4 | Outside world and major story events | ⬜ |
 | 5 | Sound and cinematic presentation | ⬜ |
 | 6 | Menus, effects and final polish | ⬜ |
@@ -583,6 +583,66 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
   - He is reading the master script and will reply. **No `.dlg` / `chapters.json` / `docs.json` rewrite until he approves.**
   - The script's four open questions: all recommendations accepted.
   - The command-panel and identity-row fixes are re-captured at the 3B checkpoint.
+
+### Iteration 3B: narrative implementation (2026-11-06, approved by Daniel, committed locally)
+- **Daniel (2026-11-06):**
+  - **master script approved** with fixes F1–F7 (`STAGE3_NARRATIVE_MASTER.md` §21);
+  - playtime stays **about 90 min**, measured in Stage 6;
+  - **one batched, silent `tools/godot_bg` capture run is pre-approved for the 3B checkpoint**. Any other window still needs his OK.
+- **Problems the script check found in the code (to fix in 3B):**
+  - **Transitions.** Dialogue starts under the chapter card and the timeskip black. E advances a line even while the screen is held.
+  - **Jams.**
+    - The ch2 jam clears on any power loss (the race).
+    - The handwheel does nothing in OFF.
+    - `jam_cleared` counts across chapters.
+    - Story jams trip MAIN.
+  - **Saves.**
+    - An autosave inside a beat's `do` list replays that beat's talks on load.
+    - A chapter-change save skips the chapter's start values.
+  - **Devices.**
+    - There is no phone mesh.
+    - The tide-tables anchor is about 0.4 m off the books.
+    - The ch4 door prompt says "bolted".
+- **What 3B changed:**
+
+  | Area | Change | Files |
+  |---|---|---|
+  | Story data | The approved script, transcribed with F1–F7 and the §21.1 notes:<br>• 6 `.dlg` files;<br>• `chapters.json` at 11/8/7/5/5/7 beats;<br>• optional calls and the after-read map;<br>• `docs.json`: edited log, letter, note and photo, and a new `inquiry_extract` | `data/story/*`, `blender/documents.py`, `assets/docs/*` |
+  | Director | **Transitions:** chapter change and timeskip run fade out → midpoint (world changes under black) → fade in/card → `transition_done`. Only "instant" actions run while held, with a safety time-out.<br>**New actions:** `caption`, `until`, `release`, `ending_card` (ending id plus epilogue lines).<br>**Optional calls:** offered between beats, and they defer the beat's talk.<br>**Other:** `play_aside` for examinations; timed hint lists; `jam_cleared_ch<N>`; a `bot_pick_fn` hook for tests | `story/story_director.gd` |
+  | Saves | **Autosave inside a beat:** stores the remaining actions (`in_beat`/`resume`), so a load continues the beat instead of replaying it.<br>**Chapter-change save:** taken after the chapter start values are applied.<br>**Old saves:** `layout` 2, and old ch1/ch6 beat indices are remapped (`StoryState.remap_beat`) | `story/story_state.gd`, `story_director.gd`, `game_fp.gd` |
+  | Presentation | Chapter card, timeskip and caption; the **ending card** (warm black, spaced-capitals title, lines one at a time; input or about 4 s each); input blocked under black | `story/story_presenter.gd`, `ui/dialogue_ui.gd`, `main_fp.gd` |
+  | Sim | **Story jam:** binds at 046° in any mode; MANUAL is rigid; no MAIN trip; never cleared by a power loss; freed by MODE OFF plus the handwheel backed 6°; `jam_reengage` (ch2 AUTO, ch6 MANUAL).<br>**Hand turning:** the handwheel turns the optic in OFF.<br>**Ross assist:** follows the lowest-`tti` ship in MANUAL.<br>**Jammed AUTO:** a fixed beam.<br>**Story ships:** `range` and `release_ship`.<br>Watch-mode jams are unchanged (sim_v2 numbers identical) | `core/keeper_sim.gd`, `keeper_config.gd`, `keeper_bot2.gd` |
+  | Ch6 rescue | The *Iona Star* holds until Rory's call, then makes way across the 046° line. With no orders she is aground about 85 s later, even with Ross on the beam. A player who starts vectoring 60 s late still saves her | `chapters.json` |
+  | Room | GPO 706-style phone (desk, back-right corner); 1953 photograph props (`PROP_photo53door` / `PROP_photo53desk`); IA volumes for the phone, tide tables, vapour kit and photographs; anchors moved onto the props. Blender v036 (an intermediate build) and **v037**; GLB v035; 119.8k tris; 0 validation FAIL; reimport OK | `blender/build.py`, `fp/station.gd`, `game_fp.gd` |
+  | Doors and devices | **Bolt:** ch4, from `hail` until the door scene ("Draw the bolt"). **Other devices:** phone, tide tables (and the Grant's), vapour kit, photographs. **Archive:** the second open alternates with the Inquiry extract. **Drawer:** the hint foreshadows F2 | `game_fp.gd`, `station.gd` |
+  | Radio panel | A "Call a station" box, keyed, greyed out with no power | `fp/fp_ui.gd` |
+  | Capture tool | 3B states: `chapter_<n>`, `timeskip`, `ending_<id>`, `calls`, `photo_door`, `caption`, `say_phone`, `say_grants`. **Capture runs now swallow real input:** the first checkpoint run lost its game when a real key reached the focused "Continue" button | `scripts/capture_fp.gd` |
+- **Tests (headless, final code):**
+
+  | Suite | Result | Notes |
+  |---|---|---|
+  | story | 0 failures | 8 campaigns reach **all 4 endings**, plus the lie + reunion variant and a door-shut-throughout game, each with a titled card and its epilogue lines; 13 autosaves reloaded with no replay; flag audit 34 set, 0 unread; layout, `.dlg` action and remap checks |
+  | regress | 172/172 | 3 headless mouse skips; new R10 has 27 checks |
+  | interaction | 159 checks, 0 failures | 12 warnings, all "no paper sound" (Stage 5) |
+  | qa_sweep | 1,918/1,918 | |
+  | run_tests | 95/95 | |
+  | sim_v2 | no gate failures | identical to HEAD |
+  | pytest | 18/18 | |
+
+  Baseline at HEAD (`dc87818`, clean worktree): story 0, regress 143, interaction 134, qa_sweep 1,411, run_tests 95, sim_v2 OK, pytest 18.
+- **Captures:** `renders/last_light/s3b_pair_sheet_{1..3}.png` (before from a worktree of `dc87818`) and `s3b_new_sheet_{1..3}.png`.
+  - **Both 3A recaptures are done:** the command panel at 1.5 and the identity row.
+  - **The Calls box was not captured:** the forced state ran while the bot was speaking. The state is fixed, and R10 verifies the box headlessly.
+  - **A cursor tip** ("[Click] Write up the station log") can sit over the radio identity row. It follows the real mouse position in the background window and is older than 3B.
+- **Daniel (2026-11-06): checkpoint 3B approved.**
+  - Commit locally.
+  - **Keep the ch6 hold-then-release rescue.**
+  - Recapture the Calls box and the caption at the 3C checkpoint.
+  - Commit v037; v036 stays untracked.
+- **Known limits:**
+  - nothing is heard: `carrier_click` is not synthesised yet (Stage 5), so the ch1 carrier is caption-only;
+  - the photograph on the floor is small (a 12.5 cm print);
+  - playtime is still a design estimate.
 
 ## Stage 2 log
 - **Plan (2026-11-05), approved.** The full audit is at `~/.claude/plans/the-last-light-soft-hearth.md`.

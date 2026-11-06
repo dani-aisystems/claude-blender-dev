@@ -1,7 +1,7 @@
 {
  "log_1971": {
-  "title": "Station log, 14 November 1971",
-  "text": "14.11 16.22 SW6 Overcast, rain: Light exhibited. Lamp normal. / 16.40 Engine started. Batteries on charge, 41%. / 18.30 Kittiwake (SY 37) brought in by North Sound on radio bearings. / 23.25 Radio check Stornoway CG. Gale 9 forecast. All well.  (Hand: C. Mackay)"
+  "title": "Station log, Sunday 14 November 1971",
+  "text": "14.11.71 Sun. 16.22 SW 6, overcast, rain. Light exhibited. Lamp normal. / 16.40 Engine started. Batteries on charge, 41%. / 18.30 Radio check Stornoway CG. Gale warning, severe gale 9. / 18.50 Kittiwake (SY 37) brought in by North Sound on radio bearings. / 23.25 Stornoway CG on Ch. 16. All well.  (Hand: C. Mackay)"
  },
  "log_1953": {
   "title": "Station log, 14-15 November 1953",
@@ -9,11 +9,15 @@
  },
  "letter_1957": {
   "title": "Unsent letter, Christmas 1957",
-  "text": "Christmas 1957\n\nCallum,\n\nI made you write it. I made a boy of twenty-three put his name to my lie, because I was asleep in this chair with the bottle, and the clockwork stuck on the bad tooth, and the light was out, and I could not face it.\n\nThe girl at Stornoway had it right. Ten minutes to two. I heard the wireless in my sleep and thought I was dreaming.\n\nRoss was a better man than me. If you ever have the courage I did not, put it right.\n\nYour father,\nIain Mackay"
+  "text": "Christmas 1957\n\nCallum,\n\nI made you write it. I made a boy of twenty-three put his hand to my lie, because I was asleep in this chair with the bottle, and the clockwork stuck on the bad tooth, and the light was out, and I could not face it.\n\nThe girl at Stornoway had it right. Ten minutes to two. I heard the wireless in my sleep and thought I was dreaming.\n\nRoss was a better man than me, and he was my friend. If you ever have the courage I did not, put it right.\n\nYour father,\nIain Mackay"
  },
  "note_046": {
   "title": "Maintenance note, light console",
-  "text": "GEAR RACE - worn tooth at 046\u00b0. Sticks in heavy weather. Free by hand. Reported to Board 1949. I.M. / Reported again 1953. C.M. / Reported again 1961. Engineer says \"next refit\". C.M."
+  "text": "GEAR RACE - worn tooth at 046\u00b0. Sticks in heavy weather. FREE BY HAND: take the drive off, back her past the tooth, then put the drive in again. Reported to Board 4.3.49. I.M. / Reported again 9.12.53. C.M. / Reported again 2.2.61. Engineer says \"next refit\". C.M."
+ },
+ "inquiry_extract": {
+  "title": "Report of Formal Investigation, Mary Ellen (SY 214): extract",
+  "text": "22. The Court has considered a wireless message logged by Stornoway Coastguard at 01.52, which was said to report that no light was visible from North Point. The message was received in conditions of severe interference. The Court finds it confused and unreliable. 23. The Court prefers the evidence of the station log of North Point Light, kept by a principal keeper of long and unblemished service, which records that the light was exhibited throughout save for approximately two minutes at 02.10. 24. The Court finds that the master, Alasdair Ross, failed to keep a proper lookout and stood into danger despite the light being exhibited. APPENDIX C. Photostat of the station log, North Point Light, 14-15 November 1953. (The page shown is in a small square hand.)"
  },
  "clipping_1954": {
   "title": "Stornoway Gazette, 18 March 1954",
@@ -32,7 +36,7 @@
   "text": "Stores for the relief boat,\nThurs. if the sea allows\n\n- paraffin for the stove (2 drums)\n- No. 8 cells for the torch, a dozen\n- tea, condensed milk, Skerry Flake\n- glass for the west window, 2nd pane\n   (cracked in the Sept. gale)\n\nTell Stornoway the No. 2 set still\nsmokes on starting.\n\nC.M."
  },
  "photo_1953": {
-  "title": "Photograph slid under the door",
-  "text": "Eight men on a deck at Leverburgh pier. On the back, in pencil: \"Mary Ellen, July 1953. A. Ross, master.\""
+  "title": "Photograph: the Mary Ellen's crew, July 1953",
+  "text": "Eight men on a deck at Leverburgh pier. The one at the wheel is laughing. On the back, in pencil: \"Mary Ellen, July 1953. A. Ross, master.\" Beneath, in another hand: \"Kenny B. on the hatch.\""
  }
 }

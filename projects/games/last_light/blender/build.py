@@ -2351,10 +2351,74 @@ def build_anchors(B):
     story stages never force an architectural rebuild."""
     B.empty("ANCHOR_calendar", dp(-18.0, 0, 1.55, R_IN - 0.02), (0.15, 0.2, 0.01), wb(-18.0))
     B.empty("ANCHOR_diagram", dp(-67.0, 0, 2.0, R_IN - 0.02), (0.3, 0.2, 0.01), wb(-67.0))
-    B.empty("ANCHOR_telephone", dp(R["desk"], 0.95, 0.8, 2.75), (0.12, 0.1, 0.08), wb(R["desk"]))
-    B.empty("ANCHOR_tide_tables", dp(R["storage"], -0.2, 1.05, R_IN - 0.3), (0.15, 0.1, 0.12), wb(R["storage"]))
+    B.empty("ANCHOR_telephone", dp(R["desk"], 0.965, 0.86, 2.912), (0.12, 0.1, 0.08), wb(R["desk"]))     # 3B: on the phone
+    B.empty("ANCHOR_tide_tables", dp(R["storage"], -0.57, 1.2, back_dist(1.4) - 0.23), (0.09, 0.17, 0.16), wb(R["storage"]))
     B.empty("ANCHOR_oilskins", dp(R["stair"] - 19.0, 0, 1.7, R_IN - 0.05), (0.2, 0.4, 0.1), wb(R["stair"] - 19.0))   # left of the door
     B.empty("ANCHOR_gear_046", dp(R["optic_drive"], 0, 1.2, 2.78 - 0.3), (0.06, 0.06, 0.06), wb(R["optic_drive"]), kind="SPHERE")
+
+
+def build_story_props(B):
+    """Stage 3B (STAGE3_NARRATIVE_MASTER §11.2): the dead GPO telephone on the desk, the 1953 photograph
+    (PROP_photo53door on the floor inside the stair door if Ross slid it under; PROP_photo53desk on the desk
+    if he came in: Godot shows one or neither), and the examine volumes for the phone, the tide tables
+    (and the Grant's behind them) and the old vapour-burner kit."""
+    b = R["desk"]
+    bs = wb(b)
+    r, o, u = wall_frame(b)
+    top = 0.78
+    # GPO 706-style table telephone (black bakelite), facing the keeper's chair: front = -o
+    pc = dp(b, 0.965, top, 2.912)          # back-right corner, between the manuals and the binoculars
+    blk = B.bm("M_LL_Bakelite", "SM_Props")
+    box(blk, pc + u * 0.012, (0.175, 0.19, 0.024), bs, bevel=0.006, segs=2)                        # plinth
+    box(blk, pc + u * 0.058 + o * 0.01, (0.16, 0.155, 0.07), bs, bevel=0.022, segs=3)              # rounded body
+    tilt = math.radians(38)
+    dn = (-o * math.sin(tilt) + u * math.cos(tilt)).normalized()                                     # dial faces up-front
+    dcen = pc + u * 0.07 - o * 0.062
+    db3 = basis_z(dn, u)
+    cyl(blk, dcen, 0.047, 0.047, 0.01, 24, db3)                                                      # dial boss
+    cyl(B.bm("M_LL_Iron", "SM_Props"), dcen + dn * 0.0062, 0.044, 0.044, 0.003, 24, db3)           # chrome finger plate
+    for k in range(10):                                                                               # finger holes
+        a = math.radians(-60 + k * 30)
+        hp = dcen + dn * 0.0078 + db3 @ Vector((0.031 * math.cos(a), 0.031 * math.sin(a), 0))
+        cyl(blk, hp, 0.0075, 0.0075, 0.002, 10, db3)
+    cyl(B.bm("M_LL_Paper", "SM_Props"), dcen + dn * 0.008, 0.017, 0.017, 0.0015, 18, db3)          # number card
+    for sx in (-1, 1):                                                                               # cradle prongs
+        box(blk, pc + u * 0.104 + o * 0.03 + r * sx * 0.062, (0.022, 0.06, 0.022), bs, bevel=0.006, segs=2)
+    hb = pc + u * 0.128 + o * 0.03                                                                   # handset in its cradle
+    seg_cyl(blk, hb - r * 0.07, hb + r * 0.07, 0.014, 12)
+    for sx in (-1, 1):
+        cup = hb + r * sx * 0.088 - u * 0.006
+        cyl(blk, cup, 0.024, 0.031, 0.034, 18, basis_z(-u if sx > 0 else -u, o))
+    # coiled cord: from the back of the body, down onto the desk beside it, and up into the handset's end
+    c0 = pc + r * 0.07 + o * 0.075 + u * 0.03
+    c1 = pc + r * 0.135 + o * 0.0 + u * 0.004
+    c2 = hb + r * 0.105 - u * 0.012
+    for k in range(15):
+        t = k / 14.0
+        cp = c0 * (1 - t) ** 2 + c1 * 2 * (1 - t) * t + c2 * t * t
+        tang = (c1 - c0) * 2 * (1 - t) + (c2 - c1) * 2 * t
+        torus(blk, cp, 0.0075, 0.0021, 10, 4, basis_z(tang))
+    B.empty("IA_phone", pc + u * 0.075, (0.12, 0.11, 0.1), bs)
+    # the 1953 crew photograph: a small soft print, face up (two placements, Godot shows the right one)
+    for nm, loc, bb in (("PROP_photo53desk", dp(b, -0.58, top + 0.001, 2.2), bs),):
+        box(B.bm("M_LL_Paper", nm), loc + u * 0.0008, (0.125, 0.095, 0.0016), bb, bevel=0.0)
+        box(B.bm("M_LL_Iron", nm), loc + u * 0.0018, (0.108, 0.078, 0.0004), bb, bevel=0.0)
+        B.empty("IA_photo53desk", loc + u * 0.03, (0.1, 0.09, 0.04), bb)
+    sb = R["stair"]
+    sbs = wb(sb)
+    sback = back_dist(1.3, 0.0)                     # = build_stair (ANCHOR_door_photo)
+    sfront = sback - STAIR_DEPTH
+    floor_p = dp(sb, 0.1, 0.0, sfront - 0.32)
+    _, _, su = wall_frame(sb)
+    box(B.bm("M_LL_Paper", "PROP_photo53door"), floor_p + su * 0.0012, (0.125, 0.095, 0.0016), sbs, bevel=0.0)
+    box(B.bm("M_LL_Iron", "PROP_photo53door"), floor_p + su * 0.0022, (0.108, 0.078, 0.0004), sbs, bevel=0.0)
+    B.empty("IA_photo53", floor_p + su * 0.03, (0.1, 0.09, 0.04), sbs)
+    # examine volumes on the storage shelves (the props are modelled in build_props)
+    st = R["storage"]
+    stb = wb(st)
+    sc = back_dist(1.4) - 0.25
+    B.empty("IA_tide_tables", dp(st, -0.57, 1.2, sc + 0.02), (0.09, 0.17, 0.16), stb)
+    B.empty("IA_vapour", dp(st, 0.52, 0.72, sc), (0.1, 0.1, 0.14), stb)
 
 
 def build_room(B):
@@ -2371,6 +2435,7 @@ def build_room(B):
     build_conduits(B)
     build_anchors(B)
     build_props(B)
+    build_story_props(B)
 
 
 # ------------------------------------------------------------------ lighthouse exterior

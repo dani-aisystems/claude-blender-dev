@@ -1,8 +1,14 @@
 # THE LAST LIGHT · Chapter 6 · The Last Light
+# Stage 3B: STAGE3_NARRATIVE_MASTER.md §8.6 (approved 2026-11-06, fixes F1 and F4). In-room speakers
+# inside radio conversations carry @room; ROSS shows as "The man at the door" until knows_name.
 
 == ch6_iona mode=radio
 ! static
 ELSPETH: North Point, Iona Star. I see your light. I see it. Callum Mackay, I need you to put me through the East Gut. I can't make the open sea against this. Over.
+[if has_flag("told_elspeth_there")] ELSPETH: You said you were there, that night. Then you know this water better than anyone alive. Over.
+[if not has_flag("elspeth_letter_told")] ELSPETH: And Mr Mackay. A month ago someone wrote to tell me your light was out the night my father drowned. No name on it.
+[if not has_flag("elspeth_letter_told")] ! set elspeth_letter_told=1
+[if has_flag("elspeth_letter_told") and not has_flag("told_elspeth_there")] ELSPETH: If it goes out tonight, I'll know they were right. Over.
 * I'll put you through, Elspeth. Confirm your position when I call. Over. -> yes
 * [if relation("elspeth") > 0] You'll come through, Miss Ross. You've my word. Over. -> word
 = word
@@ -12,14 +18,16 @@ ELSPETH: Your word. Right. Over.
 ELSPETH: Hand steering's slow. Give me your corrections early. Iona Star listening.
 
 == ch6_jam mode=thought
-~ The grind. The amber lamp. The bearing repeater stops at oh-four-six.
+> [A grinding shudder overhead. The optic stops.]
+~ The amber lamp. The bearing repeater stops at oh-four-six. The handwheel's gone rigid as a post.
 ~ Of course it does. Of course it does tonight.
-[if has_flag("door_open")] ROSS: Callum. MANUAL. Put it on her by hand. Give me the wheel and talk her in. I've held a wheel in worse than this.
-[if has_flag("door_shut")] VISITOR: Callum! Switch it to hand and open this door. You can't steer the light and talk her in both. Let me help you.
-[if has_flag("door_shut")] * (Open the door.) -> open_now
-[if has_flag("door_shut")] * Stay where you are. I'll do it myself. -> alone
-[if has_flag("door_open")] * Take the wheel, Mr Ross. -> together
-[if has_flag("door_open")] * I'll do it myself. -> alone
+[if has_flag("door_open") and relation("ross") >= 2] ROSS@room: Callum. It's the tooth. Motor off, and we'll back her off it by hand. Then give me the wheel and talk my girl in.
+[if has_flag("door_open") and relation("ross") < 2] ROSS@room: Keeper. It's the tooth. Motor off, and back her off it by hand. Then give me the wheel and talk my girl in.
+[if has_flag("door_shut")] ROSS@room: Callum! It's the tooth, I can hear it from here. Motor off and back her off by hand. Then open this door. You can't hold the light and talk her in both.
+* [if has_flag("door_shut")] (Open the door.) -> open_now
+* [if has_flag("door_shut")] Stay where you are. I'll do it myself. -> alone
+* [if has_flag("door_open")] Take the wheel, Mr Ross. -> together
+* [if has_flag("door_open")] I'll do it myself. -> alone
 = open_now
 ! set door_open=1
 ! unset door_shut
@@ -29,11 +37,29 @@ ROSS: There's the boy.
 = together
 ! set ross_wheel=1
 ! add rel.ross 1
-ROSS: Got her. Talk, Callum. I'll keep her in the light.
+ROSS@room: Two men to one wheel, then. Same as it should have been.
 -> END
 = alone
 ! set ross_wheel=0
-~ Hand on the spokes. MANUAL. Find her in the rain and hold her there.
+~ Motor off. Back the wheel off the tooth. Then MANUAL, and find her in the rain.
+
+== ch6_freed mode=thought
+> [A clunk you feel in your teeth. The wheel turns free.]
+[if has_flag("ross_wheel")] ~ Ross takes the spokes from me without a word. His hands know this wheel. They've been on it before.
+[if has_flag("ross_wheel")] ROSS@room: I have her. Go to your radio.
+[if not has_flag("ross_wheel")] ~ Free. Hand on the spokes, eye on the radar, the handset on its long cord. Find her in the rain and hold her there.
+
+== ch6_rory mode=radio
+! static
+RORY: North Point, Kittiwake. I heard the Mayday. I'm at the mouth of the Sound with every light I own switched on. If she wants a mark on the far side of the Gut, she's got one. Over.
+* Good lad. Stay there. Over. -> ok
+* [if clue("rory_grandfather") and has_flag("knows_name")] Rory. Your grandfather was right about the boat in the Gut. -> right
+= right
+RORY: ...Eh?
+RORY: Tell me after, Callum. Tell me after. Kittiwake standing by.
+-> END
+= ok
+RORY: Standing by. Kittiwake.
 
 == ch6_outcome mode=radio
 [if saved("Iona Star")] ELSPETH: North Point, Iona Star. We're through. We're through the Gut, we've the island's lee. Nobody hurt. Over.
@@ -46,54 +72,110 @@ ROSS: Got her. Talk, Callum. I'll keep her in the light.
 * Well steered, Iona Star. North Point. Out. -> plain
 = father
 ! set reunion=1
-ROSS: Elspeth.
+ROSS@room: Elspeth.
 ! wait 2.0
 ELSPETH: ...Who is this.
-ROSS: I've your mother's eyes on a photograph in my coat. I named my boat after her before I named it after anything else. Mary Ellen. Eighteen years, lass. I'm sorry.
+ROSS@room: I've your mother's eyes on a photograph in my coat. I named my boat for her before I named it for anything else. Eighteen years, lass. I'm sorry.
 ! wait 2.5
 ELSPETH: ...Dad?
+[if has_flag("elspeth_letter_told")] ! wait 1.5
+[if has_flag("elspeth_letter_told")] ELSPETH: You sent the letter.
+[if has_flag("elspeth_letter_told")] ROSS@room: I did. I'd not the courage to sign it.
 -> END
 = plain
 ELSPETH: Thank you, North Point. Thank you. Iona Star out.
 -> END
 = lost
-ROSS: She's upright. She's upright, Callum. That's the Gut's sand ledge. They'll walk off her at low water.
+ROSS@room: She's upright. She's upright, Callum. That's the Gut's sand ledge. They'll walk off her at low water.
 
 == ch6_morag_dawn mode=radio
 ! static
-MORAG: North Point, Stornoway. Lifeboat reports on scene. Wind backing westerly. It's over, Callum. Over.
+MORAG: North Point, Stornoway. Lifeboat reports on scene. Wind veering westerly. It's over, Callum. Over.
 MORAG: I've a log to close for tonight. And an old one I never closed. Is there anything North Point wishes to report? Over.
 * Stornoway, North Point. Amend my station log, entry of fifteenth November 1953. Over. -> truth
 * Nothing to report, Stornoway. North Point out. -> silence
 = truth
 ! set told_truth=1
-CALLUM: The light at North Point was extinguished from approximately oh-one-forty until oh-two-oh-one. The log entry for oh-two-ten was false. It was written by me, on the principal keeper's instruction.
+CALLUM: The light at North Point stopped turning at approximately oh-one-forty, and was extinguished from approximately oh-one-fifty until oh-two-oh-one.
+CALLUM: The log entry for oh-two-ten was false. It was written by me, on the principal keeper's instruction.
+[if has_flag("kept_letter")] CALLUM: I hold a letter from the principal keeper, Iain Mackay, admitting it.
+[if has_flag("gave_letter")] CALLUM: Mr Alasdair Ross holds a letter from the principal keeper, Iain Mackay, admitting it.
 CALLUM: The master of the Mary Ellen kept a proper lookout. There was no light for him to see. Over.
 ! wait 2.0
 MORAG: ...North Point, Stornoway. Received and logged. Every word.
-[if relation("morag") >= 2] MORAG: Kitchen table, Callum. Monday. I'll put the kettle on. Stornoway out.
+[if has_flag("lied_to_morag")] MORAG: You told me at half past one that the log was right. I'll not say anything about that on the air.
+[if has_flag("deflected_morag")] MORAG: You asked me what it mattered, after eighteen years. Well. Now you know.
+[if has_flag("admitted_to_morag")] MORAG: You told me first. In the dark, with the set half dead. I'll remember that.
+[if has_flag("lied_heard")] MORAG: And at midnight, when you said you'd heard nothing. Let that be the last one.
+[if lost("Iona Star")] MORAG: Then we'll say it together. My notebook and your book, in the same room.
+[if relation("morag") >= 2] MORAG: Kitchen table, Callum. I'll put the kettle on. Stornoway out.
 [if relation("morag") < 2] MORAG: Stornoway out.
 -> END
 = silence
 ! set kept_lie=1
+[if has_flag("admitted_to_morag")] MORAG: ...Three hours ago you told me the light was out before she struck.
+[if has_flag("admitted_to_morag")] MORAG: I'll not put that in my log, Callum. You'll have to.
 MORAG: ...Roger, North Point. Nothing to report.
 MORAG: Stornoway out.
+[if has_flag("door_open")] ~ Behind me Ross sets down the cup I gave him, very carefully, as if it might break.
+[if has_flag("door_open")] ROSS@room: Aye. Well.
+[if has_flag("door_shut")] > [Footsteps going down the stair, one at a time]
 
 == ch6_final_log mode=thought
 ~ Oh-six-thirty. The rain's thinning to a mist, and the sea's going from black to the colour of slate.
 [if has_flag("told_truth")] ~ I open the station log and write it the way it happened. Small square letters. A clerk's hand.
-[if has_flag("told_truth")] ~ "15.11.71. 06.30. Correction to entry of 15.11.53. The light was out. The fault was the keeper's. C. Mackay, P.K."
+[if has_flag("told_truth") and has_flag("confessed_to_ross")] ~ "15.11.71. 06.30. Correction to entry of 15.11.53. Light extinguished 01.50 to 02.01. The entry at 02.10 is false, and in my hand. The master of the Mary Ellen is not to blame. C. Mackay, P.K."
+[if has_flag("told_truth") and not has_flag("confessed_to_ross")] ~ "15.11.71. 06.30. Correction to entry of 15.11.53. Light extinguished 01.50 to 02.01. The entry at 02.10 is false, written on the instruction of the principal keeper. The master of the Mary Ellen is not to blame. C. Mackay, P.K."
+[if has_flag("told_truth") and has_flag("blamed_father")] ~ On the instruction of the principal keeper. True. And still a way of standing behind him.
 [if has_flag("kept_lie")] ~ I open the station log and write: "15.11.71. 06.30. Storm abating. Light exhibited throughout. Nothing to report."
 [if has_flag("kept_lie")] ~ It's the second lie I've written in this book. It comes no easier than the first.
+[if has_flag("kept_lie") and has_flag("gave_letter")] ~ Ross has Father's letter. He can do what he likes with it. I'll not stop him.
 
 == ch6_epilogue mode=thought
 [if has_flag("told_truth") and saved("Iona Star")] ~ The Board opened a new inquiry in the spring. It took eleven minutes to read Morag's notebook into the record.
-[if has_flag("told_truth") and saved("Iona Star")] ~ Alasdair Ross lived until August. He spent it at his daughter's house in Leverburgh, and he was buried under his own name.
-[if has_flag("told_truth") and lost("Iona Star")] ~ The Iona Star was refloated on the March springs. Nobody was lost. The second inquiry and the first one were heard together.
-[if has_flag("told_truth") and lost("Iona Star")] ~ Ross gave his evidence from a chair. Elspeth sat beside him and held his hand the whole day.
-[if has_flag("kept_lie") and saved("Iona Star")] ~ Ross left with the morning tide in the black boat. Elspeth brought the Iona Star into Stornoway at noon and never knew who had held the light on her.
+[if has_flag("told_truth") and saved("Iona Star") and has_flag("gave_letter")] ~ Father's letter was read after it. Nobody in the room looked at me while it was read, which was a kindness.
+[if has_flag("told_truth") and saved("Iona Star") and has_flag("kept_letter")] ~ I read Father's letter into the record myself. My voice held until the last line.
+[if has_flag("told_truth") and saved("Iona Star")] ~ Alasdair Ross lived until August. Elspeth took him home to Leverburgh, and he was buried there under his own name.
+[if has_flag("told_truth") and lost("Iona Star")] ~ The Iona Star was refloated on the March springs. Nobody was lost.
+[if has_flag("told_truth") and lost("Iona Star")] ~ The two inquiries were heard together, the old one and the new. Morag read her notebook. I read my book.
+[if has_flag("told_truth") and lost("Iona Star")] ~ Ross gave his evidence from a chair. Elspeth sat beside him and held his hand the whole day. He lived to hear it.
+[if has_flag("kept_lie") and saved("Iona Star") and not has_flag("reunion")] ~ Ross left with the morning tide in the black boat. Elspeth brought the Iona Star into Stornoway at noon and never knew who had held the light on her.
+[if has_flag("kept_lie") and saved("Iona Star") and has_flag("reunion")] ~ Ross left with the morning tide. Elspeth met him on the pier at Stornoway that night. I heard it from Morag, not from either of them.
+[if has_flag("kept_lie") and saved("Iona Star") and has_flag("reunion")] ~ The Inquiry's finding stands. She knows it isn't true. She can't prove it. I could have.
+[if has_flag("kept_lie") and has_flag("gave_letter")] ~ He never used Father's letter. I think it was a kindness. I think it was the cruellest thing he ever did.
 [if has_flag("kept_lie") and saved("Iona Star")] ~ Some nights on sixteen I hear a carrier with no voice on it, and I don't answer it.
 [if has_flag("kept_lie") and lost("Iona Star")] ~ There was a second inquiry, for the Iona Star. They read my log into the record. Light exhibited throughout.
 [if has_flag("kept_lie") and lost("Iona Star")] ~ They believed it. People always believe the light.
 ~ North Point Light. Fifteenth of November, nineteen seventy-one.
 ~ The light was kept.
+
+# ---- after-read room lines (§11.3, ids from §21 F5): chapters.json "after_read" decides when
+
+== after_photo_keepers_a mode=thought
+~ Father and me, May fifty-two. He'd his arm round me for the camera. He never did otherwise.
+
+== after_photo_keepers_b mode=thought
+~ Eighteen months after that, he had me write it.
+
+== after_photo_keepers_c mode=thought
+~ He'd his arm round me for the camera. I'd give a good deal to know what he was thinking.
+
+== after_note_046_a mode=thought
+~ Father's note and mine under it. Twenty-two years of "next refit".
+
+== after_note_046_c mode=thought
+~ Free by hand. He wrote that in nineteen forty-nine. He knew.
+
+== after_coat_note_a mode=thought
+~ Paraffin, cells, tea. Glass for the west window. And a linesman for the phone, if they remember.
+
+== after_coat_note_c mode=thought
+[if has_flag("knows_name")] ~ My stores list. The same hand Ross carried out here every summer.
+
+== after_forecast_b mode=thought
+~ Storm ten. They said imminent at four o'clock. They were right.
+
+== look_photo53 mode=thought
+[if has_flag("door_open")] ~ He left it on the desk, face up, and said nothing about it.
+[if not has_flag("door_open")] ~ He slid it under the door and said nothing about it.
+~ Eight men on a deck at Leverburgh. Four months later, Kenny Bain was the only one of them anyone saw again.

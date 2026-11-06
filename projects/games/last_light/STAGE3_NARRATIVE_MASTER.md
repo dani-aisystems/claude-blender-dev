@@ -1,8 +1,8 @@
 # THE LAST LIGHT: Stage 3 master narrative script
 
-**Status: DRAFT for Daniel's approval** (written 2026-11-05 during iteration 3A).
+**Status: APPROVED by Daniel 2026-11-06**, with fixes F1–F7 (§21). Written 2026-11-05 during iteration 3A.
 
-**Nothing here is in the game yet.** The approval gate holds: no `.dlg`, `chapters.json` or `docs.json` changes until Daniel approves or edits this document.
+This is being implemented in iteration 3B. Where this document and the `.dlg` / `chapters.json` / `docs.json` files disagree, this document wins until the 3B checkpoint.
 
 **What this replaces.**
 - `NARRATIVE.md` stays as the history of the 2026-11-04 direction choice.
@@ -1675,3 +1675,47 @@ Human playtesting is needed. These figures assume a first-time player who reads 
 2. **The ch2 jam now teaches the ch6 procedure.** It becomes OFF → back the handwheel → AUTO, one step more than today. That way the "free by hand" climax isn't new under pressure. Is that acceptable? **Recommendation: yes.**
 3. **Rory mid-rescue.** `ch6_rory` is a short radio exchange just before the rescue begins. Keep it there, or move it after the outcome as a quieter beat? **Recommendation: keep it before the rescue.** It is short and raises the stakes.
 4. **The Ross assist strength.** With Ross on the wheel the beam tracks the ship fully, which makes "saved" easier and makes trusting him a real advantage. Should it instead be a partial assist (slower slew)? **Recommendation: a full assist.** The player still has to vector her through the Gut.
+
+---
+
+## 21. Approval fixes (Daniel, 2026-11-06)
+Daniel approved the script together with these fixes. They came from checking the script against the code and the approved cabin decisions. The fixes take precedence over the text in §1–§20.
+
+| # | Fix | Applies to |
+|---|---|---|
+| F1 | **Motor, not clockwork, in the AUTO lines.** The room's optic drive is an electric motor with the clockwork kept as standby (ROADMAP cabin decision). AUTO lines say "the motor" or "the optic". The clockwork belongs to the 1953 story | `ch1_lit` line 1: "The motor takes up the optic overhead. Twelve turns a minute, same as the day they fitted it." `ch2_jam` / `ch6_jam` captions: "[A grinding shudder overhead. The optic stops.]" |
+| F2 | **Drawer.** The letter lies "under the old Notices to Mariners", so the shelf's 1953 Tide Tables (which hide the Grant's) are the only tide tables. One added line explains why Callum never found it | `ch5_letter` line 1: "Under the old Notices to Mariners, an envelope…". Line added after it: "~ Nine years at this desk and I never once emptied that drawer. I think I knew." Bible §4.1 "Doesn't know" and §5.3 Christmas 1957 updated to match |
+| F3 | "Three years" → "two years" (C4) | `ch4_door` `sy` branch (already "two years" in §8.4; the change list now records it) |
+| F4 | `VISITOR` hard-coded in ch6 → `ROSS@room` | `ch6_jam` (all Ross lines use `ROSS@room`, so the resolver decides the label) |
+| F5 | Missing texts | `look_photo53` (below); §11.3 room-line ids `after_<doc>_<range>`; §8.7 KEPT count is 18 |
+| F6 | Morag's "Leave your handset keyed if you have to" is cut | `ch4_door` `radio` branch |
+| F7 | §5.3 order: the September 1971 gale before the October letter | §5.3 |
+
+**`look_photo53`** (an after-read line, ch4–6, the first time the 1953 photograph is closed):
+```
+== look_photo53 mode=thought
+[if has_flag("door_open")] ~ He left it on the desk, face up, and said nothing about it.
+[if not has_flag("door_open")] ~ He slid it under the door and said nothing about it.
+~ Eight men on a deck at Leverburgh. Four months later, Kenny Bain was the only one of them anyone saw again.
+```
+The photograph is on the floor inside the stair door if it was slid under (`door_shut`), or on the desk if Ross came in.
+
+**Room-line ids (§11.3):** `after_photo_keepers_a` / `_b` / `_c` (ch1–2, ch3–4, ch5–6), `after_note_046_a` / `_c`, `after_coat_note_a` / `_c`, `after_forecast_b`.
+
+**Playtime (Daniel, 2026-11-06):** the target stays **about 90 minutes**, measured in the Stage 6 timed playthrough.
+
+### 21.1 Implementation notes (3B, for the checkpoint)
+These are consistency fixes made while transcribing. None changes the story, and each is listed here so the script stays the single source of truth.
+
+| Where | Change | Why |
+|---|---|---|
+| `ch1_mary_ellen` tail, `ch3_dark` | "the clockwork" → "the motor" | F1, applied to the two AUTO lines §21 didn't list |
+| Pre-ch4 door hint (code) | "Bolted for the night, the way Father always kept it" → "The stair door, and the long stair down. Nobody on it till the relief comes on Thursday." | It contradicted the ch4 line "It was never even bolted" |
+| Desk drawer hint before ch5 (code) | "Old Notices to Mariners and a tin of pencils. I never go through it." | F2 foreshadowing |
+| `note_046` | Iain's 1949 line reads "FREE BY HAND: take the drive off, back her past the tooth, then put the drive in again." | The light had no motor in 1949, so §12.2's "motor OFF" was an anachronism. The game's objective still says MODE OFF |
+| `inquiry_extract` | "Inverness, March 1954" | The Gazette clipping already places the Inquiry at Inverness |
+| `log_1971` 18.30 | "Radio check Stornoway CG. Gale warning, severe gale 9." | It fits one line of the log page |
+| `photo_1953` title | "Photograph: the Mary Ellen's crew, July 1953" | It is not always slid under the door |
+| Ch6 gameplay | *Iona Star* spawns holding position (bearing 66°, heading 30° across the 046° line) and is **released** after Rory's call (new `release` action). Measured: with no orders she is aground about 85 s after release, **even with Ross holding the beam on her**; the expert bot saves her; a player who starts vectoring 60 s late still saves her | Before, her spawn heading self-captured the East Gut as soon as she saw the light, in AUTO too, so vectoring was never needed. That contradicted decision 4 (the player vectors) and made "aground" unreachable when Ross helped |
+| Jam visibility | A jammed optic in AUTO is a fixed beam: ships see it only along its bearing | A jammed light no longer counts as "seen all round" |
+| `ch1` `kittiwake` beat | Uses a new `until` action (wait for CONFIRM inside the beat) | The merge of `kittiwake_call` and `confirm` needed it |

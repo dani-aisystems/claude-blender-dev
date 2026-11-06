@@ -1,4 +1,5 @@
 # THE LAST LIGHT · Chapter 3 · The Storm
+# Stage 3B: STAGE3_NARRATIVE_MASTER.md §8.3 and §11.1 (approved 2026-11-06).
 
 == ch3_forecast mode=radio
 ! static
@@ -19,7 +20,7 @@ LOWESTOFT: Don't be long, North Point.
 == ch3_after_two mode=thought
 [if saved("Corrie May") and saved("Lowestoft Star")] ~ Both in. Both in. The engine's knocking like a fist on a table.
 [if lost("Corrie May") or lost("Lowestoft Star")] ~ The radio fills up with Morag's voice and the lifeboat's, and then with nothing at all.
-~ Two o'clock coming. The worst of it still to come.
+~ Coming up on two o'clock. I know what this hour sounds like in this room.
 
 == ch3_elspeth mode=radio
 ! static
@@ -35,6 +36,10 @@ ELSPETH: Mackay.
 ! wait 1.2
 ELSPETH: My father's boat was lost under your light, Mr Mackay. Eighteen years ago tonight.
 ELSPETH: This is Elspeth Ross. First mate. I wanted you to know who was out here.
+ELSPETH: Someone sent me a letter last month. No name on it. "The light was out. Your father was not to blame."
+! set elspeth_letter_told=1
+! wait 1.0
+ELSPETH: I'd like to know who writes a letter like that and doesn't sign it. Over.
 * I'm sorry, Miss Ross. I was there that night. -> sorry_there
 * I know who your father was. -> know
 * (Say nothing.) -> silence
@@ -65,7 +70,7 @@ MORAG: "No light at North Point. Repeat. No light"
 == ch3_dark mode=thought
 ! static fade
 ~ Bang. The room goes black.
-~ Lamps out. Radio dead. Above my head the clockwork slows and stops.
+~ Lamps out. Radio dead. Above my head the motor winds down and stops.
 ~ Only the red lamp on the distribution cabinet, glowing like a coal. The main breaker.
 
 == ch3_notes_b mode=radio
@@ -74,6 +79,9 @@ MORAG: ...North Point! Callum! Answer me!
 CALLUM: Lost the main breaker. I'm back. Light's back. Over.
 MORAG: Thank God. Callum, did you hear what I said? Oh-one-fifty-two. No light. Your father's log says the light failed at oh-two-ten. After she struck.
 MORAG: Eighteen minutes, Callum. They hanged Alasdair Ross's name on eighteen minutes.
+[if has_flag("admitted_once")] MORAG: And you told me tonight you'd missed lighting-up once. I've been sitting here working out which night.
+[if has_flag("admitted_there")] MORAG: You told me you were there. So tell me.
+[if has_flag("said_asleep")] MORAG: Asleep, you said. Then you'll not know what time it went out. Or will you.
 * The log says oh-two-ten. The log is right. -> lie
 * Morag, it was eighteen years ago. What does it matter now? -> deflect
 * I was there. The light was out before she struck. -> admit
@@ -86,7 +94,7 @@ MORAG: Right. I'll write that in my log, then. "North Point confirms the log." S
 = deflect
 ! set deflected_morag=1
 ! add rel.morag -1
-MORAG: It matters to the seven men's widows. It matters to his girl. It matters to me, Callum. Stornoway out.
+MORAG: It matters to six widows in Leverburgh, and to his. It matters to his girl. It matters to me, Callum. Stornoway out.
 -> END
 = admit
 ! set admitted_to_morag=1
@@ -101,3 +109,21 @@ CALLUM: Go ahead, Rory.
 RORY: I'm tied up in the Sound, and I've been watching. There's a boat came out from the lee of Pabbay. Old wooden boat, a wee motor-fisher. No lights. Not a single light, Callum.
 RORY: She's heading your way. Not for the Sound. For your landing, under the light. Over.
 ~ On the radar a small hard echo is moving in from the north, steady as a clock.
+
+# ---- optional radio call (§11.1)
+
+== opt_ch3_hector mode=radio
+CALLUM: Gannet, North Point. Are you snug, Hector? Over.
+! static
+HECTOR: Snug as a dog in a basket, North Point. Lying to two anchors in the West Gut lee, and the passengers asleep at last. Over.
+HECTOR: I was thinking of your father. On a night like this he'd have had the kettle on and the tide tables open, and Sandy Ross up from the boat telling lies about herring.
+* Sandy Ross? -> sandy
+* He never spoke of it. -> never
+= sandy
+HECTOR: Alasdair. Nobody called him that but the minister. Sandy and Iain, thick as thieves, the summers Sandy ran the Board's stores.
+HECTOR: Och. I'm sorry, Callum. I'm an old fool tonight. Gannet out.
+! clue sandy
+-> END
+= never
+HECTOR: No. He wouldn't, after. Nobody on Harris said the name for a long while. Gannet out.
+! clue sandy

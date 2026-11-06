@@ -1,20 +1,18 @@
 # THE LAST LIGHT · Chapter 1 · The Watch
 # Speakers: CALLUM (player), MORAG (Stornoway Coastguard), RORY (Kittiwake), MARY ELLEN (unknown caller). "~" = Callum's thoughts.
+# Stage 3B: transcribed from STAGE3_NARRATIVE_MASTER.md §8.1 (approved 2026-11-06, fixes F1-F7).
 
 == ch1_dusk mode=thought
 ~ Sixteen-twenty. The sun's gone behind Pabbay and taken the colour with it.
+~ Sunday the fourteenth of November. I wrote the date at the top of the page this morning and sat looking at it.
 ~ Twenty-one winters on the lights, and the wind still sounds like someone trying the door.
+~ The phone's been dead since the September gale. The radio's all the company there is till Thursday.
 ~ Lighting-up time. Then the batteries. Then the long quiet.
 
 == ch1_lit mode=thought
-~ The clockwork takes up the weight overhead. Twelve turns a minute, same as the day it was built.
-~ Through the floor of the lantern the light starts its walk around the sea.
-
-== ch1_normal mode=thought
+~ The motor takes up the optic overhead. Twelve turns a minute, same as the day they fitted it.
 ~ Normal power. Forty miles on a clear night. Tonight won't be clear.
-
-== ch1_battery mode=thought
-~ Forty-one percent. The engineer's been saying since Easter these cells are tired.
+~ Batteries next. Forty-one percent at noon, and the engineer's been saying since Easter these cells are tired.
 ~ The engine, then, before the weather turns. The cage, south-west corner.
 
 == ch1_gen mode=thought
@@ -24,6 +22,11 @@
 == ch1_charging mode=thought
 ~ Fourteen amps and climbing. She'll come up.
 ~ Mind the temperature. That engine was old when Father was keeper.
+
+== ch1_carrier mode=thought
+> [A carrier on Channel 16. Two clicks. No voice.]
+~ Somebody keyed a set on sixteen. Twice. Nobody spoke.
+~ Some boy with his father's handset. On the Sabbath. His mother'll skelp him.
 
 == ch1_radio_check mode=radio
 ! static
@@ -43,7 +46,7 @@ CALLUM: Received. Gale nine before dawn. Over.
 MORAG: And Callum. It's the fourteenth.
 * I know what night it is, Morag. -> knows
 * Is it? I'd lost track. -> deflect
-* It's a Saturday. That's all it is. -> flat
+* It's a Sunday. That's all it is. -> flat
 = knows
 ! add rel.morag 1
 MORAG: Aye. I thought you might. I'll be on till six. Shout if you want company on the set. Stornoway out.
@@ -60,6 +63,7 @@ MORAG: ...Right you are. Stornoway, out.
 RORY: North Point Light, North Point Light, this is the Kittiwake, Kittiwake, eh, Sierra Yankee three-seven. Over.
 CALLUM: Kittiwake, North Point. Go ahead, over.
 RORY: Callum, is that you? Thank God. Sorry, eh, North Point. I'm coming in from the Flannans, and the rain's that thick I can't see my own bow. I was meant to pick up the Sound an hour ago. Over.
+RORY: And, eh. Don't be telling my mother I was out on the Sabbath. Over.
 RORY: I've stopped her. I'm just sitting here like a gull on a fence post. Can you put me in? Over.
 * Stay where you are, Rory. I'll find you. Over. -> calm
 * You're not the first tonight and you'll not be the last. Hold on. Over. -> calm
@@ -83,7 +87,8 @@ RORY: Aye. Aye, I see it. Here, Callum, you'll laugh, but my grandfather used to
 RORY: He did. He did. Half of them were true, mind. Over.
 -> out
 = which
-RORY: The Mary Ellen. Ross's boat. My grandfather was on her the season before she went down. He always said Ross was a better seaman sober than most men are... eh. Sorry. You'd know all that. Over.
+RORY: The Mary Ellen. Ross's boat. My grandfather was on her the night she went down. Below, in the engine. Only one of them that came home.
+RORY: He always said Ross was a better seaman sober than most men are... eh. Sorry. You'd know all that. He died at Easter, God rest him. Over.
 ! clue rory_grandfather
 = out
 RORY: I'm in the Sound now. Thanks, North Point. I'll stand you a dram at Christmas. Kittiwake out.
@@ -128,7 +133,7 @@ MORAG: ...Aye. Right.
 MORAG: Stornoway listening on sixteen. Out.
 
 == ch1_log_after mode=thought
-~ Eighteen-thirty, Kittiwake brought in through the North Sound. Twenty-three-twenty-five, radio check, all well.
+~ Eighteen-thirty, radio check, gale warning. Ten to seven, Kittiwake in by the North Sound. Twenty-three-twenty-five, Stornoway on sixteen. All well.
 ~ The same small square letters I learned at the school in Tarbert. Father always said I wrote like a clerk.
 
 == ch1_mary_ellen mode=radio
@@ -152,7 +157,7 @@ MARY ELLEN: ...the East... Gut...
 = tail
 ! static fade
 ~ Static. Then nothing. Not even the carrier.
-~ The light is burning. I can hear the clockwork through the ceiling.
+~ The light is burning. I can hear the motor through the ceiling.
 
 == ch1_morag_heard mode=radio
 MORAG: North Point, Stornoway. Callum. Did you hear that? Over.

@@ -31,7 +31,39 @@ The staged-polish session won't edit `build.py` (needed for bevels, smooth shadi
 
 Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (current stage and iteration, decisions, feedback log, next task), and with `docs/PROJECT_STATE.md`.
 
-## Latest status (2026-11-05, Stage 3 started: iteration 3A plus the master script)
+## Latest status (2026-11-06, Stage 3B approved by Daniel and committed locally)
+- **3A** (`dc87818`) and **3B** are approved and committed locally. Never push.
+  - The untracked textures, base meshes, `cabin-photos/` and `.blend` v028–v030 and v032–v034 stay as they are.
+  - v036 and v037 are this session's new versions (v036 is an intermediate build; v037 matches the GLB in Godot).
+- **Master script approved by Daniel 2026-11-06** with fixes F1–F7.
+  - `STAGE3_NARRATIVE_MASTER.md` §21 holds the fixes, and §21.1 the implementation notes, including the ch6 *Iona Star* hold-then-release change.
+  - Playtime target: about 90 min.
+- **What changed, the test results and the evidence:** ROADMAP Stage 3 log, "Iteration 3B". Sheets: `renders/last_light/s3b_pair_sheet_{1..3}.png` and `s3b_new_sheet_{1..3}.png`.
+- **Tests (final code, headless):**
+
+  | Suite | Result |
+  |---|---|
+  | story | 0 failures (all 4 endings plus variants; 13 autosave reloads) |
+  | regress | 172/172 |
+  | interaction | 159 checks, 0 failures, 12 sound warnings |
+  | qa_sweep | 1,918/1,918 |
+  | run_tests | 95/95 |
+  | sim_v2 | no gate failures |
+  | pytest | 18/18 |
+- **Gotchas learned:**
+  - The shell is zsh: `$G` holding a command is NOT word-split. Run the suites with a bash script (this session used a scratch `run_suites.sh`).
+  - `pipeline.sh` reruns `documents.py`/`textures.py`. Their paper grain is unseeded, so every unchanged PNG churns. Restore the unchanged ones from HEAD, or run the build steps without them.
+  - Vertex-based free-space probes miss big flat boxes (the radar cabinet has corner vertices only). Check placements with a top-down render.
+  - A capture run can lose its game to a real key reaching the menu's focused button. `capture_fp` now swallows real input.
+  - `jam_cleared` is cumulative; story beats use `jam_cleared_ch<N>`.
+- **Daniel's 3B decisions:**
+  - approved;
+  - keep the ch6 rescue as built;
+  - recapture the Calls box and the caption at 3C;
+  - v037 is committed and v036 stays untracked.
+- **Next:** plan 3C (portraits: `blender/portraits.py` from the CC0 base meshes, 6 characters × 3 expressions, a print card beside radio lines, Ross only after `knows_name`) and get Daniel's approval before building.
+
+## Earlier status (2026-11-05, Stage 3 started: iteration 3A plus the master script)
 - **Plan:** revision 2, approved by Daniel: `~/.claude/plans/the-last-light-stage3-plan-r2.md`. His decisions:
   - "targeted fill" lore scope;
   - the script written alongside 3A and reviewed at the 3A checkpoint;

@@ -16,34 +16,64 @@ signal chapter_finished(n: int)
 signal story_event(name_: String, args: Array)
 signal request_autosave
 signal campaign_finished(ending: Dictionary)
+## Stage 3B: the presenter runs the chapter change as fade out -> (midpoint: the chapter switches under
+## black) -> fade in -> card, and calls transition_midpoint() / transition_done(). Headless, nothing waits.
+signal transition_requested(kind: String, args: Array)
 
 ## The beat-action contract (Stage 2): actions the director runs itself, and presentation events it
 ## forwards to game_fp._on_story_event. story_test fails on any "do" name outside these two lists, so a
 ## no-op like the retired hint_device cannot creep back in.
 const ACTIONS := ["talk", "wait", "objective", "set", "unset", "add", "clue", "ship", "storm", "clock", "fault",
-	"battery", "mode", "intensity", "autosave", "end_campaign"]
-const PRESENTATION_EVENTS := ["hint", "timeskip", "sky", "phantom_echo", "door_open", "visitor_enter", "knock",
-	"footsteps", "sfx", "static", "music"]
+	"battery", "mode", "intensity", "autosave", "end_campaign", "timeskip", "ending_card", "until", "release"]
+const PRESENTATION_EVENTS := ["hint", "sky", "phantom_echo", "door_open", "visitor_enter", "knock",
+	"footsteps", "sfx", "static", "music", "caption"]
+## Actions that may run while a transition holds the story at its midpoint (the screen is black): they
+## change the world, not what the player reads. Everything else waits for transition_done().
+const INSTANT_ACTIONS := ["objective", "set", "unset", "add", "clue", "storm", "clock", "battery", "mode",
+	"intensity", "sky", "music", "phantom_echo", "autosave"]
+## The four endings (STAGE3_NARRATIVE_MASTER §15): the dawn report x whether Iona Star came through.
+const ENDINGS := {
+	"correction": "Correction",
+	"heard_together": "Heard Together",
+	"nothing_to_report": "Nothing to Report",
+	"light_exhibited": "Light Exhibited Throughout",
+}
+const HOLD_SAFETY_S := 8.0             # a lost tween can never strand the story
+const ENDING_HOLD_S := 240.0           # the ending card is read at the player's pace
 
 var sim: KeeperSim
 var state := StoryState.new()
 var db := DialogueDB.new()
 var runner: DialogueRunner
 var chapters: Array = []
+var after_read: Dictionary = {}        # doc id -> [[first chapter, last chapter, conv], ...] (3B, E7)
 var bot := false                   # auto-advance dialogue + auto-choose (tests/captures)
 var bot_choice := 0
+var bot_pick_fn: Callable              # tests: (conversation id, choices) -> index; overrides bot_choice
 var bot_line_s := 0.05             # capture runs read at human pace (see game_fp)
 var bot_wait_mul := 0.02
 var _actions: Array = []           # remaining actions of the running beat
 var _wait := 0.0
 var _talking := false
 var _beat_hint_t := 0.0
-var _hint_shown := false
+var _hints_done := 0                   # how many of the beat's timed hints have been shown
+var _until := ""                       # 3B: an `until <expr>` action holds the beat's remaining actions
 var _waiting_line := false
 var _line_timer := 0.0
 var _pending_choice: Dictionary = {}
 var _need_radio_for_choice := false
 var finished := false
+## Transition hold (Stage 3B). presenter_driven is set by game_fp when a presenter shows the fades;
+## headless runs and story_test never hold. 0 = free, 1 = going to black, 2 = at the midpoint (only
+## INSTANT_ACTIONS run) until the fade in / chapter card has finished.
+var presenter_driven := false
+var _hold := 0
+var _hold_t := 0.0
+var _hold_limit := HOLD_SAFETY_S
+var _pending_chapter := 0
+var _optional_running := ""            # id of the optional radio call in progress ("" = none)
+var ending_lines: Array = []           # the epilogue as shown on the ending card (also kept for tests)
+var ending_id := ""
 
 
 func setup(k: KeeperSim, headless_bot := false) -> void:
@@ -55,7 +85,9 @@ func setup(k: KeeperSim, headless_bot := false) -> void:
 	for p in probs:
 		push_error("dialogue: " + p)
 	runner = DialogueRunner.new(db, state)
-	chapters = JSON.parse_string(FileAccess.get_file_as_string("res://data/story/chapters.json"))["chapters"]
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/story/chapters.json"))
+	chapters = data["chapters"]
+	after_read = data.get("after_read", {})
 
 
 func chapter_data(n: int) -> Dictionary:
@@ -65,7 +97,8 @@ func chapter_data(n: int) -> Dictionary:
 	return {}
 
 
-## Start (or resume) at state.chapter / state.beat.
+## Start (or resume) at state.chapter / state.beat. A save taken by an autosave inside a beat resumes
+## that beat's remaining actions instead of re-checking its `when` (which replayed its talks, 3B).
 func begin(fresh := true) -> void:
 	var c := chapter_data(state.chapter)
 	if c.is_empty():
@@ -73,11 +106,52 @@ func begin(fresh := true) -> void:
 		return
 	if fresh:
 		state.beat = 0
+		state.resume = []
+		state.in_beat = false
 		_apply_chapter_start(c)
+	if presenter_driven:
+		_hold = 2                          # the chapter card is about to show: no talk until it has
+		_hold_t = 0.0
+		_hold_limit = HOLD_SAFETY_S
 	chapter_started.emit(state.chapter, c["title"], c.get("subtitle", ""))
 	if state.objective != "":
 		objective_changed.emit(state.objective)
+	if not fresh and state.in_beat:
+		_actions = state.resume.duplicate(true)
+		_beat_done_pending = true
+		state.resume = []
+		state.in_beat = false
+		return
 	_enter_beat()
+
+
+## Presenter: the screen is fully black (chapter change or timeskip).
+func transition_midpoint() -> void:
+	if _hold != 1:
+		return
+	_hold = 2
+	_hold_t = 0.0
+	if _pending_chapter > 0:
+		_switch_chapter()
+
+
+## Presenter: the fade in and the chapter card are done; the story may speak again.
+func transition_done() -> void:
+	if _hold == 1:
+		transition_midpoint()
+	_hold = 0
+	_hold_t = 0.0
+
+
+func is_held() -> bool:
+	return _hold != 0
+
+
+func _begin_hold(kind: String, args: Array, limit := HOLD_SAFETY_S) -> void:
+	_hold = 1
+	_hold_t = 0.0
+	_hold_limit = limit
+	transition_requested.emit(kind, args)
 
 
 func _apply_chapter_start(c: Dictionary) -> void:
@@ -101,8 +175,9 @@ func _beats() -> Array:
 
 func _enter_beat() -> void:
 	_actions = []
+	_until = ""
 	_beat_hint_t = 0.0
-	_hint_shown = false
+	_hints_done = 0
 	var beats := _beats()
 	if state.beat >= beats.size():
 		_end_chapter()
@@ -117,6 +192,14 @@ func _process(delta: float) -> void:
 	if sim == null or finished:
 		return
 	state.play_seconds += delta
+	sim.assist = state.has_flag("ross_wheel")    # 3B: Ross on the handwheel (sim assist in MANUAL)
+	if _hold != 0:
+		_hold_t += delta
+		if _hold_t > _hold_limit:
+			push_warning("story: transition hold timed out (phase %d)" % _hold)
+			transition_done()
+		elif _hold == 1:
+			return
 	# conversations
 	if _talking:
 		_dialogue_tick(delta)
@@ -124,6 +207,12 @@ func _process(delta: float) -> void:
 	if _wait > 0.0:
 		_wait -= delta
 		return
+	if _until != "":
+		if state.eval(_until):
+			_until = ""
+		else:
+			_tick_hints(delta)
+			return
 	if not _actions.is_empty() or _beat_done_pending:
 		_run_actions()
 		return
@@ -140,21 +229,33 @@ func _process(delta: float) -> void:
 		_beat_done_pending = true
 		_run_actions()
 	else:
-		_beat_hint_t += delta
-		var hint: Array = b.get("hint", [])
-		if hint.size() == 2 and not _hint_shown and _beat_hint_t > float(hint[0]):
-			_hint_shown = true
-			story_event.emit("hint", [hint[1]])
+		_tick_hints(delta)
+
+
+## A beat's hint is [seconds, text] or a list of them ([[25, "..."], [50, "..."]]). The clock runs while
+## the beat waits for its `when`, or for an `until` inside its actions.
+func _tick_hints(delta: float) -> void:
+	_beat_hint_t += delta
+	var beats := _beats()
+	if state.beat >= beats.size():
+		return
+	var hint: Array = beats[state.beat].get("hint", [])
+	var list: Array = hint if (not hint.is_empty() and hint[0] is Array) else ([hint] if hint.size() == 2 else [])
+	if _hints_done < list.size() and _beat_hint_t > float(list[_hints_done][0]):
+		story_event.emit("hint", [list[_hints_done][1]])
+		_hints_done += 1
 
 
 var _beat_done_pending := false
 
 
 func _run_actions() -> void:
-	while not _actions.is_empty() and not _talking and _wait <= 0.0:
+	while not _actions.is_empty() and not _talking and _wait <= 0.0 and _hold != 1 and _until == "":
+		if _hold == 2 and not String(_actions[0][0]) in INSTANT_ACTIONS:
+			return                         # under black / during the card: only world changes run
 		var a: Array = _actions.pop_front()
 		_do(a)
-	if _actions.is_empty() and not _talking and _wait <= 0.0 and _beat_done_pending:
+	if _actions.is_empty() and not _talking and _wait <= 0.0 and _beat_done_pending and _hold == 0 and _until == "":
 		_beat_done_pending = false
 		_next_beat()
 
@@ -179,6 +280,8 @@ func _do(a: Array) -> void:
 			state.apply_action(name_, args)
 		"ship":
 			_route_sim(sim.spawn_story_ship(args[0]))
+		"release":
+			_route_sim(sim.release_ship(String(args[0])))
 		"storm":
 			sim.storm_override = float(args[0])
 		"clock":
@@ -186,7 +289,7 @@ func _do(a: Array) -> void:
 			if args.size() > 1:
 				sim.clock_rate = float(args[1])
 		"fault":
-			_route_sim(sim.trigger_fault(args[0]))
+			_route_sim(sim.trigger_fault(args[0], args.slice(1)))
 		"battery":
 			sim.battery = float(args[0])
 		"mode":
@@ -194,11 +297,83 @@ func _do(a: Array) -> void:
 		"intensity":
 			_route_sim(sim.set_intensity(int(args[0])))
 		"autosave":
+			# the save remembers what is left of this beat, so loading resumes here instead of re-running
+			# the beat (its `when` is usually still true and its talks would play twice)
+			state.in_beat = true
+			state.resume = _actions.duplicate(true)
 			request_autosave.emit()
+			state.in_beat = false
+			state.resume = []
+		"timeskip":
+			story_event.emit("timeskip", args)
+			if presenter_driven:
+				_begin_hold("timeskip", args)
+		"ending_card":
+			_ending_card(String(args[0]) if args.size() > 0 else "ch6_epilogue")
+		"caption":
+			_caption(String(args[0]))
+		"until":
+			if not state.eval(String(args[0])):
+				_until = String(args[0])
+				_beat_hint_t = 0.0
+				_hints_done = 0
 		"end_campaign":
 			_finish_campaign()
 		_:
 			story_event.emit(name_, args)    # presentation: PRESENTATION_EVENTS, handled by game_fp
+
+
+## A sound caption outside a conversation (non-blocking). It is kept in the history like a `>` line.
+func _caption(text: String) -> void:
+	state.history.append({"speaker": "", "name": "", "text": text, "mode": "thought", "look": "sound",
+		"chapter": state.chapter, "conv": "", "clock": sim.clock_text() if sim else ""})
+	story_event.emit("caption", [text])
+
+
+## Which of the four endings this campaign reached (§15).
+func compute_ending() -> String:
+	var truth := state.has_flag("told_truth")
+	var through := state.saved("Iona Star")
+	if truth:
+		return "correction" if through else "heard_together"
+	return "nothing_to_report" if through else "light_exhibited"
+
+
+## The ending card: title plus the epilogue lines that apply to this campaign, read from the
+## conversation without presenting it (conditions evaluated, actions ignored). With a presenter the
+## story holds until the card has been read; headless it only records them.
+func _ending_card(conv_id: String) -> void:
+	ending_id = compute_ending()
+	ending_lines = collect_lines(conv_id)
+	for t in ending_lines:
+		state.history.append({"speaker": "", "name": "", "text": t, "mode": "thought", "look": "thought",
+			"chapter": state.chapter, "conv": conv_id, "clock": sim.clock_text() if sim else ""})
+	state.convs_done[conv_id] = true
+	state.flags["ending"] = ending_id
+	story_event.emit("ending_card", [ending_id, ENDINGS[ending_id], ending_lines])
+	if presenter_driven:
+		_begin_hold("ending", [ending_id], ENDING_HOLD_S)
+
+
+## The visible lines of a conversation for the current state, in order (choices are not expected).
+func collect_lines(conv_id: String) -> Array:
+	var out: Array = []
+	var r := DialogueRunner.new(db, state)
+	var hist := state.history.size()
+	if not r.start(conv_id):
+		return out
+	var item := r.advance()
+	var guard := 0
+	while item["type"] != "end" and guard < 500:
+		guard += 1
+		if item["type"] == "line":
+			out.append(String(item["text"]))
+		elif item["type"] == "choice":
+			item = r.choose(0)
+			continue
+		item = r.advance()
+	state.history.resize(hist)             # the runner logged them; the card adds them itself
+	return out
 
 
 func _route_sim(events: Array) -> void:
@@ -229,6 +404,8 @@ func on_sim_events(events: Array) -> void:
 				state.flags["jam_count"] = int(state.flags.get("jam_count", 0)) + 1
 			"jam_cleared":
 				state.flags["jam_cleared"] = int(state.flags.get("jam_cleared", 0)) + 1
+				var k := "jam_cleared_ch%d" % state.chapter      # beats key on this chapter's clear (3B)
+				state.flags[k] = int(state.flags.get(k, 0)) + 1
 			"breaker_trip":
 				state.flags["tripped"] = 1
 			"breaker":
@@ -280,6 +457,7 @@ func _step_dialogue(item: Dictionary = {}) -> void:
 		"end":
 			_talking = false
 			_waiting_line = false
+			_optional_running = ""
 			dialogue_closed.emit()
 
 
@@ -297,6 +475,8 @@ func _dialogue_tick(delta: float) -> void:
 			elif not _pending_choice.is_empty():
 				var n: int = _pending_choice["choices"].size()
 				var pick := clampi(bot_choice, 0, n - 1)
+				if bot_pick_fn.is_valid():
+					pick = clampi(int(bot_pick_fn.call(String(runner.conv.get("id", "")), _pending_choice["choices"])), 0, n - 1)
 				_pending_choice = {}
 				_waiting_line = false
 				_step_dialogue(runner.choose(pick))
@@ -324,6 +504,28 @@ func is_talking() -> bool:
 	return _talking
 
 
+## A short conversation outside the beat list: an after-read room line, the bolt, the phone (3B, E7).
+## It plays only when the story is quiet, and the beat queue waits for it like for an optional call.
+func play_aside(conv_id: String, once := true) -> bool:
+	if _talking or _hold != 0 or finished or not db.convs.has(conv_id):
+		return false
+	if once and state.done(conv_id):
+		return false
+	start_conversation(conv_id)
+	return true
+
+
+## Manual saves only between beats and outside transitions; an autosave may also be taken by the
+## `autosave` action inside a beat (the save then carries the beat's remaining actions).
+func can_manual_save() -> bool:
+	return not _talking and _actions.is_empty() and _wait <= 0.0 and _hold == 0 and _pending_chapter == 0 \
+		and _until == ""
+
+
+func can_autosave() -> bool:
+	return not _talking and _wait <= 0.0
+
+
 func current_mode() -> String:
 	return runner.mode() if _talking else ""
 
@@ -331,15 +533,94 @@ func current_mode() -> String:
 # ------------------------------------------------------------------ chapters
 
 func _end_chapter() -> void:
+	if _pending_chapter > 0:
+		return                             # already fading to the next chapter
 	var n := state.chapter
 	chapter_finished.emit(n)
 	if chapter_data(n + 1).is_empty():
 		_finish_campaign()
 		return
-	state.chapter = n + 1
+	_pending_chapter = n + 1
+	if presenter_driven:
+		_begin_hold("chapter", [n + 1])    # the presenter fades out, then calls transition_midpoint()
+	else:
+		_switch_chapter()
+
+
+## The chapter changes under black: its start values are applied BEFORE the autosave, so a load of
+## that save starts the chapter with its own clock and storm (3B: the save used to keep the old ones).
+func _switch_chapter() -> void:
+	var c := chapter_data(_pending_chapter)
+	state.chapter = _pending_chapter
+	_pending_chapter = 0
 	state.beat = 0
+	state.resume = []
+	state.in_beat = false
+	_apply_chapter_start(c)
 	request_autosave.emit()
-	begin(true)
+	begin(false)
+
+
+# ------------------------------------------------------------------ optional radio calls (3B, E6)
+
+## Calls the keeper may make from the radio in quiet moments: chapters.json "optional_calls", each
+## {id, station, label, conv, open_after, close_at, if}. A call is offered after the beat `open_after`
+## has run, until the beat `close_at` has run, once, and never while the story is speaking.
+func available_calls() -> Array:
+	var out: Array = []
+	if _talking or _hold != 0 or finished:
+		return out
+	var beats := _beats()
+	for oc in chapter_data(state.chapter).get("optional_calls", []):
+		if state.done(String(oc["conv"])):
+			continue
+		var a := _beat_index(beats, String(oc.get("open_after", "")))
+		var z := _beat_index(beats, String(oc.get("close_at", "")))
+		if state.beat <= a or (z >= 0 and state.beat > z):
+			continue
+		if oc.has("if") and not state.eval(String(oc["if"])):
+			continue
+		out.append(oc)
+	return out
+
+
+func request_call(call_id: String) -> bool:
+	for oc in available_calls():
+		if String(oc["id"]) == call_id:
+			_optional_running = call_id
+			start_conversation(String(oc["conv"]))
+			return true
+	return false
+
+
+func optional_running() -> String:
+	return _optional_running if _talking else ""
+
+
+## Id of the beat the story is at (or "" past the end).
+func beat_id() -> String:
+	var beats := _beats()
+	return String(beats[state.beat].get("id", "")) if state.beat < beats.size() else ""
+
+
+func beat_reached(id: String) -> bool:
+	var i := _beat_index(_beats(), id)
+	return i >= 0 and state.beat >= i
+
+
+## The after-read room line for a document in this chapter, if one is due (played once each).
+func after_read_conv(doc: String) -> String:
+	for e in after_read.get(doc, []):
+		if state.chapter >= int(e[0]) and state.chapter <= int(e[1]) and not state.done(String(e[2])):
+			return String(e[2])
+	return ""
+
+
+func _beat_index(beats: Array, id: String) -> int:
+	for i in beats.size():
+		if String(beats[i].get("id", "")) == id:
+			return i
+	return -1
 
 
 func _finish_campaign() -> void:
@@ -348,8 +629,10 @@ func _finish_campaign() -> void:
 	finished = true
 	var truth := state.has_flag("told_truth")
 	var saved_ship := state.saved("Iona Star")
+	if ending_id == "":
+		ending_id = compute_ending()
 	campaign_finished.emit({"truth": truth, "iona_saved": saved_ship, "flags": state.flags, "rescues": state.rescues,
-		"play_seconds": state.play_seconds})
+		"play_seconds": state.play_seconds, "ending": ending_id, "title": ENDINGS[ending_id], "lines": ending_lines})
 
 
 func save_data() -> Dictionary:

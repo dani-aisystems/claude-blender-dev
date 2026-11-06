@@ -4,9 +4,27 @@ extends SceneTree
 ##  2. every conversation is walked through ALL choice paths (DFS) with permissive flags: no dead ends/loops
 ##  3. full campaign playthroughs (StoryDirector bot mode + KeeperBot2 at the station) for several choice
 ##     policies: each must reach the campaign end without a softlock, and reports the ending + sim time.
+##  4. Stage 3B: all four endings (and the reunion variant, and a door-shut-throughout game) are reached by
+##     valid choice policies; every flag/clue the story sets is read somewhere (or allow-listed); the beat
+##     layout; old-save beat remap; an autosave inside a beat resumes there instead of replaying it.
 ##   godot --headless --path godot -s res://tests/story_test.gd [-- --policies=0,1,2 --quick]
 
 var fails: Array[String] = []
+var endings := {}                       # ending id -> [scenario names] (3B)
+var reunion_lie := false
+var autosaves: Array = []               # snapshots taken at every autosave of the policy-0 campaign
+## Set but deliberately not read by a condition (STAGE3_NARRATIVE_MASTER §16.1 "engine / history only").
+const HISTORY_ONLY := ["letter", "log_1953", "ending", "archive_flip", "kept_letter_unused"]
+## 3B beat layout (§7): ch1 merged to 11 beats; ch6 gains jam, free, standby and ending.
+const BEATS := {1: 11, 2: 8, 3: 7, 4: 5, 5: 5, 6: 7}
+## Ending scenarios: reply preferences (conversation -> text fragment) and when the station goes idle.
+const SCENARIOS := [
+	{"name": "E2 truth + aground", "prefs": {}, "idle_at": "iona", "expect": "heard_together"},
+	{"name": "E3 lie + saved + reunion", "prefs": {"ch6_morag_dawn": "Nothing to report"}, "expect": "nothing_to_report", "reunion": true},
+	{"name": "E4 lie + aground", "prefs": {"ch6_morag_dawn": "Nothing to report"}, "idle_at": "iona", "expect": "light_exhibited"},
+	{"name": "door shut throughout, truth", "prefs": {"ch4_door": "Keep the door shut", "ch6_jam": "Stay where you are"},
+		"expect": "correction", "door_shut": true},
+]
 
 
 func _initialize() -> void:
@@ -33,8 +51,22 @@ func _run() -> void:
 		var kv := a.trim_prefix("--").split("=", true, 1)
 		args[kv[0]] = kv[1] if kv.size() > 1 else "1"
 	var policies: PackedStringArray = String(args.get("policies", "0,1,2")).split(",")
+	_check_layout()
+	_audit_flags(db)
+	_check_dlg_actions(db)
+	_check_remap()
 	for p in policies:
 		await _campaign(int(p))
+	if not args.has("quick"):
+		for sc in SCENARIOS:
+			await _campaign(0, sc)
+		for e in ["correction", "heard_together", "nothing_to_report", "light_exhibited"]:
+			if not endings.has(e):
+				fails.append("ending '%s' not reached by any policy" % e)
+		if not reunion_lie:
+			fails.append("the lie + saved + reunion variant (C9) was not reached")
+		print("ENDINGS reached=%s" % endings)
+		await _autosave_resumes()
 	await _save_roundtrip()
 	_save_files()
 	print("STORY_RESULT ", JSON.stringify({"failed": fails.size(), "failures": fails}))
@@ -53,12 +85,22 @@ func _check_beat_actions() -> void:
 		var o = stack.pop_back()
 		if o is Dictionary:
 			for k in o:
-				if k == "hint" and o[k] is Array and o[k].size() == 2:
+				var texts: Array = []
+				if k == "hint" and o[k] is Array and not o[k].is_empty():
+					for h in (o[k] if o[k][0] is Array else [o[k]]):
+						texts.append(String(h[1]))
+				if k == "objective" and o[k] is String:
+					texts.append(o[k])
+				if k == "do" and o[k] is Array:
+					for a in o[k]:
+						if String(a[0]) == "objective":
+							texts.append(String(a[1]))
+				for t in texts:
 					for pad in [false, true]:           # Stage 2C: glyph tokens resolve for both devices
 						InputSetup.pad_active = pad
-						var r: String = InputSetup.resolve(String(o[k][1]))
+						var r: String = InputSetup.resolve(t)
 						if "{" in r or "}" in r:
-							fails.append("chapters.json: unresolved hint token in '%s'" % r)
+							fails.append("chapters.json: unresolved token in '%s'" % r)
 					InputSetup.pad_active = false
 				if k == "do" and o[k] is Array:
 					for a in o[k]:
@@ -120,7 +162,7 @@ func _dfs(db: DialogueDB, id: String, st: StoryState, picks: Array, depth: int) 
 	return 1
 
 
-func _campaign(policy: int) -> void:
+func _campaign(policy: int, sc: Dictionary = {}) -> void:
 	var k := KeeperSim.new()
 	k.setup(KeeperConfig.new(), LayoutData.load_file(), {"ships": [], "faults": []}, 11 + policy)
 	k.story_mode = true
@@ -128,9 +170,20 @@ func _campaign(policy: int) -> void:
 	root.add_child(dir)
 	dir.setup(k, true)
 	dir.bot_choice = policy
+	var prefs: Dictionary = sc.get("prefs", {})
+	if not prefs.is_empty():
+		dir.bot_pick_fn = func(conv: String, choices: Array) -> int:
+			if prefs.has(conv):
+				for c in choices:
+					if String(prefs[conv]) in String(c["text"]):
+						return int(c["index"])
+			return 0
 	var bot := KeeperBot2.new("expert", policy + 1)
 	var ended := [false, {}]
 	dir.campaign_finished.connect(func(e): ended[0] = true; ended[1] = e)
+	if policy == 0 and sc.is_empty():
+		dir.request_autosave.connect(func(): autosaves.append({"at": "ch%d:%s" % [dir.state.chapter, dir.beat_id()],
+			"text": JSON.stringify({"story": dir.state.to_dict(), "sim": k.to_dict()}), "ch_start": dir.state.beat == 0 and not dir.state.in_beat}))
 	dir.story_event.connect(func(n, a): if n == "sim_events": dir.on_sim_events(a[0]))
 	dir.begin(true)
 	var dt := 1.0 / 30.0
@@ -142,21 +195,186 @@ func _campaign(policy: int) -> void:
 		for f in ["moved", "looked", "used_battery", "read_log_1971", "read_log_1953", "read_letter", "at_door"]:
 			if dir.state.objective != "" and guard > 2.0:
 				dir.state.flags[f] = 1
-		var ev := bot.act(k, dt)
+		var ev: Array = []
+		if sc.has("idle_at") and dir.state.chapter == 6 and dir.beat_reached(String(sc["idle_at"])):
+			# the keeper frees the jam by hand but never gives her an order: nobody vectors the Iona Star
+			if k.story_jam:
+				if k.mode != KeeperSim.Mode.OFF:
+					ev += k.set_mode(KeeperSim.Mode.OFF)
+				k.set_wheel(-1.0)
+			elif k.mode != KeeperSim.Mode.MANUAL:
+				k.set_wheel(0.0)
+				ev += k.set_mode(KeeperSim.Mode.MANUAL)
+			if not k.main_breaker:
+				ev += k.set_breaker("main", true)
+		else:
+			ev = bot.act(k, dt)
 		ev += k.step(dt)
 		dir.on_sim_events(ev)
 		dir._process(dt)
 		chapter_t[dir.state.chapter] = chapter_t.get(dir.state.chapter, 0.0) + dt
 		if int(guard / dt) % 30 == 0:
 			await process_frame
+	var label: String = sc.get("name", "policy %d" % policy)
 	if not ended[0]:
-		fails.append("campaign policy %d stuck in chapter %d beat %d (objective: %s)" % [policy, dir.state.chapter, dir.state.beat, dir.state.objective])
+		fails.append("campaign %s stuck in chapter %d beat %d (objective: %s)" % [label, dir.state.chapter, dir.state.beat, dir.state.objective])
+	else:
+		var eid: String = ended[1].get("ending", "")
+		endings[eid] = endings.get(eid, []) + [label]
+		if dir.ending_lines.size() < 3 or String(ended[1].get("title", "")) == "":
+			fails.append("campaign %s: ending card '%s' has no title or too few lines %s" % [label, eid, dir.ending_lines])
+		if sc.has("expect") and eid != sc["expect"]:
+			fails.append("campaign %s reached '%s', expected '%s'" % [label, eid, sc["expect"]])
+		if eid == "nothing_to_report" and dir.state.has_flag("reunion"):
+			reunion_lie = true
+		if sc.get("reunion", false) and not dir.state.has_flag("reunion"):
+			fails.append("campaign %s: no reunion" % label)
+		if sc.get("door_shut", false) and (dir.state.has_flag("door_open") or not dir.state.has_flag("door_shut")):
+			fails.append("campaign %s: the door was opened" % label)
+		for ch in [2, 6]:
+			if int(dir.state.flags.get("jam_cleared_ch%d" % ch, 0)) < 1:
+				fails.append("campaign %s: chapter %d jam never cleared by hand" % [label, ch])
 	var rounded := {}
 	for c in chapter_t:
 		rounded[c] = int(chapter_t[c])
-	print("CAMPAIGN policy=%d ended=%s ending=%s sim_seconds=%d per_chapter=%s rescues=%s" % [policy, ended[0],
-		{"truth": ended[1].get("truth"), "iona": ended[1].get("iona_saved")}, int(guard), rounded, dir.state.rescues])
+	print("CAMPAIGN %s ended=%s ending=%s sim_seconds=%d per_chapter=%s rescues=%s" % [label, ended[0],
+		ended[1].get("ending", "?"), int(guard), rounded, dir.state.rescues])
+	if ended[0]:
+		print("  CARD %s: %s" % [ended[1].get("title", ""), " | ".join(dir.ending_lines)])
 	dir.queue_free()
+
+
+## The beat layout the master script specifies (and that saves are remapped to).
+func _check_layout() -> void:
+	var data = JSON.parse_string(FileAccess.get_file_as_string("res://data/story/chapters.json"))
+	for c in data["chapters"]:
+		var n := int(c["n"])
+		if BEATS.has(n) and c["beats"].size() != BEATS[n]:
+			fails.append("chapter %d has %d beats, the 3B layout has %d" % [n, c["beats"].size(), BEATS[n]])
+
+
+## Every `!` action inside a conversation is one the runner, director or game_fp handles.
+func _check_dlg_actions(db: DialogueDB) -> void:
+	var known: Array = StoryDirector.ACTIONS + StoryDirector.PRESENTATION_EVENTS + ["set", "unset", "add", "clue", "wait"]
+	var seen := 0
+	for id in db.convs:
+		for st in db.convs[id]["steps"]:
+			if st["kind"] == "action":
+				seen += 1
+				if not (String(st["action"]) in known):
+					fails.append("%s: unknown action '! %s'" % [id, st["action"]])
+	print("DLG_ACTIONS checked=%d" % seen)
+
+
+## Every flag and clue the story sets is read by some condition (dialogue, chapters.json) or by the
+## engine (a quoted name in scripts/), except the history-only ones: no more choices that change nothing.
+func _audit_flags(db: DialogueDB) -> void:
+	var sets := {}
+	var reads := ""
+	for id in db.convs:
+		for st in db.convs[id]["steps"]:
+			reads += " " + String(st.get("if", ""))
+			if st["kind"] == "choice":
+				for ch in st["choices"]:
+					reads += " " + String(ch.get("if", ""))
+			if st["kind"] == "action" and String(st["action"]) in ["set", "clue", "add"]:
+				var names: Array = st["args"] if String(st["action"]) != "add" else st["args"].slice(0, 1)
+				for a in names:
+					var nm := String(a).split("=")[0]
+					if not nm.begins_with("rel."):
+						sets[nm] = id
+	var txt := FileAccess.get_file_as_string("res://data/story/chapters.json")
+	reads += " " + txt
+	var data = JSON.parse_string(txt)
+	for c in data["chapters"]:
+		for b in c["beats"]:
+			for a in b.get("do", []):
+				if String(a[0]) in ["set", "clue"]:
+					sets[String(a[1]).split("=")[0]] = "chapters.json"
+	for f in _gd_files("res://scripts"):
+		reads += " " + FileAccess.get_file_as_string(f)
+	var unread: Array = []
+	for nm in sets:
+		if nm in HISTORY_ONLY:
+			continue
+		if not ("\"%s\"" % nm in reads):
+			unread.append("%s (set in %s)" % [nm, sets[nm]])
+	for u in unread:
+		fails.append("flag never read: " + u)
+	print("FLAG_AUDIT set=%d unread=%s" % [sets.size(), unread])
+
+
+func _gd_files(dir_path: String) -> Array:
+	var out: Array = []
+	var d := DirAccess.open(dir_path)
+	if d == null:
+		return out
+	for f in d.get_files():
+		if f.ends_with(".gd"):
+			out.append(dir_path.path_join(f))
+	for sub in d.get_directories():
+		out += _gd_files(dir_path.path_join(sub))
+	return out
+
+
+## Saves are by beat index: an old (layout 1) ch1 / ch6 save lands on the same story moment.
+func _check_remap() -> void:
+	var cases := [[1, 0, 0], [1, 3, 1], [1, 5, 2], [1, 6, 3], [1, 9, 5], [1, 13, 9], [1, 14, 10], [6, 1, 4], [6, 2, 5], [2, 5, 5]]
+	for c in cases:
+		var got := StoryState.remap_beat(c[0], c[1], 1)
+		if got != c[2]:
+			fails.append("remap ch%d beat %d -> %d, expected %d" % [c[0], c[1], got, c[2]])
+	var st := StoryState.new()
+	st.from_dict({"chapter": 1, "beat": 8})            # a pre-3B save has no "layout"
+	if st.beat != 5:
+		fails.append("pre-3B ch1 save at beat 8 loaded at %d, expected 5 (kittiwake)" % st.beat)
+	if StoryState.remap_beat(1, 8, StoryState.LAYOUT) != 8:
+		fails.append("a current-layout save must not be remapped")
+
+
+## 3B: each autosave of the policy-0 campaign is loaded into a fresh sim + director; the next conversation
+## must be a new one (an autosave inside a beat used to replay that beat's talks), and a chapter-start save
+## must carry that chapter's own start clock.
+func _autosave_resumes() -> void:
+	var lay := LayoutData.load_file()
+	var checked := 0
+	for snap in autosaves:
+		var d: Dictionary = JSON.parse_string(snap["text"])
+		var k := KeeperSim.new()
+		k.setup(KeeperConfig.new(), lay, {"ships": [], "faults": []}, 11)
+		k.from_dict(d["sim"])
+		var dir := StoryDirector.new()
+		root.add_child(dir)
+		dir.setup(k, true)
+		dir.load_data(d["story"])
+		dir.story_event.connect(func(n, a): if n == "sim_events": dir.on_sim_events(a[0]))
+		if snap["ch_start"]:
+			var st: Dictionary = dir.chapter_data(dir.state.chapter).get("start", {})
+			if st.has("clock") and absf(k.clock_min - float(st["clock"])) > 0.5:
+				fails.append("autosave %s: clock %.1f, chapter start is %s" % [snap["at"], k.clock_min, st["clock"]])
+		var done: Dictionary = dir.state.convs_done.duplicate()
+		var first := [""]
+		dir.line_shown.connect(func(_i): if first[0] == "": first[0] = String(dir.runner.conv.get("id", "")))
+		dir.begin(false)
+		var bot := KeeperBot2.new("expert", 1)
+		var dt := 1.0 / 30.0
+		var t := 0.0
+		while first[0] == "" and t < 400.0 and not dir.finished:
+			t += dt
+			for f in ["moved", "looked", "used_battery", "read_log_1971", "read_log_1953", "read_letter", "at_door"]:
+				dir.state.flags[f] = 1
+			var ev := bot.act(k, dt) + k.step(dt)
+			dir.on_sim_events(ev)
+			dir._process(dt)
+		if first[0] != "" and done.has(first[0]):
+			fails.append("autosave %s replays '%s' after loading" % [snap["at"], first[0]])
+		checked += 1
+		print("  AUTOSAVE %s -> next conversation %s" % [snap["at"], first[0]])
+		dir.queue_free()
+		await process_frame
+	if checked < 8:
+		fails.append("only %d autosaves were taken in the policy-0 campaign" % checked)
+	print("AUTOSAVE_RESUMES checked=%d" % checked)
 
 
 ## Save mid-campaign (chapter 3), round-trip through JSON text, restore into a fresh sim + director,

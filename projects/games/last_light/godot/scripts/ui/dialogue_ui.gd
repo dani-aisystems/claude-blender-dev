@@ -391,6 +391,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if doc_open_fn.is_valid() and doc_open_fn.call():
 		return                                # reading a document: E / clicks belong to the viewer
+	if hold_fn.is_valid() and hold_fn.call():
+		return                                # 3B: under a fade nothing can be finished or skipped unseen
 	if not _choices.is_empty():
 		if choice_box.get_child_count() == 0:
 			return                            # radio replies gated: the keeper is away from the handset

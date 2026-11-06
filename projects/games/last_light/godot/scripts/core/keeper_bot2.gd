@@ -30,12 +30,21 @@ func act(k: KeeperSim, dt: float) -> Array:
 	if k.jammed:
 		if _fault_seen < 0.0:
 			_fault_seen = k.t
-		if k.t - _fault_seen > (6.0 if novice else 0.6) and k.mode == KeeperSim.Mode.AUTO:
+		if k.story_jam:
+			# 3B: free it by hand, the way the 046 note says: motor OFF, back the handwheel past the tooth
+			if k.t - _fault_seen > (6.0 if novice else 0.6) and k.mode != KeeperSim.Mode.OFF:
+				ev += k.set_mode(KeeperSim.Mode.OFF)
+			if k.mode == KeeperSim.Mode.OFF:
+				k.set_wheel(-1.0)
+		elif k.t - _fault_seen > (6.0 if novice else 0.6) and k.mode == KeeperSim.Mode.AUTO:
 			ev += k.set_mode(KeeperSim.Mode.OFF)
 	else:
+		if _fault_seen >= 0.0 and k.mode == KeeperSim.Mode.OFF:
+			k.set_wheel(0.0)
 		_fault_seen = -1.0
 	if k.mode == KeeperSim.Mode.OFF and not k.jammed:
-		ev += k.set_mode(KeeperSim.Mode.AUTO)
+		ev += k.set_mode(k.jam_reengage)          # 3B: the story says AUTO (ch2) or MANUAL (ch6) after a hand clear
+		k.jam_reengage = KeeperSim.Mode.AUTO
 	if not k.main_breaker:
 		if _breaker_seen < 0.0:
 			_breaker_seen = k.t

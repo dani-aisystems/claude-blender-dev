@@ -117,12 +117,17 @@ func _setup_story(save: Dictionary) -> void:
 	presenter = preload("res://scripts/story/story_presenter.gd").new()
 	add_child(presenter)
 	presenter.bind(director)
+	director.presenter_driven = true          # 3B: chapter changes and time skips wait for the fades
 	presenter.dialogue.at_radio_fn = _at_radio
 	presenter.dialogue.mouse_restore_fn = refresh_mouse
 	presenter.dialogue.in_view_fn = func(): return player != null and player.focused != ""
 	presenter.dialogue.doc_open_fn = presenter.is_document_open
 	ui.number_keys_taken_fn = func(): return presenter.dialogue.has_open_choices() or presenter.is_document_open()
 	ui.reply_root_fn = func(): return presenter.dialogue.choice_box
+	ui.optional_calls_fn = func(): return director.available_calls()
+	ui.call_requested.connect(func(cid):
+		if director.request_call(cid):
+			ui._refresh_calls())
 	presenter.dialogue.apply_settings(Settings.v["text_speed"], Settings.v["subtitle_size"])
 	Settings.changed.connect(_on_settings_changed)     # method (not lambda): auto-disconnects when freed
 	presenter.dialogue.blip.connect(func(kind): audio.ui_blip(kind))
@@ -158,7 +163,14 @@ func _on_story_event(name_: String, args: Array) -> void:
 		"hint":
 			presenter.show_hint(args[0])
 		"timeskip":
-			presenter.timeskip(args[1] if args.size() > 1 else "")
+			pass                                  # 3B: the presenter runs it as a transition (transition_requested)
+		"caption":
+			presenter.show_caption(args[0])
+		"ending_card":
+			player.enabled = false
+			ui.clear_prompt()
+			refresh_mouse()
+			presenter.show_ending(args[0], args[1], args[2])
 		"sky":
 			outside.set_sky(args[0])
 		"phantom_echo":
@@ -202,8 +214,6 @@ func _on_doc(id: String) -> void:
 	match id:
 		"logbook":
 			doc = "log_1971"
-		"archive":
-			doc = "log_1953"
 		"photo":
 			doc = "photo_keepers"
 		"note":
@@ -218,10 +228,37 @@ func _on_doc(id: String) -> void:
 			if director.state.chapter >= 5:
 				doc = "letter_1957"
 			else:
-				presenter.show_hint("Old tide tables, a tin of pencils, a broken compass. Nothing much.")
+				presenter.show_hint("The bottom drawer. Old Notices to Mariners and a tin of pencils. I never go through it.")
+		"archive":
+			# 3B: the first open is the 1953 log (then the clipping); later opens alternate with the
+			# Inquiry extract, the photostat Ross read in the Mitchell Library
+			var st := director.state
+			if not st.has_flag("read_log_1953") or st.has_flag("archive_flip"):
+				doc = "log_1953"
+				st.flags.erase("archive_flip")
+			else:
+				doc = "inquiry_extract"
+				st.flags["archive_flip"] = 1
 		"door":
-			if director.state.chapter < 4:
-				presenter.show_hint("The stair door. Bolted for the night, the way Father always kept it.")
+			_use_door()
+		"phone":
+			var conv := "look_phone_ch4" if director.state.chapter == 4 and director.beat_reached("hail") else "look_phone"
+			if not director.play_aside(conv):
+				presenter.show_hint("The GPO line. Dead since the September gale.")
+		"tide_tables":
+			var st2 := director.state
+			if not st2.has_flag("found_grants"):
+				director.play_aside("look_grants_a")
+			elif st2.clue("grants") and director.play_aside("look_grants_b"):
+				pass
+			else:
+				presenter.show_hint("Admiralty Tide Tables, 1953. Father's Grant's behind them, still half full.")
+		"vapour":
+			var conv2 := "look_vapour_b" if director.state.clue("same_hand") else "look_vapour_a"
+			if not director.play_aside(conv2):
+				presenter.show_hint("The old vapour burner and its mantle, from before the electric.")
+		"photo53", "photo53desk":
+			doc = "photo_1953"
 	if doc != "":
 		player.enabled = false
 		ui.clear_prompt()                   # the reading view has no crosshair target
@@ -242,6 +279,26 @@ func _on_doc_closed(doc: String) -> void:
 			director.on_player_event("read_letter")
 	player.enabled = true
 	refresh_mouse()
+	var aside := director.after_read_conv(doc)      # 3B: a room line the first time it's read this chapter
+	if aside != "":
+		director.play_aside(aside)
+
+
+## The stair door (3B). Before ch4 it gives the keeper's line; in ch4, from the moment the dark boat is
+## alongside until the door scene, it can be bolted (the door conversation reads `bolted`).
+func _use_door() -> void:
+	var st := director.state
+	if st.chapter < 4:
+		presenter.show_hint("The stair door, and the long stair down. Nobody on it till the relief comes on Thursday.")
+	elif _bolt_available():
+		st.flags["bolted"] = 1
+		director.play_aside("look_bolt")
+
+
+func _bolt_available() -> bool:
+	var st := director.state
+	return st.chapter == 4 and not station.door_open and not st.has_flag("bolted") and director.beat_reached("hail") \
+		and not director.is_talking() and not st.has_flag("door_shut")
 
 
 func _toggle_logbook() -> void:
@@ -264,8 +321,7 @@ func _on_campaign_finished(ending: Dictionary) -> void:
 # ------------------------------------------------------------------ save / load
 
 func can_save() -> bool:
-	return story_mode and director != null and not director.is_talking() and director._actions.is_empty() \
-		and director._wait <= 0.0 and not _ended
+	return story_mode and director != null and director.can_manual_save() and not _ended
 
 
 func save_dict() -> Dictionary:
@@ -292,7 +348,7 @@ func _manual_save(slot: String) -> void:
 
 
 func autosave() -> void:
-	if story_mode and bot_mode == "" and can_save():
+	if story_mode and bot_mode == "" and director != null and director.can_autosave() and not _ended:
 		SaveSystem.write("auto", save_dict())
 		ui.show_notice("Progress saved.", 2.0)
 
@@ -462,6 +518,7 @@ func _physics_process(delta: float) -> void:
 
 func _track_player(delta: float) -> void:
 	_update_door_prompt()
+	_update_story_props()
 	if bot_mode != "":
 		# bot-driven runs (captures/autotest): satisfy interaction objectives the way the headless test does
 		for f in ["moved", "looked", "used_battery", "read_log_1971", "read_log_1953", "read_letter", "at_door", "at_radio"]:
@@ -500,12 +557,30 @@ func _take_torch(on: bool) -> void:
 ## The stair door's prompt follows the story (Stage 2: it said "Bolted for the night" even after the
 ## ch4 door opened). Before ch4 pressing gives the keeper's line about the bolt; from ch4 the door is the
 ## story's to open (dialogue), so it is shown without a key.
+## 3B: the 1953 photograph lies inside the stair door if Ross slid it under (door kept shut), or on the
+## desk from chapter 5 if he came in and left it there.
+func _update_story_props() -> void:
+	var st := director.state
+	var under := st.clue("photo_1953")
+	var desk := not under and st.has_flag("door_open") and st.chapter >= 5
+	if station.story_prop_shown("photo53") != under:
+		station.set_story_prop("photo53", under)
+	if station.story_prop_shown("photo53desk") != desk:
+		station.set_story_prop("photo53desk", desk)
+
+
 func _update_door_prompt() -> void:
 	if station.door_open:
 		station.door_prompt = "The stair door stands open"
 		station.door_usable = false
-	elif director and director.state.chapter >= 4:
+	elif director and _bolt_available():
+		station.door_prompt = "Draw the bolt on the stair door"
+		station.door_usable = true
+	elif director and director.state.has_flag("bolted") and director.state.chapter == 4:
 		station.door_prompt = "The stair door  ·  bolted"
+		station.door_usable = false
+	elif director and director.state.chapter >= 4:
+		station.door_prompt = "The stair door"
 		station.door_usable = false
 	else:
 		station.door_prompt = "Try the stair door"

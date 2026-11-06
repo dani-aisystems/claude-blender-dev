@@ -1,4 +1,5 @@
 # THE LAST LIGHT · Chapter 4 · The Visitor
+# Stage 3B: STAGE3_NARRATIVE_MASTER.md §8.4 and §11.2 (approved 2026-11-06, fixes F3 and F6).
 
 == ch4_watch mode=thought
 ~ There she is on the radar. Small, steady, coming down the North Sound like she's done it a thousand times.
@@ -15,7 +16,23 @@
 ~ She's alongside the landing below the light. The engine note drops, coughs, stops.
 ~ Then she's dark. Not a lantern. Not a cigarette.
 ! static fade
-~ Even the speaker's gone quiet. Not static. Silence, as if the whole of Channel 16 is holding its breath.
+> [A dead carrier on Channel 16]
+~ The speaker's gone quiet. Not static. A carrier, flat and steady, with nobody on it.
+~ Somebody's sitting on sixteen.
+
+== ch4_stairs mode=thought
+~ Nobody comes up those stairs but the relief keeper and the engineer. Neither of them at half past two in the morning.
+~ A hundred and nine steps. I've counted them every day for nine years.
+
+== ch4_mf_morag mode=radio
+! set called_morag=1
+~ Sixteen's blocked solid. The old MF set, then. Two-one-eight-two.
+CALLUM: Stornoway, Stornoway, North Point on two-one-eight-two. There's a boat tied up at my landing. No lights, and somebody's sitting on sixteen. Over.
+! static
+MORAG: ...North Point, Stornoway. I hear you, Callum. Faint. The lifeboat's out on a shout at the Shiants. Two hours at least. Over.
+MORAG: Whoever it is, you do not open that door. Do you hear me? Over.
+CALLUM: I hear you.
+MORAG: I'm staying on the set. Both sets. Stornoway listening.
 
 == ch4_door mode=person
 ! knock
@@ -30,7 +47,8 @@ VISITOR: A man who's come a long way in poor weather. That's enough to be going 
 -> probe
 = sy
 ! add rel.ross 1
-VISITOR: She is. That's her sister. Same yard, same lines. I bought her for scrap and spent three years making her look like the one I lost.
+VISITOR: She is. That's her sister. Same yard, same lines. I bought her for scrap and spent two years making her look like the one I lost.
+[if clue("sister_boat")] VISITOR: The Catriona. I heard your friend at Stornoway read out the register on sixteen. She does her homework.
 VISITOR: You've good eyes, Callum.
 -> probe
 = hard
@@ -43,19 +61,20 @@ VISITOR: Private, is it. The Board's landing, the Board's light, the Board's boo
 * [if clue("same_hand")] Tell me what happened on the fifteenth of November, 1953. -> fifteenth
 = name
 VISITOR: Your father's boy. You were thin as a boathook, and you used to sing to the clockwork when you wound it. Fear a' bhàta. Your father hated that song.
-VISITOR: He kept a half-bottle of Grant's behind the Admiralty Tables. Third shelf. Is it still there?
+VISITOR: He kept a half-bottle of Grant's behind the Admiralty Tables. Top shelf. Is it still there?
 ! clue grants
+[if has_flag("found_grants")] ~ It is. I had my hand on it this afternoon.
 -> probe2
 = want
 VISITOR: To come in out of the rain, first. Then to see a page in your book.
 -> probe2
 = radio
 ! set called_morag=1
-~ I back away from the door to the desk without taking my eyes off it.
-CALLUM: Stornoway, North Point. There's a man at my door. Came off that dark boat. Over.
+~ I back away from the door to the desk without taking my eyes off it. Sixteen's still dead. The MF set, then.
+CALLUM: Stornoway, North Point on two-one-eight-two. There's a man at my door. Came off that dark boat. Over.
 MORAG: ...North Point, Stornoway. Callum, the lifeboat's out on a shout at the Shiants. Two hours at least. Do not open that door. Do you hear me? Over.
 CALLUM: I hear you.
-MORAG: I'm staying on the set. Leave your handset keyed if you have to. Stornoway listening.
+MORAG: I'm staying on the set. Stornoway listening.
 ~ Back to the door. The knocking hasn't come again. He's waiting.
 -> probe2
 = fifteenth
@@ -65,8 +84,10 @@ VISITOR: At ten to two the light at North Point was dark. I said so on the radio
 -> probe2
 = probe2
 VISITOR: The clockwork stuck tonight, didn't it. At forty-six degrees. It always did.
+> [He coughs. It goes on a long time.]
 VISITOR: Open the door, Callum. I'm sixty-four, I'm soaked to the bone, and I've no wish to harm you. I want to talk to you before I die. I'll not be long about either.
-* (Draw the bolt and open the door.) -> open
+* [if has_flag("bolted")] (Draw the bolt and open the door.) -> open
+* [if not has_flag("bolted")] (Open the door.) -> open
 * Say who you are first. Your name. -> name_ask
 * (Keep the door shut.) -> shut
 = name_ask
@@ -74,12 +95,14 @@ VISITOR: You know my name. Your father wrote it in his book, under the word "bla
 ! wait 1.5
 VISITOR: Alasdair Ross. Master of the Mary Ellen.
 ! set knows_name=1
-* (Draw the bolt and open the door.) -> open
+* [if has_flag("bolted")] (Draw the bolt and open the door.) -> open
+* [if not has_flag("bolted")] (Open the door.) -> open
 * (Keep the door shut.) -> shut
 = open
 ! set door_open=1
 ! door_open
-~ The bolt is stiff with salt. The door comes in with the storm behind it.
+[if has_flag("bolted")] ~ The bolt is stiff with salt. The door comes in with the storm behind it.
+[if not has_flag("bolted")] ~ It was never even bolted. The door comes in with the storm behind it.
 ~ An old man in an oilskin, one hand on the rail, rain running off the brim of his sou'wester. He doesn't step in until I stand aside.
 ! visitor_enter
 ROSS: Thank you.
@@ -88,7 +111,35 @@ ROSS: Thank you.
 ! set door_shut=1
 VISITOR: ...Aye. I'd have done the same, at your age, with a ghost at the door.
 ! sfx paper_slide
-~ Something scrapes under the door. A photograph, cracked and soft as cloth.
+> [Something slides under the door]
+~ A photograph, cracked and soft as cloth.
 ~ Eight men on a deck at Leverburgh pier. The one at the wheel is laughing. On the back, in pencil: "Mary Ellen, July 1953. A. Ross, master."
 ! clue photo_1953
 VISITOR: I'll talk through the door, then. I've talked to worse.
+
+# ---- examinations and asides (§11.2)
+
+== look_bolt mode=thought
+> [The bolt goes home]
+~ Two inches of oak and a bolt my father fitted. It'll have to do.
+
+== look_phone mode=thought
+~ The GPO line to Leverburgh exchange. Dead since the September gale took the cable on the shore.
+~ Nothing in it but my own breathing. The relief boat's to bring a linesman. Thursday, if the sea allows.
+
+== look_phone_ch4 mode=thought
+~ Dead. I knew it was dead. I tried it anyway.
+
+== look_grants_a mode=thought
+! set found_grants=1
+~ Admiralty Tide Tables, nineteen fifty-three. Nobody's opened them in eighteen years.
+~ Behind them, Father's half-bottle of Grant's. Still half. I've never drunk it, and I've never poured it out.
+
+== look_grants_b mode=thought
+~ Top shelf, behind the Tables. He was right. How would a stranger know that?
+
+== look_vapour_a mode=thought
+~ The old vapour burner, from before they put the electric in. Paraffin under pressure, and a mantle like a lady's stocking.
+
+== look_vapour_b mode=thought
+~ Leave the pump alone for half an hour and she starves, and gutters, and goes out. "Mantle failure," the book says. Two minutes.

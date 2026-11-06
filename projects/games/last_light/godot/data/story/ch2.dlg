@@ -1,15 +1,17 @@
 # THE LAST LIGHT · Chapter 2 · Strange Signals
+# Stage 3B: STAGE3_NARRATIVE_MASTER.md §8.2 and §11.1 (approved 2026-11-06).
 
 == ch2_trace mode=radio
 ! static
 MORAG: North Point, Stornoway. Over.
 CALLUM: Go ahead, Morag.
 MORAG: I've rung round. Nobody's reporting a Mary Ellen. The register's had nothing by that name since nineteen fifty-three. Over.
-MORAG: Lloyd's has her as lost, with seven of her eight crew. Skipper presumed lost. You know all this.
+MORAG: Lost with seven of the eight aboard, the skipper among them. Presumed. You know all this.
 * I know it. -> know
 * Then it's a prank. Some boy with a set and a bottle. -> prank
 = prank
-MORAG: That's what I told myself. Except boys with a bottle don't know the old procedure. "North Point, North Point" twice, then the name twice, the way they did it before the war.
+MORAG: That's what I told myself. Except he said it near enough the way it was said that night. "Cannot see your light."
+MORAG: Those words were never in any paper, Callum. The court called them confused and unreliable and left them out.
 -> next
 = know
 ! add rel.morag 1
@@ -52,7 +54,7 @@ HECTOR: Right you are. I'm in your hands, North Point. Over.
 
 == ch2_gannet_after mode=radio
 [if saved("Gannet")] HECTOR: Gannet's in the Gut and the passengers have stopped praying. Grand job, North Point. Over.
-[if saved("Gannet")] HECTOR: Here. Tell your father I was asking for him. Oh. Och, I'm sorry, Callum. Fifteen years and I still forget. Gannet out.
+[if saved("Gannet")] HECTOR: Here. Tell your father I was asking for him. Oh. Och, I'm sorry, Callum. Thirteen years and I still forget. Gannet out.
 [if lost("Gannet")] ~ The Gannet's echo breaks up on the rocks of the West Gut, and the speaker is full of men shouting.
 [if lost("Gannet")] ~ Morag's voice, calling the lifeboat. Then the lifeboat's, answering.
 
@@ -81,17 +83,49 @@ MARY ELLEN: ...then ask his son...
 ~ The old logs are in the box on the storage shelf. Nineteen fifty-three. Fifteenth of November.
 
 == ch2_same_hand mode=thought
+~ I know what it says. I don't need to open it.
+~ I open it.
 ~ Fifteenth November, nineteen fifty-three. Oh-two-ten. "Light extinguished approx. two minutes, mantle failure. Relit oh-two-twelve."
-~ "Trawler observed standing in too close at oh-one-thirty. No response to light."
-~ Small square letters. A clerk's hand.
-~ Tonight's page is lying open on the desk. The same hand. Eighteen years between them.
+~ "Trawler observed standing in too close at oh-one-thirty. No response to light." Signed, I. Mackay, P.K.
+~ Small square letters. A clerk's hand. Tonight's page is lying open on the desk.
+~ Eighteen years, and my hand hasn't changed at all.
 
 == ch2_jam mode=thought
-~ A grinding shudder through the ceiling, and the clockwork stops.
+> [A grinding shudder overhead. The optic stops.]
 ~ The motor's labouring. Amber lamp on the console. The beam's stuck.
+~ Motor off before she takes the main with her. Then free it by hand, the way the note says.
 
 == ch2_046 mode=thought
-~ Free again, with a clunk you can feel in your teeth.
+> [A clunk you feel in your teeth]
+~ Free again.
 ~ The bearing repeater says oh-four-six. The East Gut.
-~ There's a note taped to the console in Father's hand, and under it, mine: "Gear race, worn tooth at 046. Reported 1949. 1953. 1961."
+~ Father's note on the console, and my lines under his. "Free by hand." Forty-nine. December fifty-three. Sixty-one.
+~ December fifty-three. Three weeks after. As if writing it down would count for something.
 ~ It always sticks at forty-six.
+
+# ---- optional radio calls (§11.1): offered in the radio panel between the beats in chapters.json
+
+== opt_ch2_rory mode=radio
+CALLUM: Kittiwake, North Point. You're tied up snug? Over.
+! static
+RORY: Eh, North Point! Snug as anything. I'm sat here watching your light go round. Over.
+RORY: Here, Callum. That call on sixteen. The Mary Ellen. Half the Sound heard it. Over.
+RORY: My grandfather'd have had his coat on and been out the door. He'd never go past the Gut after dark, not once in eighteen years. Said he'd no wish to meet her. Over.
+* Get some sleep, Rory. -> sleep
+* Did he say why? -> why
+= why
+RORY: He said she wasn't finished. That's all. "She's not finished, Ruaridh."
+RORY: ...Eh. That's the wind talking. Sorry. Over.
+= sleep
+RORY: Aye. Aye, right. Kittiwake out.
+
+== opt_ch2_morag mode=radio
+CALLUM: Stornoway, North Point. Over.
+! static
+MORAG: North Point, Stornoway. Go ahead, Callum.
+CALLUM: That register. Anything else under her name? Sisters. Rebuilds. Over.
+MORAG: You're thinking what I'm thinking. Wait one.
+! wait 2.5
+MORAG: Mary Ellen had a sister off the same yard in Fraserburgh. The Catriona. Sold for breaking in nineteen sixty-nine, to a Mr Morrison. Govan.
+MORAG: Govan's a long road from razor blades to the Minch. Stornoway out.
+! clue sister_boat

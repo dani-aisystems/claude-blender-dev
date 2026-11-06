@@ -8,6 +8,7 @@ signal resume_requested
 signal restart_requested
 signal menu_requested
 signal backlog_requested                   # Stage 3A: "Dialogue history" in the pause menu, or H / View while paused
+signal call_requested(call_id: String)     # Stage 3B: an optional radio call ("Call Kittiwake")
 
 const COMMANDS := [["confirm", "Confirm position"], ["port", "Turn port 30°"], ["starboard", "Turn starboard 30°"],
 	["slow", "Reduce / resume speed"], ["hold", "Hold position"], ["maintain", "Maintain course"]]
@@ -46,6 +47,10 @@ var radio_legend: Label
 var number_keys_taken_fn: Callable          # true while dialogue replies own the number keys
 var cursor_fn: Callable                     # player.cursor_pos: the device-view cursor (mouse or virtual)
 var reply_root_fn: Callable                 # dialogue reply buttons' container (pad cursor can press them)
+var optional_calls_fn: Callable             # Stage 3B: director.available_calls() -> [{id, label, ...}]
+var calls_box: VBoxContainer                # "Call a station": shown only while a call is on offer
+var calls_list: VBoxContainer
+var _call_btns := {}                        # call id -> Button (keyed, like the vessel list)
 var _notice_t := 0.0
 var _sub_items: Array = []
 
@@ -140,6 +145,14 @@ func _build_radio(root: Control) -> void:
 	v.add_child(vessel_list)
 	_no_vessels = UIStyle.label("— no vessels on the channel —", 18, UIStyle.DIM)
 	vessel_list.add_child(_no_vessels)
+	calls_box = VBoxContainer.new()
+	calls_box.add_theme_constant_override("separation", 4)
+	calls_box.visible = false
+	v.add_child(calls_box)
+	calls_box.add_child(UIStyle.label("Call a station", 15, UIStyle.DIM))
+	calls_list = VBoxContainer.new()
+	calls_list.add_theme_constant_override("separation", 4)
+	calls_box.add_child(calls_list)
 	v.add_child(UIStyle.label("Instruction", 15, UIStyle.DIM))
 	for i in COMMANDS.size():
 		var c: Array = COMMANDS[i]
@@ -376,6 +389,7 @@ func _refresh_vessels() -> void:
 			vessel_list.remove_child(old)
 			old.queue_free()
 			_vessel_btns.erase(sid)
+	_refresh_calls()
 	_no_vessels.visible = act.is_empty()
 	tab_tip.visible = act.size() >= 2 and Settings.tip_wanted("tab")
 	tab_tip.text = "      %s  ·  next vessel" % InputSetup.glyph("next_vessel")
@@ -405,6 +419,35 @@ func _refresh_vessels() -> void:
 			b.text = t
 		if b.get_index() != i + 1:             # child 0 is the "no vessels" label
 			vessel_list.move_child(b, i + 1)
+
+
+## Optional calls (Stage 3B): one button per call on offer, removed once it has been made or its window
+## has closed. Greyed out with no power (the set is dead).
+func _refresh_calls() -> void:
+	var calls: Array = optional_calls_fn.call() if optional_calls_fn.is_valid() else []
+	var ids := {}
+	for c in calls:
+		ids[String(c["id"])] = c
+	for cid in _call_btns.keys():
+		if not ids.has(cid):
+			var old: Button = _call_btns[cid]
+			calls_list.remove_child(old)
+			old.queue_free()
+			_call_btns.erase(cid)
+	for cid in ids.keys():
+		var b: Button = _call_btns.get(cid)
+		if b == null:
+			b = _panel_button("", 36, 19)
+			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			var id_: String = cid
+			b.pressed.connect(func(): call_requested.emit(id_))
+			calls_list.add_child(b)
+			_call_btns[cid] = b
+		var t := "   " + String(ids[cid].get("label", cid))
+		if b.text != t:
+			b.text = t
+		b.disabled = sim != null and not sim.radio_on()
+	calls_box.visible = not _call_btns.is_empty()
 
 
 func _unhandled_input(event: InputEvent) -> void:

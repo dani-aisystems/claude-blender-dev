@@ -51,6 +51,9 @@ extends Resource
 @export var focus_half_deg := 8.0
 @export var jam_trip_delay := 8.0
 @export var jam_clear_time := 1.0
+@export var jam_bearing_deg := 46.0        # the worn tooth on the gear race (note_046)
+@export var jam_back_deg := 6.0            # 3B: back the handwheel this far past the tooth to free a story jam
+@export var off_wheel_mul := 0.5           # 3B: turning the optic by hand with the motor out is slow work
 
 # ---- ships ----
 @export var ship_types := {

@@ -152,18 +152,61 @@ def clipping():
 
 
 def note_046():
+    # Stage 3B: dated entries, and the procedure the ch2 jam teaches and ch6 needs. Iain's 1949 line is
+    # era-neutral ("take the drive off": the clockwork then, MODE OFF on the electric drive now)
     W, H = 900, 640
     img = paper(W, H, 46, (238, 230, 200), 1)
     d = ImageDraw.Draw(img)
-    jitter_text(d, (60, 60), "GEAR RACE - worn tooth at 046°.", IAIN(44), INK, 1)
-    jitter_text(d, (60, 130), "Sticks in heavy weather. Free by hand.", IAIN(38), INK, 2)
-    jitter_text(d, (60, 190), "Reported to Board 1949.   I.M.", IAIN(38), INK, 3)
-    d.line([50, 270, W - 50, 270], fill=(150, 120, 100), width=2)
-    jitter_text(d, (60, 300), "Reported again 1953.  C.M.", CALLUM(36), INK, 4)
-    jitter_text(d, (60, 360), "Reported again 1961.  Engineer says", CALLUM(36), INK, 5)
-    jitter_text(d, (60, 410), "\"next refit\".  C.M.", CALLUM(36), INK, 6)
+    jitter_text(d, (60, 56), "GEAR RACE - worn tooth at 046°.", IAIN(44), INK, 1)
+    jitter_text(d, (60, 122), "Sticks in heavy weather.", IAIN(36), INK, 2)
+    jitter_text(d, (60, 174), "FREE BY HAND: take the drive off, back her", IAIN(34), INK, 7)
+    jitter_text(d, (60, 220), "past the tooth, then put the drive in again.", IAIN(34), INK, 8)
+    jitter_text(d, (60, 272), "Reported to Board 4.3.49.   I.M.", IAIN(36), INK, 3)
+    d.line([50, 334, W - 50, 334], fill=(150, 120, 100), width=2)
+    jitter_text(d, (60, 360), "Reported again 9.12.53.  C.M.", CALLUM(36), INK, 4)
+    jitter_text(d, (60, 420), "Reported again 2.2.61.  Engineer says", CALLUM(36), INK, 5)
+    jitter_text(d, (60, 470), "\"next refit\".  C.M.", CALLUM(36), INK, 6)
     d.rectangle([W // 2 - 70, 0, W // 2 + 70, 30], fill=(200, 190, 150))   # tape
     return img
+
+
+def inquiry_extract(photostat):
+    """Stage 3B: the Inquiry's findings on the 01.52 Mayday and the log, with the photostat Ross read in
+    the Mitchell Library (Appendix C: a grey copy of the real 1953 log page, same hand)."""
+    W, H = 1000, 1400
+    img = paper(W, H, 54, (226, 222, 208), 1)
+    d = ImageDraw.Draw(img)
+    d.text((W // 2, 64), "REPORT OF FORMAL INVESTIGATION", font=PRINTB(34), fill=(30, 30, 30), anchor="mm")
+    d.text((W // 2, 106), "m.f.v. MARY ELLEN (SY 214)  ·  Inverness, March 1954", font=PRINT(23), fill=(50, 50, 50), anchor="mm")
+    d.text((W // 2, 140), "Extract and Appendix C", font=PRINT(21), fill=(70, 70, 70), anchor="mm")
+    d.line([70, 166, W - 70, 166], fill=(60, 60, 60), width=2)
+    y = 196
+    for para in INQUIRY:
+        for line in wrap(d, para, TYPE(23), W - 150):
+            d.text((75, y), line, font=TYPE(23), fill=(35, 35, 40))
+            y += 33
+        y += 18
+    d.text((75, y + 6), "APPENDIX C.  Photostat of the station log, North Point Light, 14-15 November 1953.",
+           font=TYPE(20), fill=(35, 35, 40))
+    g = photostat.convert("L").resize((W - 180, int((W - 180) * photostat.height / photostat.width)))
+    g = Image.merge("RGB", [g.point(lambda v: int(v * 0.72 + 30))] * 3)          # a dull grey copy
+    top = y + 48
+    if top + g.height > H - 40:
+        g = g.crop((0, 0, g.width, H - 40 - top))
+    img.paste(g, (90, top))
+    d.rectangle([88, top - 2, 92 + g.width, top + g.height + 2], outline=(90, 90, 90), width=2)
+    return img.filter(ImageFilter.GaussianBlur(0.45))
+
+
+INQUIRY = [
+    "22. The Court has considered a wireless message logged by Stornoway Coastguard at 01.52, which was said to report "
+    "that no light was visible from North Point. The message was received in conditions of severe interference. The "
+    "Court finds it confused and unreliable.",
+    "23. The Court prefers the evidence of the station log of North Point Light, kept by a principal keeper of long and "
+    "unblemished service, which records that the light was exhibited throughout save for approximately two minutes at 02.10.",
+    "24. The Court finds that the master, Alasdair Ross, failed to keep a proper lookout and stood into danger despite the "
+    "light being exhibited.",
+]
 
 
 def forecast():
@@ -657,12 +700,15 @@ def main():
     rows71 = [
         (C, "14.11", "16.22", "SW 6", "Overcast, rain", "Light exhibited. Lamp normal."),
         (C, "", "16.40", "SW 6", "Rain", "Engine started. Batteries on charge, 41%."),
-        (C, "", "18.30", "SW 7", "Heavy rain", "Kittiwake (SY 37) brought in by North Sound on radio bearings."),
-        (C, "", "23.25", "SW 7", "Heavy rain", "Radio check Stornoway CG. Gale 9 forecast. All well."),
+        (C, "", "18.30", "SW 7", "Heavy rain", "Radio check Stornoway CG. Gale warning, severe gale 9."),
+        (C, "", "18.50", "SW 7", "Heavy rain", "Kittiwake (SY 37) brought in by North Sound on radio bearings."),
+        (C, "", "23.25", "SW 7", "Heavy rain", "Stornoway CG on Ch. 16. All well."),
     ]
-    add("log_1971", "Station log, 14 November 1971", log_page(1971, rows71, 71, "NOVEMBER"),
-        "14.11 16.22 SW6 Overcast, rain: Light exhibited. Lamp normal. / 16.40 Engine started. Batteries on charge, 41%. / "
-        "18.30 Kittiwake (SY 37) brought in by North Sound on radio bearings. / 23.25 Radio check Stornoway CG. Gale 9 forecast. All well.  (Hand: C. Mackay)")
+    # Stage 3B (C10): the entries follow tonight's order (radio check 18.30, Kittiwake 18.50, Morag 23.25)
+    add("log_1971", "Station log, Sunday 14 November 1971", log_page(1971, rows71, 71, "NOVEMBER"),
+        "14.11.71 Sun. 16.22 SW 6, overcast, rain. Light exhibited. Lamp normal. / 16.40 Engine started. Batteries on charge, 41%. / "
+        "18.30 Radio check Stornoway CG. Gale warning, severe gale 9. / 18.50 Kittiwake (SY 37) brought in by North Sound "
+        "on radio bearings. / 23.25 Stornoway CG on Ch. 16. All well.  (Hand: C. Mackay)")
     rows53 = [
         (C, "14.11", "23.30", "SW 8", "Heavy rain", "I. Mackay on watch. Light good."),
         (C, "15.11", "01.30", "SW 9", "Rain, poor vis.", "Trawler observed standing in too close to East Gut. No response to light."),
@@ -670,21 +716,26 @@ def main():
         (C, "", "02.30", "SW 9", "Rain", "Wreckage reported East Gut by Stornoway W/T. Mary Ellen (SY 214) believed lost."),
         (IAIN, "", "", "", "", "I. Mackay, P.K."),
     ]
-    add("log_1953", "Station log, 14-15 November 1953", log_page(1953, rows53, 53, "NOVEMBER"),
+    page53 = log_page(1953, rows53, 53, "NOVEMBER")
+    add("log_1953", "Station log, 14-15 November 1953", page53,
         "14.11 23.30: I. Mackay on watch. Light good. / 15.11 01.30: Trawler observed standing in too close to East Gut. No response to light. / "
         "02.10: Light extinguished approx. 2 min (mantle failure). Relit 02.12. / 02.30: Wreckage reported East Gut by Stornoway W/T. "
         "Mary Ellen (SY 214) believed lost. / Signed I. Mackay, P.K.  (The entries are in the same small square hand as tonight's log.)")
     letter_text = ["Christmas 1957", "", "Callum,", "",
-                   "I made you write it. I made a boy of twenty-three put his name to my lie, because I was asleep in this chair with the bottle, and the clockwork stuck on the bad tooth, and the light was out, and I could not face it.",
+                   "I made you write it. I made a boy of twenty-three put his hand to my lie, because I was asleep in this chair with the bottle, and the clockwork stuck on the bad tooth, and the light was out, and I could not face it.",
                    "",
                    "The girl at Stornoway had it right. Ten minutes to two. I heard the wireless in my sleep and thought I was dreaming.",
                    "",
-                   "Ross was a better man than me. If you ever have the courage I did not, put it right.",
+                   "Ross was a better man than me, and he was my friend. If you ever have the courage I did not, put it right.",
                    "", "Your father,", "Iain Mackay"]
     add("letter_1957", "Unsent letter, Christmas 1957", letter(letter_text, IAIN, 42, 57), "\n".join(letter_text))
     add("note_046", "Maintenance note, light console", note_046(),
-        "GEAR RACE - worn tooth at 046°. Sticks in heavy weather. Free by hand. Reported to Board 1949. I.M. / "
-        "Reported again 1953. C.M. / Reported again 1961. Engineer says \"next refit\". C.M.")
+        "GEAR RACE - worn tooth at 046°. Sticks in heavy weather. FREE BY HAND: take the drive off, back her past the tooth, "
+        "then put the drive in again. Reported to Board 4.3.49. I.M. / Reported again 9.12.53. C.M. / "
+        "Reported again 2.2.61. Engineer says \"next refit\". C.M.")
+    add("inquiry_extract", "Report of Formal Investigation, Mary Ellen (SY 214): extract", inquiry_extract(page53),
+        " ".join(INQUIRY) + " APPENDIX C. Photostat of the station log, North Point Light, 14-15 November 1953. "
+        "(The page shown is in a small square hand.)")
     add("clipping_1954", "Stornoway Gazette, 18 March 1954", clipping(),
         "MARY ELLEN INQUIRY: MASTER TO BLAME. ... the master, Alasdair Ross of Leverburgh, who is presumed drowned, \"failed to keep a "
         "proper lookout and stood into danger despite the light being exhibited.\" Evidence from the station log of North Point Light "
@@ -708,8 +759,9 @@ def main():
     logbook_spread(log_page(1971, rows13, 70, "NOVEMBER"), log_page(1971, rows71, 71, "NOVEMBER")).save(
         TEX / "T_LL_Logbook.png", optimize=True)
     add("coat_note", "Note in the oilskin pocket", coat_note(), "\n".join(COAT_NOTE))
-    add("photo_1953", "Photograph slid under the door", photo("crew"),
-        "Eight men on a deck at Leverburgh pier. On the back, in pencil: \"Mary Ellen, July 1953. A. Ross, master.\"")
+    add("photo_1953", "Photograph: the Mary Ellen's crew, July 1953", photo("crew"),
+        "Eight men on a deck at Leverburgh pier. The one at the wheel is laughing. On the back, in pencil: \"Mary Ellen, "
+        "July 1953. A. Ross, master.\" Beneath, in another hand: \"Kenny B. on the hatch.\"")
     # one 2048 atlas for the three prop faces (one material, not three): calendar top-left (700x1000),
     # wiring diagram top-right (1100x800 at x 720), barometer dial bottom-left (1024x1024 at y 1024)
     props = Image.new("RGB", (2048, 2048), (230, 226, 214))

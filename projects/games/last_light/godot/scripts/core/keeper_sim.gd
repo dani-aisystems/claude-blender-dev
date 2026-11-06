@@ -47,6 +47,14 @@ var _manual_vel := 0.0
 var jammed := false
 var _jam_t := 0.0
 var _jam_clear_t := 0.0
+## Stage 3B story jam (the worn tooth at 046): it binds in any mode, never trips MAIN and never clears by
+## itself or on a power loss. It is freed only by hand: MODE OFF, then the handwheel backed past the
+## tooth (cfg.jam_back_deg). Watch-mode jams (night.json) keep the old rules.
+var story_jam := false
+var _jam_back := 0.0                     # degrees the optic has been backed off the tooth so far
+var jam_reengage := Mode.AUTO            # the mode the story wants after freeing it (ch2 AUTO, ch6 MANUAL)
+## Ross on the handwheel (ch6, `ross_wheel`): in MANUAL the beam follows the most endangered ship.
+var assist := false
 var faults: Array = []
 
 # ---- radio ----
@@ -310,6 +318,17 @@ func spawn_story_ship(e: Dictionary) -> Array:
 	return ev
 
 
+## 3B: a story ship that was holding (protected) starts making way again: from here she can be lost.
+func release_ship(n: String) -> Array:
+	var s := find_ship_named(n)
+	if s == null:
+		return []
+	s.hold = false
+	s.protected = false
+	s.speed = s.cruise * 0.5
+	return [{"type": "ship_released", "ship": s.id, "name": s.name}]
+
+
 func find_ship_named(n: String) -> FleetShip:
 	for s in ships:
 		if s.name == n:
@@ -317,9 +336,12 @@ func find_ship_named(n: String) -> FleetShip:
 	return null
 
 
-func trigger_fault(kind: String) -> Array:
+func trigger_fault(kind: String, opts: Array = []) -> Array:
 	match kind:
 		"jam":
+			if "story" in opts:
+				jam_reengage = Mode.MANUAL if "manual" in opts else Mode.AUTO
+				return _story_jam()
 			faults.append({"t": t, "type": "jam", "done": false})
 		"overheat":
 			gen_temp = maxf(gen_temp, cfg.temp_trip - 4.0)
@@ -328,6 +350,17 @@ func trigger_fault(kind: String) -> Array:
 				main_breaker = false
 				return [{"type": "breaker_trip", "cause": "story"}]
 	return []
+
+
+## The story jam binds at once on the tooth: the bearing repeater stops at 046 whatever the mode.
+func _story_jam() -> Array:
+	jammed = true
+	story_jam = true
+	_jam_t = 0.0
+	_jam_back = 0.0
+	bearing = deg_to_rad(cfg.jam_bearing_deg)
+	_manual_vel = 0.0
+	return [{"type": "jam", "story": true}]
 
 
 func to_dict() -> Dictionary:
@@ -339,7 +372,8 @@ func to_dict() -> Dictionary:
 		"gen_temp": gen_temp, "gen_overheated": gen_overheated, "mode": mode, "intensity": intensity, "bearing": bearing,
 		"jammed": jammed, "faults": faults, "ships": sh, "next_id": _next_id, "saved": saved, "lost": lost,
 		"dark_seconds": dark_seconds, "score": score, "story_mode": story_mode, "storm_override": storm_override,
-		"clock_min": clock_min, "clock_rate": clock_rate, "seed": seed_used}
+		"clock_min": clock_min, "clock_rate": clock_rate, "seed": seed_used,
+		"story_jam": story_jam, "jam_back": _jam_back, "assist": assist, "jam_reengage": jam_reengage}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -358,6 +392,10 @@ func from_dict(d: Dictionary) -> void:
 	score = int(d.get("score", 0))
 	_next_id = int(d.get("next_id", 1))
 	faults = d.get("faults", [])
+	story_jam = bool(d.get("story_jam", false)) and jammed
+	_jam_back = float(d.get("jam_back", 0.0))
+	assist = bool(d.get("assist", false))
+	jam_reengage = int(d.get("jam_reengage", Mode.AUTO))
 	ships.clear()
 	for sd in d.get("ships", []):
 		ships.append(FleetShip.from_dict(sd))
@@ -384,7 +422,13 @@ func _faults_step(dt: float, ev: Array) -> void:
 			jammed = true
 			_jam_t = 0.0
 			ev.append({"type": "jam"})
-	if jammed:
+	if jammed and story_jam:
+		if _jam_back >= cfg.jam_back_deg:
+			jammed = false
+			story_jam = false
+			_jam_back = 0.0
+			ev.append({"type": "jam_cleared", "story": true})
+	elif jammed:
 		if mode != Mode.AUTO or not powered():
 			_jam_clear_t -= dt
 			if _jam_clear_t <= 0.0 or not powered():
@@ -484,11 +528,37 @@ func _light_step(dt: float, _ev: Array) -> void:
 				bearing = wrapf(bearing + deg_to_rad(cfg.auto_speed_deg) * dt, -PI, PI)
 			_manual_vel = 0.0
 		Mode.MANUAL:
+			if story_jam:
+				_manual_vel = 0.0          # the handwheel is rigid on the tooth
+				return
 			var target := wheel_input * deg_to_rad(cfg.manual_max_deg)
+			if assist and not jammed:
+				var aim := assist_target()
+				if aim != null:
+					var diff := Geo.angle_diff(bearing, Geo.bearing_of(aim.pos))
+					target = clampf(diff * 3.0, -1.0, 1.0) * deg_to_rad(cfg.manual_max_deg)
 			_manual_vel = move_toward(_manual_vel, target, deg_to_rad(cfg.manual_accel_deg) * dt)
 			bearing = wrapf(bearing + _manual_vel * dt, -PI, PI)
 		_:
-			_manual_vel = 0.0
+			# OFF (3B): the motor is out, so the handwheel turns the optic by hand. With the story jam on the
+			# tooth it only goes back (bearing decreasing); backing it far enough frees the gear race.
+			var target := wheel_input * deg_to_rad(cfg.manual_max_deg) * cfg.off_wheel_mul
+			if story_jam:
+				target = minf(target, 0.0)
+			_manual_vel = move_toward(_manual_vel, target, deg_to_rad(cfg.manual_accel_deg) * dt)
+			bearing = wrapf(bearing + _manual_vel * dt, -PI, PI)
+			if story_jam and _manual_vel < 0.0:
+				_jam_back += rad_to_deg(-_manual_vel * dt)
+
+
+## The ship Ross keeps the beam on: the active, still-sailing ship closest to striking (lowest tti).
+func assist_target() -> FleetShip:
+	var best: FleetShip = null
+	for sh in active_ships():
+		if sh.state == FleetShip.State.SAILING or sh.state == FleetShip.State.PILOTING:
+			if best == null or sh.tti < best.tti:
+				best = sh
+	return best
 
 
 ## Can this ship see the light right now?
@@ -497,9 +567,10 @@ func ship_sees_light(s: FleetShip) -> bool:
 		return false
 	var d := s.pos.length()
 	var r := vis_range()
-	if mode == Mode.AUTO:
+	if mode == Mode.AUTO and not jammed:
 		return d <= r
-	if mode == Mode.MANUAL:
+	if mode == Mode.MANUAL or (mode == Mode.AUTO and jammed):
+		# 3B: a jammed optic in AUTO is a fixed beam (stuck on the tooth), seen only along its bearing
 		var off := absf(Geo.angle_diff(bearing, Geo.bearing_of(s.pos)))
 		return off <= deg_to_rad(cfg.focus_half_deg) + atan2(s.radius, maxf(d, 1.0)) and d <= r * cfg.focus_mul
 	return false
@@ -537,7 +608,7 @@ func spawn_ship(e: Dictionary) -> FleetShip:
 	s.turn_rate = deg_to_rad(p["turn_deg"])
 	s.radius = p["radius"]
 	var b := deg_to_rad(float(e["bearing"]))
-	s.pos = Geo.polar(b, cfg.spawn_radius)
+	s.pos = Geo.polar(b, float(e.get("range", cfg.spawn_radius)))    # 3B: story ships may start further out
 	var aim = e.get("aim", 0)
 	if typeof(aim) == TYPE_STRING and aim == "reef":
 		s.heading = Geo.bearing_of(_blind_reef(b) - s.pos)

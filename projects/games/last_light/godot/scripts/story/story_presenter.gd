@@ -17,6 +17,17 @@ var doc_tex: TextureRect
 var doc_text: RichTextLabel
 var doc_title: Label
 var docs := {}
+var caption: Label                       # 3B: sound captions outside conversations ("[Footsteps on the stair]")
+var _caption_tw: Tween
+## 3B ending card (§15.5): warm black, the ending's title, the epilogue lines one at a time.
+var ending_root: Control
+var ending_bg: ColorRect
+var ending_title: Label
+var ending_box: VBoxContainer
+var _ending_open := false
+var _end_wait := 0.0
+var _end_skip := false
+var _end_guard := 0
 var _hint_t := 0.0
 var _doc_open := ""
 var _transcript := false
@@ -132,11 +143,23 @@ func _ready() -> void:
 	doc_title.offset_top = -90
 	doc_title.offset_bottom = -40
 	doc_root.add_child(doc_title)
+	caption = UIStyle.label("", 20, UIStyle.INK, UIStyle.sans())     # 3B checkpoint: 18 px DIM was lost on the dark room
+	caption.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	caption.offset_left = -560
+	caption.offset_right = 560
+	caption.offset_top = -330
+	caption.offset_bottom = -296
+	caption.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	caption.modulate.a = 0.0
+	root.add_child(caption)
 	fade = ColorRect.new()
 	fade.color = Color(0, 0, 0, 0)
 	fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(fade)
+	_build_ending()
 
 
 func bind(d: StoryDirector) -> void:
@@ -149,6 +172,7 @@ func bind(d: StoryDirector) -> void:
 	d.objective_changed.connect(set_objective)
 	dialogue.hold_fn = is_screen_held
 	d.chapter_started.connect(show_chapter)
+	d.transition_requested.connect(_on_transition)
 
 
 ## Objectives carry the same {interact} {move} ... tokens as hints (Stage 3A: ch1 hard-coded "WASD").
@@ -157,9 +181,9 @@ func set_objective(t: String) -> void:
 	hint.text = ""
 
 
-## True while the screen is (partly) black: dialogue must not type out unseen behind a fade.
+## True while the screen is (partly) black or the ending card is up: dialogue must not type out unseen.
 func is_screen_held() -> bool:
-	return fade.color.a > 0.02
+	return fade.color.a > 0.02 or _ending_open
 
 
 func show_hint(t: String) -> void:
@@ -167,24 +191,186 @@ func show_hint(t: String) -> void:
 	_hint_t = 14.0
 
 
+## The chapter card (3B). It is shown after the chapter has switched under black: the black lifts while
+## the card fades in, and the story is released (transition_done) when the card starts to fade out, so the
+## first line never types under the card or the fade.
 func show_chapter(n: int, title: String, sub: String) -> void:
 	card_title.text = "%s · %s" % [["", "I", "II", "III", "IV", "V", "VI"][clampi(n, 0, 6)], title]
 	card_sub.text = sub
 	var tw := create_tween()
-	tw.tween_property(card, "modulate:a", 1.0, 1.6)
-	tw.tween_interval(3.2)
-	tw.tween_property(card, "modulate:a", 0.0, 1.8)
+	tw.tween_property(fade, "color:a", 0.0, 0.8)
+	tw.parallel().tween_property(card, "modulate:a", 1.0, 1.2)
+	tw.tween_interval(2.8)
+	tw.tween_callback(_release)
+	tw.tween_property(card, "modulate:a", 0.0, 1.4)
 
 
+func _release() -> void:
+	if director:
+		director.transition_done()
+
+
+func _midpoint() -> void:
+	if director:
+		director.transition_midpoint()
+
+
+## The director asks for a transition; it holds the story until we call back.
+func _on_transition(kind: String, args: Array) -> void:
+	match kind:
+		"chapter":
+			var tw := create_tween()
+			tw.tween_property(fade, "color:a", 1.0, 0.6)
+			tw.tween_interval(0.25)
+			tw.tween_callback(_midpoint)     # the chapter switches under black, then show_chapter fades in
+		"timeskip":
+			timeskip(String(args[1]) if args.size() > 1 else "")
+		"ending":
+			pass                             # show_ending (story event) drives it and releases at the end
+
+
+## A time skip: black with the clock, the world changes under black (midpoint), then the fade lifts and
+## the story is released.
 func timeskip(clock_text: String) -> void:
 	card_title.text = clock_text
 	card_sub.text = ""
 	var tw := create_tween()
 	tw.tween_property(fade, "color:a", 1.0, 1.0)
 	tw.parallel().tween_property(card, "modulate:a", 1.0, 1.0)
+	tw.tween_callback(_midpoint)
 	tw.tween_interval(1.6)
 	tw.tween_property(fade, "color:a", 0.0, 1.4)
 	tw.parallel().tween_property(card, "modulate:a", 0.0, 1.4)
+	tw.tween_callback(_release)
+
+
+## A sound caption outside a conversation: small capitals, low centre, about three seconds.
+func show_caption(t: String) -> void:
+	caption.text = t.strip_edges().trim_prefix("[").trim_suffix("]").strip_edges().to_upper()
+	if _caption_tw:
+		_caption_tw.kill()
+	_caption_tw = create_tween()
+	_caption_tw.tween_property(caption, "modulate:a", 0.9, 0.3)
+	_caption_tw.tween_interval(3.2)
+	_caption_tw.tween_property(caption, "modulate:a", 0.0, 0.6)
+
+
+func _build_ending() -> void:
+	var lay := CanvasLayer.new()
+	lay.layer = 25                           # over the HUD and dialogue, under the document viewer
+	add_child(lay)
+	ending_root = Control.new()
+	ending_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ending_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ending_root.visible = false
+	lay.add_child(ending_root)
+	ending_bg = ColorRect.new()
+	ending_bg.color = Color(0.035, 0.026, 0.02, 0.0)          # warm black
+	ending_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ending_root.add_child(ending_bg)
+	var col := VBoxContainer.new()
+	col.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	col.offset_left = -560
+	col.offset_right = 560
+	col.offset_top = -330
+	col.offset_bottom = 330
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 26)
+	ending_root.add_child(col)
+	ending_title = UIStyle.label("", 46, UIStyle.INK, UIStyle.serif())
+	ending_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ending_title.modulate.a = 0.0
+	col.add_child(ending_title)
+	ending_box = VBoxContainer.new()
+	ending_box.add_theme_constant_override("separation", 16)
+	col.add_child(ending_box)
+
+
+## "Correction" -> "C O R R E C T I O N" (words kept apart by a wider gap).
+static func spaced_caps(t: String) -> String:
+	var out := ""
+	for i in t.length():
+		var ch := t[i].to_upper()
+		out += ("   " if ch == " " else ch + (" " if i < t.length() - 1 and t[i + 1] != " " else ""))
+	return out
+
+
+func is_ending_open() -> bool:
+	return _ending_open
+
+
+## The ending card (§15.5): a slow fade from the dawn view to warm black, the title in spaced capitals,
+## then each epilogue line in italic serif, one at a time (input or about four seconds each). The last two
+## lines (the place and date, and "The light was kept.") are set apart. Releases the story at the end.
+func show_ending(_id: String, title: String, lines: Array) -> void:
+	_ending_open = true
+	for c in ending_box.get_children():
+		c.queue_free()
+	ending_title.text = spaced_caps(title)
+	ending_title.modulate.a = 0.0
+	ending_root.visible = true
+	dialogue.visible = false
+	var tw := create_tween()
+	tw.tween_property(ending_bg, "color:a", 1.0, 2.4)
+	await tw.finished
+	tw = create_tween()
+	tw.tween_property(ending_title, "modulate:a", 1.0, 1.4)
+	await tw.finished
+	await _ending_pause(1.2)
+	for i in lines.size():
+		var l := _ending_line(lines, i)
+		l.modulate.a = 0.0
+		ending_box.add_child(l)
+		var t2 := create_tween()
+		t2.tween_property(l, "modulate:a", 1.0 if i < lines.size() - 2 else 0.9, 1.0)
+		await _ending_pause(maxf(4.0, String(lines[i]).length() * 0.05))
+	await _ending_pause(2.5)
+	_ending_open = false
+	_release()
+
+
+## Captures (3B): the card as it looks once every line is up, no animation.
+func show_ending_static(title: String, lines: Array) -> void:
+	for c in ending_box.get_children():
+		c.queue_free()
+	ending_title.text = spaced_caps(title)
+	ending_title.modulate.a = 1.0
+	ending_bg.color.a = 1.0
+	ending_root.visible = true
+	dialogue.visible = false
+	for i in lines.size():
+		var l := _ending_line(lines, i)
+		l.modulate.a = 1.0 if i < lines.size() - 2 else 0.9
+		ending_box.add_child(l)
+
+
+## One epilogue line: italic serif; the last two (place and date, "The light was kept.") smaller, in amber.
+func _ending_line(lines: Array, i: int) -> Label:
+	var tail := i >= lines.size() - 2
+	var l := UIStyle.label(String(lines[i]), 24 if not tail else 21, UIStyle.AMBER if tail else UIStyle.INK,
+		UIStyle.serif_italic())
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.custom_minimum_size = Vector2(1080, 0)
+	return l
+
+
+func hide_ending() -> void:
+	ending_root.visible = false
+	ending_bg.color.a = 0.0
+	dialogue.visible = true
+	for c in ending_box.get_children():
+		c.queue_free()
+
+
+func _ending_pause(secs: float) -> void:
+	_end_wait = secs
+	_end_skip = false
+	_end_guard = Engine.get_process_frames()
+	while _end_wait > 0.0 and not _end_skip:
+		await get_tree().process_frame
+		if not get_tree().paused:
+			_end_wait -= get_process_delta_time()
 
 
 func fade_to(a: float, secs: float) -> Tween:
@@ -272,6 +458,14 @@ func _zoom_at(factor: float, at: Vector2) -> void:
 ## _input, not _unhandled_input: the viewer owns every event while it is open (its full-screen shade is a
 ## GUI control that swallowed mouse buttons before _unhandled_input, so right click never closed it, R8).
 func _input(event: InputEvent) -> void:
+	if _ending_open:
+		var press: bool = event.is_action_pressed("interact") or (event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode == KEY_SPACE) or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
+		if press and Engine.get_process_frames() - _end_guard > 20:
+			_end_skip = true
+		if press:
+			get_viewport().set_input_as_handled()
+		return
 	if not doc_root.visible:
 		return
 	get_viewport().set_input_as_handled()          # nothing under the viewer reacts while reading

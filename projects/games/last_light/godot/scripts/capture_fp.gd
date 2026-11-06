@@ -13,6 +13,11 @@ extends Node
 ##     say_radio, say_thought, say_inroom (ROSS in a radio scene), say_door (the man at the door, person),
 ##     say_choices (a radio line plus two replies), say_sound (3A caption), text15 (text size 1.5),
 ##     doc_<id> (a document open in the viewer), pause, backlog (3A: the dialogue history)
+##   Stage 3B states (static, so before/after shots are comparable): chapter_<n> (that chapter's card),
+##     timeskip (the clock card half-way through its fade), ending_<id> (the full ending card, its lines
+##     collected from ch6_epilogue for that ending), calls (ch2 with the optional radio calls on offer),
+##     photo_door (the 1953 photograph inside the stair door), caption (a sound caption), say_phone,
+##     say_grants (the phone and Grant's thoughts)
 ##   VIEW pp_<ia id> (Stage 2): the PLAYER stands 1.3 m from that control and looks at it, so the shot
 ##     shows the real crosshair and prompt (e.g. 60@pp_start!gen_off!valve_shut)
 ##   --nohud hides the HUD / dialogue layers for room views (kept for "player" and "focus_*" shots).
@@ -128,6 +133,14 @@ func view(name_: String) -> Array:
 	return []
 
 
+## Capture runs are driven by the bot and forced states only. A real key or click that reaches the window
+## (Godot activates it once at startup) must not press the focused menu button or move the story on: the
+## 3B checkpoint run lost its game to a "Continue" press. Every real input event is swallowed here; GUI
+## input is processed after all _input callbacks, so this covers the menu buttons too.
+func _input(_event: InputEvent) -> void:
+	get_viewport().set_input_as_handled()
+
+
 func _run() -> void:
 	var args: Dictionary = GameState.user_args
 	var name_: String = args.get("capture", "fp")
@@ -232,8 +245,34 @@ func _force(g, st: String) -> void:
 			g.sim.fuel_valve = false
 		"flash":
 			pass                        # triggered right before the save (see _flash_peak)
-		"say_radio", "say_thought", "say_inroom", "say_door", "say_choices", "say_sound":
+		"say_radio", "say_thought", "say_inroom", "say_door", "say_choices", "say_sound", "say_phone", "say_grants":
 			_say(g, st)
+		"timeskip":
+			_hold_director(g)
+			g.presenter.card_title.text = "18:30"
+			g.presenter.card_sub.text = ""
+			g.presenter.card.modulate.a = 0.85
+			g.presenter.fade.color.a = 0.85
+			_restore_state["card"] = true
+		"calls":
+			_hold_director(g)
+			_restore_state["story_pos"] = [g.director.state.chapter, g.director.state.beat]
+			g.director.state.chapter = 2
+			g.director.state.beat = 4
+			# the bot's own dialogue may be running, and no call is offered while the story speaks: show the
+			# chapter-2 calls the panel would list once it is quiet
+			_restore_state["calls_fn"] = g.ui.optional_calls_fn
+			var oc: Array = g.director.chapter_data(2).get("optional_calls", [])
+			g.ui.optional_calls_fn = func(): return oc
+			g.ui._refresh_calls()
+		"photo_door":
+			_restore_state["photo_door"] = true
+			g.director.state.clues["photo_1953"] = true
+			g._update_story_props()
+		"caption":
+			g.presenter.caption.text = "FOOTSTEPS ON THE STAIR. ONE STEP AT A TIME."
+			g.presenter.caption.modulate.a = 0.85
+			_restore_state["caption"] = true
 		"text15":
 			_restore_state["subtitle_size"] = Settings.v["subtitle_size"]
 			Settings.v["subtitle_size"] = 1.5          # in memory only (capture runs never save settings)
@@ -249,7 +288,18 @@ func _force(g, st: String) -> void:
 				g.open_backlog(false)
 				_restore_state["backlog"] = true
 		_:
-			if st.begins_with("doc_"):
+			if st.begins_with("chapter_"):
+				_hold_director(g)
+				var c: Dictionary = g.director.chapter_data(int(st.substr(8)))
+				g.presenter.card_title.text = "%s · %s" % [["", "I", "II", "III", "IV", "V", "VI"][clampi(int(st.substr(8)), 0, 6)], c.get("title", "")]
+				g.presenter.card_sub.text = c.get("subtitle", "")
+				g.presenter.card.modulate.a = 1.0
+				_restore_state["card"] = true
+			elif st.begins_with("ending_") and g.presenter.has_method("show_ending_static"):
+				_hold_director(g)
+				_ending_static(g, st.substr(7))
+				_restore_state["ending"] = true
+			elif st.begins_with("doc_"):
 				_hold_director(g)
 				g.player.enabled = false
 				g.presenter.open_document(st.substr(4))
@@ -279,9 +329,50 @@ func _unforce(g) -> void:
 	if _restore_state.has("subtitle_size"):
 		Settings.v["subtitle_size"] = _restore_state["subtitle_size"]
 		Settings.apply()
+	if _restore_state.has("card"):
+		g.presenter.card.modulate.a = 0.0
+		g.presenter.fade.color.a = 0.0
+	if _restore_state.has("calls_fn"):
+		g.ui.optional_calls_fn = _restore_state["calls_fn"]
+	if _restore_state.has("story_pos"):
+		g.director.state.chapter = _restore_state["story_pos"][0]
+		g.director.state.beat = _restore_state["story_pos"][1]
+		g.ui._refresh_calls()
+	if _restore_state.has("photo_door"):
+		g.director.state.clues.erase("photo_1953")
+		g._update_story_props()
+	if _restore_state.has("caption"):
+		g.presenter.caption.modulate.a = 0.0
+	if _restore_state.has("ending"):
+		g.presenter.hide_ending()
 	if _restore_state.has("director"):
 		g.director.process_mode = _restore_state["director"]
 	_restore_state.clear()
+
+
+## The ending card as it looks once every line is up, for one of the four endings: the epilogue lines
+## are collected from ch6_epilogue with that ending's deciding flags set (and restored afterwards).
+const ENDING_FLAGS := {
+	"correction": [{"told_truth": 1, "gave_letter": 1}, "saved"],
+	"heard_together": [{"told_truth": 1}, "lost"],
+	"nothing_to_report": [{"kept_lie": 1, "reunion": 1, "gave_letter": 1}, "saved"],
+	"light_exhibited": [{"kept_lie": 1}, "lost"],
+}
+
+
+func _ending_static(g, id: String) -> void:
+	var st: StoryState = g.director.state
+	var keep_flags: Dictionary = st.flags.duplicate()
+	var keep_rescues: Dictionary = st.rescues.duplicate()
+	for f in ["told_truth", "kept_lie", "reunion", "gave_letter", "kept_letter"]:
+		st.flags.erase(f)
+	for f in ENDING_FLAGS[id][0]:
+		st.flags[f] = ENDING_FLAGS[id][0][f]
+	st.rescues["Iona Star"] = ENDING_FLAGS[id][1]
+	var lines: Array = g.director.collect_lines("ch6_epilogue")
+	st.flags = keep_flags
+	st.rescues = keep_rescues
+	g.presenter.show_ending_static(StoryDirector.ENDINGS[id], lines)
 
 
 # ------------------------------------------------------------------ staged dialogue (Stage 3 checkpoints)
@@ -293,6 +384,8 @@ const SAMPLE_LINES := {
 	"say_door": {"mode": "person", "speaker": "VISITOR", "text": "Open the door, Callum. I'm sixty-four, I'm soaked to the bone, and I've no wish to harm you."},
 	"say_choices": {"mode": "radio", "speaker": "MORAG", "text": "And Callum. It's the fourteenth."},
 	"say_sound": {"type": "line", "mode": "person", "speaker": "", "name": "", "look": "sound", "text": "Three slow knocks."},
+	"say_phone": {"mode": "thought", "speaker": "", "text": "The GPO line to Leverburgh exchange. Dead since the September gale took the cable on the shore."},
+	"say_grants": {"mode": "thought", "speaker": "", "text": "Behind them, Father's half-bottle of Grant's. Still half. I've never drunk it, and I've never poured it out."},
 }
 const SAMPLE_HISTORY := [
 	{"speaker": "", "name": "", "text": "Sixteen-twenty. The sun's gone behind Pabbay and taken the colour with it.", "look": "thought", "chapter": 1, "clock": "16:20"},

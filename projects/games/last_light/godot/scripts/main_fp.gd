@@ -257,8 +257,9 @@ func _on_finished(stats: Dictionary) -> void:
 		game.show_end(stats, best)
 
 
-func _on_campaign_over(_ending: Dictionary) -> void:
-	await get_tree().create_timer(4.0).timeout
+func _on_campaign_over(ending: Dictionary) -> void:
+	# 3B: the ending card has already faded to warm black and been read; the credits follow at once
+	await get_tree().create_timer(1.0 if ending.has("ending") else 4.0).timeout
 	_open_credits(true)
 
 

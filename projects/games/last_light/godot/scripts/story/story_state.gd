@@ -14,6 +14,16 @@ var history: Array = []       # {speaker (as shown), name, text, mode, look, cha
 var objective := ""
 var sim: KeeperSim             # for conditions that read the station
 var play_seconds := 0.0
+## An autosave inside a beat (3B): the beat had started and these actions were still to run.
+var in_beat := false
+var resume: Array = []
+## Beat layout of chapters.json. Saves are by beat INDEX, so older layouts are remapped on load.
+## 2 = Stage 3B (ch1 15 -> 11 beats, ch6 3 -> 7 beats).
+const LAYOUT := 2
+const REMAP := {
+	1: {1: [0, 1, 1, 1, 2, 2, 3, 4, 5, 5, 6, 7, 8, 9, 10]},
+	6: {1: [0, 4, 5]},
+}
 
 
 func flag(name_: String):
@@ -119,12 +129,15 @@ func _val(s: String):
 
 func to_dict() -> Dictionary:
 	return {"chapter": chapter, "beat": beat, "flags": flags, "clues": clues.keys(), "rel": rel, "rescues": rescues,
-		"convs_done": convs_done.keys(), "history": history.slice(-300), "objective": objective, "play_seconds": play_seconds}
+		"convs_done": convs_done.keys(), "history": history.slice(-300), "objective": objective, "play_seconds": play_seconds,
+		"layout": LAYOUT, "in_beat": in_beat, "resume": resume}
 
 
 func from_dict(d: Dictionary) -> void:
 	chapter = int(d.get("chapter", 1))
-	beat = int(d.get("beat", 0))
+	beat = remap_beat(chapter, int(d.get("beat", 0)), int(d.get("layout", 1)))
+	in_beat = bool(d.get("in_beat", false))
+	resume = d.get("resume", [])
 	flags = d.get("flags", {})
 	clues = {}
 	for c in d.get("clues", []):
@@ -137,3 +150,11 @@ func from_dict(d: Dictionary) -> void:
 	history = Speakers.sanitize_history(d.get("history", []), self)   # pre-3A saves stored raw ids ("ROSS")
 	objective = d.get("objective", "")
 	play_seconds = float(d.get("play_seconds", 0.0))
+
+
+## A beat index from a save made with an older chapters.json layout, in today's layout.
+static func remap_beat(ch: int, b: int, layout: int) -> int:
+	if layout >= LAYOUT or not REMAP.has(ch) or not REMAP[ch].has(layout):
+		return b
+	var m: Array = REMAP[ch][layout]
+	return m[clampi(b, 0, m.size() - 1)] if b < m.size() else b - m.size() + int(m[-1]) + 1
