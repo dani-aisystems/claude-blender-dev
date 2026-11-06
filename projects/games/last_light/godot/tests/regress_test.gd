@@ -21,6 +21,9 @@ extends SceneTree
 ##  R11 brief 2026-11-06, group G1: E is never taken by dialogue, Space finishes then advances only after
 ##      the dwell, replies ignore their first 0.4 s, the clock card draws above the black, the radar is its
 ##      own target (never the radio view), sim radio chatter waits behind a story line and is logged
+##  R12 brief G2: the pause menu (no saving; Transcript / Options / Main menu with a confirm), Options handed
+##      to main_fp, device checks answered with a logged thought, the step objective panel (ticks, compact
+##      in device views, clear of the radio panel at every text size)
 ##   godot --path godot -s res://tests/regress_test.gd            (windowed: all checks)
 ##   godot --headless --path godot -s res://tests/regress_test.gd (R1 mouse checks SKIPPED: the headless
 ##                                                                  display server ignores mouse modes)
@@ -73,6 +76,9 @@ func _run() -> void:
 	while g.presenter.is_screen_held() and lift < 900:
 		await process_frame
 		lift += 1
+	# ch1 now opens with flat cells and the lights off (brief item 8); these checks were written for a
+	# powered station, so give it charge (the dark opening has its own checks in story_test)
+	g.sim.battery = 80.0
 	# windowed runs capture the real pointer: Daniel's own mouse must not turn the camera or flip the device
 	# mode mid-test (cabin pass). In memory only: persist is off, so settings.cfg is never written.
 	var st_node: Node = root.get_node("Settings")
@@ -92,6 +98,7 @@ func _run() -> void:
 	await _r9_dialogue_foundation()
 	await _r10_narrative_mechanics()
 	await _r11_brief_g1()
+	await _r12_brief_g2()
 	print("REGRESS_RESULT ", JSON.stringify({"passed": passes, "failed": fails.size(), "failures": fails, "skipped": skips}))
 	quit(1 if fails.size() > 0 else 0)
 
@@ -993,7 +1000,7 @@ Ross said: not a speaker line
 		var o: Rect2 = g.presenter.objective.get_global_rect()
 		var hr: Rect2 = g.presenter.hint.get_global_rect()
 		_check(not o.intersects(hr) and hr.position.y >= o.end.y - 0.5, "x%.1f objective and hint never overlap (%s / %s)" % [sc, o, hr])
-		_check(g.presenter.objective.get_theme_font_size("font_size") == UIStyle.px(19) and g.presenter.card_title.get_theme_font_size("font_size") == UIStyle.px(64)
+		_check(g.presenter.objective.get_theme_font_size("font_size") == UIStyle.px(20) and g.presenter.card_title.get_theme_font_size("font_size") == UIStyle.px(64)
 			and g.ui.notice.get_theme_font_size("font_size") == UIStyle.px(24), "x%.1f objective, chapter card and notices follow the text size" % sc)
 		var vp := g.get_viewport().get_visible_rect()
 		_check(vp.encloses(o) and vp.encloses(hr), "x%.1f objective and hint on screen" % sc)
@@ -1302,3 +1309,96 @@ func _r11_brief_g1() -> void:
 	await _frames(3)
 	_check(g._comms_queue.is_empty() and g.ui._sub_items.size() >= 1, "it shows once the story line has closed")
 	g.director.process_mode = Node.PROCESS_MODE_DISABLED
+
+
+func _button_texts(n: Node) -> Array:
+	var out: Array = []
+	for c in n.find_children("*", "Button", true, false):
+		out.append((c as Button).text)
+	return out
+
+
+func _r12_brief_g2() -> void:
+	print("R12 brief G2: pause, feedback, objective panel")
+	g.player.leave_focus()
+	await _settle_focus()
+	# a) the pause menu: no save buttons; Transcript, Options, Main menu
+	g.set_paused(true)
+	await _frames(2)
+	var texts := _button_texts(g.ui.pause_panel)
+	var no_save := texts.all(func(t): return not String(t).to_lower().contains("save"))
+	var has := ["Resume", "Options", "Main menu"].all(func(w): return texts.any(func(t): return String(t).begins_with(w)))
+	_check(no_save and has and texts.any(func(t): return String(t).begins_with("Transcript")), "pause menu: Resume / Transcript / Options / Main menu, no saving (%s)" % [texts])
+	var opt := [0]
+	var co := func(): opt[0] += 1
+	g.options_requested.connect(co)
+	for b in g.ui.pause_panel.find_children("*", "Button", true, false):
+		if (b as Button).text == "Options":
+			(b as Button).pressed.emit()
+	await _frames(2)
+	_check(opt[0] == 1 and not g.ui.pause_panel.visible, "Options is handed to main_fp and the pause menu steps aside")
+	g.options_requested.disconnect(co)
+	g.ui.pause_panel.visible = true
+	var menu := [0]
+	var cm := func(): menu[0] += 1
+	g.ui.menu_requested.connect(cm)
+	for b in g.ui.pause_panel.find_children("*", "Button", true, false):
+		if (b as Button).text == "Main menu":
+			(b as Button).pressed.emit()
+	await _frames(2)
+	_check(menu[0] == 0 and g.ui._confirm_panel != null, "Main menu asks first")
+	g.ui.menu_requested.disconnect(cm)
+	g.set_paused(false)
+	await _frames(2)
+	_check(g.ui._confirm_panel == null, "resuming closes the question")
+	# b) checking the generator / battery answers with a thought that is kept in the transcript
+	g.director.process_mode = Node.PROCESS_MODE_INHERIT
+	var h0: int = g.director.state.history.size()
+	g.sim.gen = KeeperSim.Gen.OFF
+	g.sim.fuel_valve = false
+	g.sim.fuel = 30.0
+	g._route([{"type": "inspect", "device": "gen_panel"}])
+	await _frames(2)
+	_check(g.presenter.thought.text.contains("valve") and g.presenter.thought.modulate.a > 0.0 or g.presenter.thought.text.contains("valve"),
+		"E on the generator: Callum says the valve is shut (%s)" % g.presenter.thought.text)
+	_check(g.director.state.history.size() == h0 + 1, "the check's thought is in the transcript")
+	g.sim.battery = 0.0
+	_check(g.station.inspect_line("battery").begins_with("Flat"), "a flat battery is called flat")
+	g.sim.battery = 80.0
+	g.director.process_mode = Node.PROCESS_MODE_DISABLED
+	# c) the step objective panel: title, one row per step, ticks, compact in device views
+	var obj := {"title": "Restore the lights", "steps": [{"text": "Find the torch", "done": "false"}, {"text": "Open the fuel valve", "done": "false"}]}
+	g.presenter.set_objective(obj)
+	g.presenter.set_progress([0])
+	await _frames(2)
+	var rows: int = g.presenter.obj_steps.get_child_count()
+	_check(g.presenter.objective.text == "Restore the lights" and rows == 2, "the mission title and its two steps show")
+	var r0: RichTextLabel = g.presenter.obj_steps.get_child(0).get_child(1)
+	var r1: RichTextLabel = g.presenter.obj_steps.get_child(1).get_child(1)
+	_check(r0.text.begins_with("[s]") and not r1.text.begins_with("[s]") and g.presenter.is_step_done(0) and not g.presenter.is_step_done(1),
+		"only the done step is ticked and struck through")
+	var vp: Rect2 = g.get_viewport().get_visible_rect()
+	_check(g.presenter.obj_box.get_global_rect().position.x > vp.size.x * 0.5, "the mission panel sits top-right")
+	# game_fp sets the compact state every physics frame from the real view, so enter one (the radio)
+	g.player.enter_focus("radio")
+	await _settle_focus()
+	await _frames(3)
+	_check(not g.presenter.obj_steps.visible and g.presenter.objective.visible, "in a device view only the title shows")
+	var settings: Node = root.get_node("Settings")
+	for sc in [1.0, 1.5]:
+		settings.v["subtitle_size"] = sc
+		settings.apply()
+		await _frames(3)
+		g.ui.radio_panel.visible = true
+		await _frames(2)
+		var ob: Rect2 = g.presenter.obj_box.get_global_rect()
+		var rp: Rect2 = g.ui.radio_panel.get_global_rect()
+		_check(not ob.intersects(rp), "x%.1f the compact mission panel clears the radio panel (%s / %s)" % [sc, ob, rp])
+		g.ui.radio_panel.visible = false
+	settings.v["subtitle_size"] = 1.0
+	settings.apply()
+	g.player.leave_focus()
+	await _settle_focus()
+	await _frames(3)
+	_check(g.presenter.obj_steps.visible, "back in free walk the steps show again")
+	g.presenter.set_objective("")

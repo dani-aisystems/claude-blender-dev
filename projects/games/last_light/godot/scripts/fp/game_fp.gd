@@ -37,6 +37,7 @@ var _looked := 0.0
 var _last_yaw := 0.0
 var _last_pos := Vector3.ZERO
 var _story_flags_t := 0.0
+var _left_door := false                    # item 8: has the keeper walked away from the stair door yet?
 # Brief item 26 (2026-11-06): one voice at a time. Sim radio chatter (acks, position reports, maydays) waits
 # while a story line or reply is up, then plays in order; every heard line also goes to the transcript.
 var _comms_queue: Array = []               # [{from, text, outgoing, kind, ship}] deferred sim radio lines
@@ -513,6 +514,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _track_player(delta: float) -> void:
+	presenter.set_compact(player.focused != "")    # item 20: title only while a device view is open
 	_update_door_prompt()
 	_update_story_props()
 	if bot_mode != "":
@@ -535,7 +537,12 @@ func _track_player(delta: float) -> void:
 	if _looked > 1.2:
 		st.flags["looked"] = 1
 	var dp: Vector3 = station.door_position()
-	st.flags["at_door"] = 1 if Vector2(p.x - dp.x, p.z - dp.z).length() < 1.8 else st.flags.get("at_door_once", 0)
+	var dd := Vector2(p.x - dp.x, p.z - dp.z).length()
+	# item 8: the keeper now starts just inside the stair door, so being near it only counts after he has
+	# first walked away from it (the spawn latched at_door_once on the first tick and could fire ch4's door)
+	if dd > 2.2:
+		_left_door = true
+	st.flags["at_door"] = 1 if (_left_door and dd < 1.8) else st.flags.get("at_door_once", 0)
 	if st.flags["at_door"] == 1:
 		st.flags["at_door_once"] = 1
 	st.flags["at_radio"] = 1 if _at_radio() else 0

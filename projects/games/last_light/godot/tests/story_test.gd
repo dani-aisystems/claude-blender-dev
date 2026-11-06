@@ -68,6 +68,7 @@ func _run() -> void:
 		print("ENDINGS reached=%s" % endings)
 		await _autosave_resumes()
 		await _kittiwake_power_out()
+		await _opening_checklist()
 	await _save_roundtrip()
 	_save_files()
 	print("STORY_RESULT ", JSON.stringify({"failed": fails.size(), "failures": fails}))
@@ -92,10 +93,19 @@ func _check_beat_actions() -> void:
 						texts.append(String(h[1]))
 				if k == "objective" and o[k] is String:
 					texts.append(o[k])
+				if k == "objective" and o[k] is Dictionary:
+					texts.append(String(o[k].get("title", "")))
+					for st in o[k].get("steps", []):
+						texts.append(String(st.get("text", "")))
 				if k == "do" and o[k] is Array:
 					for a in o[k]:
 						if String(a[0]) == "objective":
-							texts.append(String(a[1]))
+							if a[1] is Dictionary:
+								texts.append(String(a[1].get("title", "")))
+								for st in a[1].get("steps", []):
+									texts.append(String(st.get("text", "")))
+							else:
+								texts.append(String(a[1]))
 				for t in texts:
 					for pad in [false, true]:           # Stage 2C: glyph tokens resolve for both devices
 						InputSetup.pad_active = pad
@@ -163,6 +173,52 @@ func _dfs(db: DialogueDB, id: String, st: StoryState, picks: Array, depth: int) 
 	return 1
 
 
+## Brief items 8 and 9: the dark opening's checklist ticks only from real state, in the order the keeper
+## really does things, and the live "lights" step follows the lights both ways.
+func _opening_checklist() -> void:
+	var k := KeeperSim.new()
+	k.setup(KeeperConfig.new(), LayoutData.load_file(), {"ships": [], "faults": []}, 41)
+	k.story_mode = true
+	var dir := StoryDirector.new()
+	root.add_child(dir)
+	dir.setup(k, true)
+	var prog := [[]]
+	dir.objective_progress.connect(func(d): prog[0] = d.duplicate())
+	dir.begin(true)
+	var step := func(secs: float):
+		for i in int(secs * 30):
+			dir.on_sim_events(k.step(1.0 / 30.0))
+			dir._process(1.0 / 30.0)
+	step.call(1.0)
+	var obj = dir.state.objective
+	if not (obj is Dictionary) or String(obj.get("title", "")) != "Restore the lights" or k.lights_on() or k.battery > 0.0:
+		fails.append("item 8: ch1 does not open dark with the 'Restore the lights' checklist (lights_on=%s battery=%.0f)" % [k.lights_on(), k.battery])
+	if not prog[0].is_empty():
+		fails.append("item 9: steps ticked before anything was done: %s" % [prog[0]])
+	dir.state.flags["torch_taken"] = 1
+	step.call(0.5)
+	var after_torch: Array = prog[0].duplicate()
+	k.set_fuel_valve(true)
+	step.call(0.5)
+	var after_valve: Array = prog[0].duplicate()
+	k.set_start(true)
+	step.call(2.5)
+	k.set_start(false)
+	var after_start: Array = prog[0].duplicate()
+	k.set_charge(true)
+	step.call(2.0)
+	var after_charge: Array = prog[0].duplicate()
+	k.set_breaker("lights", false)
+	step.call(0.5)
+	var lights_off: Array = prog[0].duplicate()
+	var ok: bool = after_torch == [0] and after_valve == [0, 1] and after_start == [0, 1, 2] \
+		and after_charge == [0, 1, 2, 3, 4] and lights_off == [0, 1, 2, 3]
+	if not ok:
+		fails.append("item 9: opening ticks wrong: torch %s, valve %s, start %s, charge %s, lights off %s" % [after_torch, after_valve, after_start, after_charge, lights_off])
+	print("OPENING_CHECKLIST torch=%s valve=%s start=%s charge=%s lights_off=%s" % [after_torch, after_valve, after_start, after_charge, lights_off])
+	dir.queue_free()
+
+
 ## The generator part of KeeperBot2 only: start it when the battery is low, charge, stop when full.
 func _keep_power(k: KeeperSim) -> Array:
 	var ev: Array = []
@@ -206,7 +262,7 @@ func _kittiwake_power_out() -> void:
 	while t < 3000.0 and dir.state.chapter == 1:
 		t += dt
 		for f in ["moved", "looked", "used_battery", "read_log_1971"]:
-			if dir.state.objective != "" and t > 2.0:
+			if dir.state.has_objective() and t > 2.0:
 				dir.state.flags[f] = 1
 		var ev: Array = []
 		if phase == 0 and dir.beat_id() == "kittiwake":
@@ -290,7 +346,7 @@ func _campaign(policy: int, sc: Dictionary = {}) -> void:
 		guard += dt
 		# the bot "player": satisfies interaction objectives after a short delay
 		for f in ["moved", "looked", "used_battery", "read_log_1971", "read_log_1953", "read_letter", "at_door"]:
-			if dir.state.objective != "" and guard > 2.0:
+			if dir.state.has_objective() and guard > 2.0:
 				dir.state.flags[f] = 1
 		var ev: Array = []
 		if sc.has("idle_at") and dir.state.chapter == 6 and dir.beat_reached(String(sc["idle_at"])):

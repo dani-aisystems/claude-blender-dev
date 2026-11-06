@@ -20,6 +20,10 @@ var doc_title: Label
 var docs := {}
 var caption: Label                       # 3B: sound captions outside conversations ("[Footsteps on the stair]")
 var thought: Label                       # brief item 16: Callum's short, non-blocking thought when checking a device
+var obj_box: VBoxContainer                # item 20: the mission panel (title, steps, hint), top-right
+var obj_steps: VBoxContainer
+var _obj_done: Array = []
+var _compact := false
 var _thought_tw: Tween
 var _caption_tw: Tween
 ## 3B ending card (§15.5): warm black, the ending's title, the epilogue lines one at a time.
@@ -49,7 +53,7 @@ var _open_frame := 0
 ## included), so the inspection shows exactly what lies on the desk; the physical chart never moves.
 const BUILTIN_DOCS := {
 	"chart": {"title": "Chart: North Point and approaches", "tex": "res://assets/models/watch_room_T_LL_Chart.png",
-		"text": "NORTH POINT and approaches. Soundings in metres.\n\nLeading lines: West Gut, North Sound (000°), East Gut (046°).\n\nIn pencil: clearing bearings, clear 336° and clear 022°. A fix marked 13/11 2100. An older line, half rubbed out."},
+		"text": "NORTH POINT and approaches. Soundings in metres.\n\nLeading lines: West Gut, North Sound (000°), East Gut (046°).\n\nIn pencil: clearing bearings, clear 336° and clear 022°. A fix marked 13/11 2100. An older line, half rubbed out.\n\nKEEPER'S TERMS (brief item 27)\nBearing: the direction of a ship from the light, in degrees clockwise from north (000° due north, 046° north-east, 314° north-west).\nHeading: the direction a ship is pointing.\nLeading line: a safe track into a channel. A ship on the line, heading in, is clear of the rocks.\nPort: the ship's own left. Starboard: her right. \"Turn port\" swings her bow to her left.\nGut: a narrow channel between rocks (West Gut, East Gut).\nLee: the sheltered side, out of the wind.\nAbeam: straight out to one side of a ship.\nOver: \"my turn is done, go ahead\". Out: \"end of the call\"."},
 }
 
 
@@ -63,22 +67,29 @@ func _ready() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
-	# objective and hint share one column (Stage 3A): at any text size the hint sits under the objective
-	# instead of at a fixed y where a wrapped or enlarged objective ran into it
+	# Brief items 9 and 20 (2026-11-06): the mission panel, top-right. The mission title, then its steps,
+	# each with a box that ticks when the step is really done; the hint sits under them (one column, so
+	# nothing overlaps at any text size). About 27 % of a 1920-wide screen. Clear of the radio panel
+	# (centre-right) because in device views it compacts to the title (set_compact).
 	var top := VBoxContainer.new()
-	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	top.offset_left = 40
-	top.offset_top = 32
-	top.offset_right = 900
-	top.custom_minimum_size = Vector2(860, 0)
-	top.add_theme_constant_override("separation", 6)
+	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	top.offset_left = -560
+	top.offset_right = -36
+	top.offset_top = 28
+	top.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	top.add_theme_constant_override("separation", 5)
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(top)
-	objective = UIStyle.label("", 19, UIStyle.INK, UIStyle.serif())
+	obj_box = top
+	objective = UIStyle.label("", 20, UIStyle.AMBER, UIStyle.serif())
 	objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	objective.modulate.a = 0.85
+	objective.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	top.add_child(objective)
-	hint = UIStyle.label("", 18, UIStyle.DIM, UIStyle.sans())
+	obj_steps = VBoxContainer.new()
+	obj_steps.add_theme_constant_override("separation", 3)
+	obj_steps.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(obj_steps)
+	hint = UIStyle.label("", 17, UIStyle.DIM, UIStyle.sans())
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	top.add_child(hint)
 	dialogue = preload("res://scripts/ui/dialogue_ui.gd").new()
@@ -189,15 +200,91 @@ func bind(d: StoryDirector) -> void:
 	dialogue.advance_requested.connect(d.advance_line)
 	dialogue.choice_made.connect(d.choose)
 	d.objective_changed.connect(set_objective)
+	d.objective_progress.connect(set_progress)
 	dialogue.hold_fn = is_screen_held
 	d.chapter_started.connect(show_chapter)
 	d.transition_requested.connect(_on_transition)
 
 
 ## Objectives carry the same {interact} {move} ... tokens as hints (Stage 3A: ch1 hard-coded "WASD").
-func set_objective(t: String) -> void:
-	objective.text = ("▸ " + InputSetup.resolve(t)) if t != "" else ""
+## Item 9: a step objective shows its title and one row per step; a plain string shows as the title.
+func set_objective(o) -> void:
+	for c in obj_steps.get_children():
+		obj_steps.remove_child(c)
+		c.queue_free()
+	_obj_done = []
 	hint.text = ""
+	if o is Dictionary:
+		objective.text = InputSetup.resolve(String(o.get("title", "")))
+		for st in o.get("steps", []):
+			obj_steps.add_child(_step_row(InputSetup.resolve(String(st.get("text", "")))))
+	else:
+		objective.text = InputSetup.resolve(String(o))
+	_apply_compact()
+
+
+func _step_row(text: String) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var box := Control.new()
+	box.custom_minimum_size = Vector2(UIStyle.px(15), UIStyle.px(15))
+	box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	box.set_meta("done", false)
+	box.draw.connect(func():
+		var s := box.size
+		var y0 := UIStyle.px(5)
+		var r := Rect2(0, y0, s.x, s.x)
+		box.draw_rect(r, Color(UIStyle.INK, 0.7), false, 1.5)
+		if box.get_meta("done"):
+			box.draw_polyline(PackedVector2Array([Vector2(s.x * 0.18, y0 + s.x * 0.52), Vector2(s.x * 0.42, y0 + s.x * 0.78),
+				Vector2(s.x * 0.86, y0 + s.x * 0.2)]), UIStyle.AMBER, 2.2, true))
+	row.add_child(box)
+	var l := RichTextLabel.new()
+	l.bbcode_enabled = true
+	l.fit_content = true
+	l.scroll_active = false
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.add_theme_font_override("normal_font", UIStyle.serif())
+	l.add_theme_color_override("default_color", UIStyle.INK)
+	UIStyle.track(l, 18)
+	l.set_meta("plain", text)
+	l.text = text.replace("[", "[lb]")
+	row.add_child(l)
+	return row
+
+
+## Item 9/20: tick the steps that are done (a done step is ticked, dimmed and struck through).
+func set_progress(done: Array) -> void:
+	_obj_done = done
+	for i in obj_steps.get_child_count():
+		var row := obj_steps.get_child(i)
+		var box: Control = row.get_child(0)
+		var l: RichTextLabel = row.get_child(1)
+		var d := i in done
+		box.set_meta("done", d)
+		box.queue_redraw()
+		var plain: String = String(l.get_meta("plain")).replace("[", "[lb]")
+		l.text = ("[s]" + plain + "[/s]") if d else plain
+		row.modulate.a = 0.55 if d else 1.0
+
+
+func is_step_done(i: int) -> bool:
+	return i in _obj_done
+
+
+## Item 20: in device views (the radio panel sits centre-right) the panel shows only the mission title.
+func set_compact(on: bool) -> void:
+	if on != _compact:
+		_compact = on
+		_apply_compact()
+
+
+func _apply_compact() -> void:
+	obj_steps.visible = not _compact
+	hint.visible = not _compact
 
 
 ## True while the screen is (partly) black or the ending card is up: dialogue must not type out unseen.

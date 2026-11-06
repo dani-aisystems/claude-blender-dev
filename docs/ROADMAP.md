@@ -78,8 +78,8 @@ The work groups cut across stages. Each group ends with a checkpoint in the four
 | Group | Items | Stage(s) | Status |
 |---|---|---|---|
 | A (docs) | Findings log, proposals 35–37, this section, PROJECT_STATE, handoff | — | ✅ done 2026-11-06 (awaiting Daniel's read) |
-| G1 progression, input and correctness bugs | 32, 7, 25, 23, 26, 21, 28, 3, 5 | 2E, 3D, 4, Cabin pass 2 | 🟡 implemented 2026-11-06, all suites green; captures pending Daniel's OK; checkpoint awaiting approval |
-| G2 opening, missions, feedback, saves | 8, 9, 20, 16, 4, 27, 24 (decision) | 2E, 3D, 6 | ⬜ (needs decision D8) |
+| G1 progression, input and correctness bugs | 32, 7, 25, 23, 26, 21, 28, 3, 5 | 2E, 3D, 4, Cabin pass 2 | ✅ approved by Daniel 2026-11-06 (`cfa55b1`) |
+| G2 opening, missions, feedback, saves | 8, 9, 20, 16, 4, 27, 24 (decision) | 2E, 3D, 6 | 🟡 implemented and committed (`193fcf3` + the G2 commit); final suites and captures NOT run; checkpoint pending (see handoff) |
 | G3 body and equipment | 13, 14, 12, 18, 19 | 2E | ⬜ |
 | G4 cabin assets | 6, 10, 11, 15, 17 | Cabin pass 2 | ⬜ |
 | G5 weather and audio | 29, 30, 33 | 4, 5 | ⬜ (needs Daniel's music pick from the CC0 shortlist) |

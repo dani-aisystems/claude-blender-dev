@@ -31,6 +31,32 @@ The staged-polish session won't edit `build.py` (needed for bevels, smooth shadi
 
 Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (current stage and iteration, decisions, feedback log, next task), and with `docs/PROJECT_STATE.md`.
 
+## Latest status (2026-11-06, brief G2 committed, NOT checkpointed; continue in a new session)
+- **Daniel: "push it and leave the rest for a new session".** Commits pushed to origin/main (public repo dani-aisystems/claude-blender-dev, a one-time push at his explicit request; the CLAUDE.md "never push" rule still applies otherwise).
+- **G2 state.**
+  - **Done:** items 4, 16 and 27 (commit `193fcf3`), then 8 and 9/20 (this commit):
+    - flat-battery dark opening (D8-a): torch → valve → START → CHARGE → lights → console;
+    - the `at_door_once` latch fixed;
+    - step objectives with real-state ticks in a top-right panel (compact in device views);
+    - concise objectives with nautical glosses; a terms legend in the chart transcription;
+    - hints with `unless`;
+    - save layout 3 with remap.
+  - Also done: D7 (note_046 2.2.63) and the `log_1971` re-render, checked by eye (`renders/last_light/g2_docs_check.png`); D9 (in `193fcf3`).
+- **NOT verified on the final G2 code.** The last full suite run was interrupted by the session ending, so first thing next session:
+  - run all suites (story, regress, interaction, qa_sweep, sim_v2, run_tests, pytest). The last completed regress run was 200/201; the one failure was fixed after it, but the fix is not re-run;
+  - capture the dark opening, the mission panel (free walk and radio view, text 1.0 and 1.5), and a pause-menu shot (ask Daniel before opening a Godot window);
+  - then hold the G2 checkpoint with Daniel. Item 24 (seated at the radio) is a decision only and is implemented with G3.
+- **Other sessions (stay out of their files):**
+  - **G5 (audio and lightning, Daniel's own session):** `audio/*`, `godot/assets/audio/*`, `audio_director.gd`, `outside.gd`, `keeper_sim.gd`.
+  - **Character session:** `character-refs/`, `blender/portraits*.py`, `visitor_figure.gd`, `NARRATIVE.md`. It also has D10 edits inside `STAGE3_NARRATIVE_MASTER.md`, which carries my §20b and D7/D9/log_1971 lines too; left uncommitted for that session to commit.
+  - `dialogue_ui.gd`, `fp_ui.gd` and `speakers.gd` were released to the character session (portrait card integration) at `193fcf3`.
+- **Still to do from the brief:**
+  - G3: body and equipment;
+  - G4: cabin assets, including D8's document re-render to the F15 hand, the I08/I09 captions and the console note texture (item 11, using CANON_INDEX §6 wording);
+  - G6: menu, ending panels, credits.
+- **Open decisions:** item 1 links; proposals 35–37; item 31.
+- **Gotcha:** the scratchpad was wiped when the session restarted. The suite runner is a small bash loop over `tools/godot --headless -s res://tests/<t>.gd` under `timeout` and `taskpolicy -b`.
+
 ## Latest status (2026-11-06, Daniel's 38-point brief: Phase A docs done)
 - **Daniel sent a large brief.** It has 34 improvements, proposals 35–37, roadmap and log instructions, and a findings-log brief that arrived **truncated at its §4**. The plan was approved: `~/.claude/plans/the-last-light-cosmic-waffle.md`.
 - **Daniel's decisions:**

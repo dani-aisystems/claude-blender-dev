@@ -164,7 +164,7 @@ def note_046():
     jitter_text(d, (60, 272), "Reported to Board 4.3.49.   I.M.", IAIN(36), INK, 3)
     d.line([50, 334, W - 50, 334], fill=(150, 120, 100), width=2)
     jitter_text(d, (60, 360), "Reported again 9.12.53.  C.M.", CALLUM(36), INK, 4)
-    jitter_text(d, (60, 420), "Reported again 2.2.61.  Engineer says", CALLUM(36), INK, 5)
+    jitter_text(d, (60, 420), "Reported again 2.2.63.  Engineer says", CALLUM(36), INK, 5)
     jitter_text(d, (60, 470), "\"next refit\".  C.M.", CALLUM(36), INK, 6)
     d.rectangle([W // 2 - 70, 0, W // 2 + 70, 30], fill=(200, 190, 150))   # tape
     return img
@@ -698,15 +698,16 @@ def coat_note():
 def main():
     C = CALLUM
     rows71 = [
-        (C, "14.11", "16.22", "SW 6", "Overcast, rain", "Light exhibited. Lamp normal."),
-        (C, "", "16.40", "SW 6", "Rain", "Engine started. Batteries on charge, 41%."),
+        # brief 2026-11-06 (D8-a, Daniel): the evening starts with flat cells; the light comes after the engine
+        (C, "14.11", "16.22", "SW 6", "Overcast, rain", "Batteries flat. Engine started, on charge."),
+        (C, "", "16.40", "SW 6", "Rain", "Light exhibited. Lamp normal."),
         (C, "", "18.30", "SW 7", "Heavy rain", "Radio check Stornoway CG. Gale warning, severe gale 9."),
         (C, "", "18.50", "SW 7", "Heavy rain", "Kittiwake (SY 37) brought in by North Sound on radio bearings."),
         (C, "", "23.25", "SW 7", "Heavy rain", "Stornoway CG on Ch. 16. All well."),
     ]
     # Stage 3B (C10): the entries follow tonight's order (radio check 18.30, Kittiwake 18.50, Morag 23.25)
     add("log_1971", "Station log, Sunday 14 November 1971", log_page(1971, rows71, 71, "NOVEMBER"),
-        "14.11.71 Sun. 16.22 SW 6, overcast, rain. Light exhibited. Lamp normal. / 16.40 Engine started. Batteries on charge, 41%. / "
+        "14.11.71 Sun. 16.22 SW 6, overcast, rain. Batteries flat. Engine started, on charge. / 16.40 Light exhibited. Lamp normal. / "
         "18.30 Radio check Stornoway CG. Gale warning, severe gale 9. / 18.50 Kittiwake (SY 37) brought in by North Sound "
         "on radio bearings. / 23.25 Stornoway CG on Ch. 16. All well.  (Hand: C. Mackay)")
     rows53 = [
@@ -732,7 +733,7 @@ def main():
     add("note_046", "Maintenance note, light console", note_046(),
         "GEAR RACE - worn tooth at 046°. Sticks in heavy weather. FREE BY HAND: take the drive off, back her past the tooth, "
         "then put the drive in again. Reported to Board 4.3.49. I.M. / Reported again 9.12.53. C.M. / "
-        "Reported again 2.2.61. Engineer says \"next refit\". C.M.")
+        "Reported again 2.2.63. Engineer says \"next refit\". C.M.")
     add("inquiry_extract", "Report of Formal Investigation, Mary Ellen (SY 214): extract", inquiry_extract(page53),
         " ".join(INQUIRY) + " APPENDIX C. Photostat of the station log, North Point Light, 14-15 November 1953. "
         "(The page shown is in a small square hand.)")

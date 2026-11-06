@@ -10,7 +10,8 @@ extends Node
 signal line_shown(item: Dictionary)       # for the dialogue UI
 signal choices_shown(item: Dictionary)
 signal dialogue_closed
-signal objective_changed(text: String)
+signal objective_changed(obj)            # a String or a step objective (item 9)
+signal objective_progress(done: Array)    # item 9: indices of the steps that are done right now
 signal chapter_started(n: int, title: String, subtitle: String)
 signal chapter_finished(n: int)
 signal story_event(name_: String, args: Array)
@@ -121,9 +122,12 @@ func begin(fresh := true) -> void:
 		_hold = 2                          # the chapter card is about to show: no talk until it has
 		_hold_t = 0.0
 		_hold_limit = HOLD_SAFETY_S
+	if fresh:
+		state.flags.erase("at_door_once")   # item 8: "has been to the door" is per chapter (ch4's door scene)
 	chapter_started.emit(state.chapter, c["title"], c.get("subtitle", ""))
-	if state.objective != "":
+	if state.has_objective():
 		objective_changed.emit(state.objective)
+		_obj_last = [-1]                   # re-send the ticks after a load
 	if not fresh and state.in_beat:
 		_actions = state.resume.duplicate(true)
 		_beat_done_pending = true
@@ -195,6 +199,42 @@ func _check_daytank() -> void:
 		story_event.emit("hint", ["The day-tank was dry. Callum pumped it up from the main tank below."])
 
 
+func _set_objective(o) -> void:
+	state.objective = o
+	state.obj_done = []
+	_obj_last = [-1]
+	objective_changed.emit(o)
+
+
+## Item 9: tick the current objective's steps from the real state. A step latches once its `done` is true
+## (it was really done); a "live" step follows the state both ways (e.g. the lights being on). Steps never
+## move the story: the beat still advances on its own `when`.
+var _obj_last: Array = [-1]
+var _obj_t := 0.0
+
+
+func _tick_objective(delta: float) -> void:
+	_obj_t -= delta
+	if _obj_t > 0.0 or not (state.objective is Dictionary):
+		return
+	_obj_t = 0.15
+	var steps: Array = state.objective.get("steps", [])
+	var done: Array = []
+	for i in steps.size():
+		var st: Dictionary = steps[i]
+		var ok := state.eval(String(st.get("done", "false")))
+		if bool(st.get("live", false)):
+			if ok:
+				done.append(i)
+		elif i in state.obj_done or ok:
+			done.append(i)
+			if not (i in state.obj_done):
+				state.obj_done.append(i)
+	if done != _obj_last:
+		_obj_last = done
+		objective_progress.emit(done)
+
+
 ## Item 32: what the keeper should fix when the story waits on power (radio or light).
 func _power_hint_text() -> String:
 	if not sim.main_breaker:
@@ -240,8 +280,7 @@ func _enter_beat() -> void:
 		return
 	var b: Dictionary = beats[state.beat]
 	if b.has("objective"):
-		state.objective = b["objective"]
-		objective_changed.emit(state.objective)
+		_set_objective(b["objective"])
 	if can_autosave() and _hold != 1 and _pending_chapter == 0:
 		beat_autosave.emit()             # entering a beat re-runs it on load, so this is always a clean point
 
@@ -260,6 +299,7 @@ func _process(delta: float) -> void:
 			return
 	_check_daytank()
 	_tick_power_hint(delta)
+	_tick_objective(delta)
 	# conversations
 	if _talking:
 		_dialogue_tick(delta)
@@ -306,9 +346,11 @@ func _tick_hints(delta: float) -> void:
 	if state.beat >= beats.size():
 		return
 	var hint: Array = beats[state.beat].get("hint", [])
-	var list: Array = hint if (not hint.is_empty() and hint[0] is Array) else ([hint] if hint.size() == 2 else [])
+	var list: Array = hint if (not hint.is_empty() and hint[0] is Array) else ([hint] if hint.size() >= 2 else [])
 	if _hints_done < list.size() and _beat_hint_t > float(list[_hints_done][0]):
-		story_event.emit("hint", [list[_hints_done][1]])
+		var h: Array = list[_hints_done]
+		if h.size() < 3 or not state.eval(String(h[2])):     # item 36: skip a hint whose "unless" already holds
+			story_event.emit("hint", [h[1]])
 		_hints_done += 1
 
 
@@ -345,8 +387,7 @@ func _do(a: Array) -> void:
 		"wait":
 			_wait = float(args[0]) * (bot_wait_mul if bot else 1.0)
 		"objective":
-			state.objective = args[0]
-			objective_changed.emit(state.objective)
+			_set_objective(args[0])
 		"set", "unset", "add", "clue":
 			state.apply_action(name_, args)
 		"ship":
