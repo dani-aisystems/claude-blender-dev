@@ -68,7 +68,7 @@ var DEVICES := {
 	"handwheel": {"kind": "wheel", "prompt": "Turn the handwheel"},
 	"console": {"kind": "focus", "prompt": "Operate the light console"},
 	"radio": {"kind": "focus", "prompt": "Use the radio"},
-	"radar": {"kind": "focus", "prompt": "Use the radio", "focus_id": "radio"},
+	"radar": {"kind": "info", "prompt": "Watch the radar", "part_of": "radio"},   # item 23: its own target, never opens the radio view; ignored inside it
 	"chart": {"kind": "doc", "prompt": "Study the chart"},          # cabin pass: full-screen inspection
 	"torch": {"kind": "pickup", "prompt": "Pick up the torch", "idle": "The torch, for when the power fails"},
 	"logbook": {"kind": "doc", "prompt": "Write up the station log"},
@@ -484,6 +484,10 @@ func info_text(id: String) -> String:
 			return "Battery %d %%  ·  draw %.2f %%/s%s" % [int(sim.battery), sim.demand, "" if sim.main_breaker else "  ·  MAIN TRIPPED"]
 		"battery":
 			return "%d %%%s" % [int(sim.battery), "  ·  charging" if sim.charge_flow > 0.0 else ""]
+		"radar":
+			if not sim.radar_on():
+				return "Dark  ·  no power" if not sim.powered() else "Switched off at the board"
+			return "Sweeping  ·  use the radio to work the ships"
 	return ""
 
 

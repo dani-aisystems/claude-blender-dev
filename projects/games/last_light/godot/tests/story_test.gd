@@ -67,6 +67,7 @@ func _run() -> void:
 			fails.append("the lie + saved + reunion variant (C9) was not reached")
 		print("ENDINGS reached=%s" % endings)
 		await _autosave_resumes()
+		await _kittiwake_power_out()
 	await _save_roundtrip()
 	_save_files()
 	print("STORY_RESULT ", JSON.stringify({"failed": fails.size(), "failures": fails}))
@@ -162,6 +163,102 @@ func _dfs(db: DialogueDB, id: String, st: StoryState, picks: Array, depth: int) 
 	return 1
 
 
+## The generator part of KeeperBot2 only: start it when the battery is low, charge, stop when full.
+func _keep_power(k: KeeperSim) -> Array:
+	var ev: Array = []
+	if k.gen == KeeperSim.Gen.OFF and k.battery < 55.0 and k.fuel > 0.0 and not (k.gen_overheated and k.gen_temp > k.cfg.temp_restart):
+		if not k.fuel_valve:
+			ev += k.set_fuel_valve(true)
+		ev += k.set_start(true)
+	elif k.gen != KeeperSim.Gen.CRANKING and k.start_held:
+		ev += k.set_start(false)
+	if k.gen == KeeperSim.Gen.RUNNING:
+		var want := k.battery < 96.0 and k.gen_temp < 82.0
+		if k.charge_on != want:
+			ev += k.set_charge(want)
+	return ev
+
+
+## Brief item 32 (the reported Kittiwake softlock): at the ch1 `kittiwake` beat the battery AND the day
+## tank are emptied and the keeper does nothing for a while. The radio call must wait (never play on a
+## dead set), a power hint must be shown, the day tank must be pumped up once, and once the keeper acts
+## again the chapter must finish. Also: a radio call at LAMP HIGH must not trip MAIN on its own.
+func _kittiwake_power_out() -> void:
+	var k := KeeperSim.new()
+	k.setup(KeeperConfig.new(), LayoutData.load_file(), {"ships": [], "faults": []}, 31)
+	k.story_mode = true
+	var dir := StoryDirector.new()
+	root.add_child(dir)
+	dir.setup(k, true)
+	var bot := KeeperBot2.new("expert", 3)
+	var hints: Array = []
+	dir.story_event.connect(func(n, a):
+		if n == "sim_events":
+			dir.on_sim_events(a[0])
+		elif n == "hint":
+			hints.append(String(a[0])))
+	dir.begin(true)
+	var dt := 1.0 / 30.0
+	var t := 0.0
+	var phase := 0                     # 0 bot to the beat, 1 dead and idle, 2 bot again
+	var idle_t := 0.0
+	var played_dead := false
+	while t < 3000.0 and dir.state.chapter == 1:
+		t += dt
+		for f in ["moved", "looked", "used_battery", "read_log_1971"]:
+			if dir.state.objective != "" and t > 2.0:
+				dir.state.flags[f] = 1
+		var ev: Array = []
+		if phase == 0 and dir.beat_id() == "kittiwake":
+			phase = 1
+			k.battery = 0.0
+			k.fuel = 0.0
+			k.charge_on = false
+			k.gen = KeeperSim.Gen.OFF
+		if phase == 1:
+			idle_t += dt
+			if dir.is_talking() and dir._is_radio_conv(String(dir.runner.conv.get("id", ""))) and not k.radio_on():
+				played_dead = true
+			if idle_t > 40.0:
+				phase = 2
+		else:
+			ev = bot.act(k, dt)
+		ev += k.step(dt)
+		dir.on_sim_events(ev)
+		dir._process(dt)
+		if int(t / dt) % 60 == 0:
+			await process_frame
+	var power_hint := hints.any(func(h): return h.begins_with("No power"))
+	if played_dead:
+		fails.append("item 32: a radio conversation played while the radio had no power")
+	if not power_hint:
+		fails.append("item 32: no 'No power' hint while the story waited on a dead set (hints: %s)" % [hints])
+	if not dir.state.has_flag("daytank_ch1"):
+		fails.append("item 32: the day tank was not pumped up when it ran dry")
+	if dir.state.chapter == 1:
+		fails.append("item 32: ch1 still stuck at beat '%s' after power came back (%.0f s)" % [dir.beat_id(), t])
+	print("KITTIWAKE_POWER_OUT dead_radio_play=%s hint=%s daytank=%s chapter=%d t=%.0f" % [played_dead, power_hint,
+		dir.state.has_flag("daytank_ch1"), dir.state.chapter, t])
+	dir.queue_free()
+	# a call at LAMP HIGH with everything on must not trip MAIN by itself
+	var k2 := KeeperSim.new()
+	k2.setup(KeeperConfig.new(), LayoutData.load_file(), {"ships": [], "faults": []}, 5)
+	k2.story_mode = true
+	k2.battery = 80.0
+	k2.set_mode(KeeperSim.Mode.AUTO)
+	k2.set_intensity(2)
+	k2.set_breaker("lights", true)
+	k2.set_breaker("radar", true)
+	k2.spawn_story_ship({"name": "Kittiwake", "kind": "fishing", "bearing": 14, "aim": 24, "hold": true, "protected": true})
+	var sid: int = k2.active_ships()[0].id
+	k2.command(sid, "confirm")
+	for i in 150:
+		k2.step(1.0 / 30.0)
+	if not k2.main_breaker:
+		fails.append("item 32: a radio call at LAMP HIGH tripped MAIN on its own (draw %.2f)" % k2.demand)
+	print("TX_HIGH main_breaker=%s demand=%.2f" % [k2.main_breaker, k2.demand])
+
+
 func _campaign(policy: int, sc: Dictionary = {}) -> void:
 	var k := KeeperSim.new()
 	k.setup(KeeperConfig.new(), LayoutData.load_file(), {"ships": [], "faults": []}, 11 + policy)
@@ -207,6 +304,8 @@ func _campaign(policy: int, sc: Dictionary = {}) -> void:
 				ev += k.set_mode(KeeperSim.Mode.MANUAL)
 			if not k.main_breaker:
 				ev += k.set_breaker("main", true)
+			# ...but keeps the power up: a dead set holds the story's radio calls (brief item 32)
+			ev += _keep_power(k)
 		else:
 			ev = bot.act(k, dt)
 		ev += k.step(dt)

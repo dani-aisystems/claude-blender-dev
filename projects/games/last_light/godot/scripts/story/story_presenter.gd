@@ -4,6 +4,7 @@ extends CanvasLayer
 
 signal document_closed(doc_id: String)
 
+const CARD_ON_BLACK_S := 1.8          # the clock or chapter card is fully up on black at least this long (item 21)
 var director: StoryDirector
 var dialogue: Control
 var objective: Label
@@ -29,6 +30,8 @@ var _end_wait := 0.0
 var _end_skip := false
 var _end_guard := 0
 var _hint_t := 0.0
+var _hint_next := ""                        # item 26: the hint waiting behind the current one
+const HINT_MIN_S := 2.5
 var _doc_open := ""
 var _transcript := false
 ## Inspection viewer (cabin pass): zoom and pan; it closes only on interact / back / pause / right click,
@@ -159,6 +162,9 @@ func _ready() -> void:
 	fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(fade)
+	# The clock and chapter card draws ABOVE the black (brief item 21): it used to be added before the fade,
+	# so at full black the time was hidden and was only ever seen half-dimmed while the fade moved.
+	root.move_child(card, -1)
 	_build_ending()
 
 
@@ -186,21 +192,29 @@ func is_screen_held() -> bool:
 	return fade.color.a > 0.02 or _ending_open
 
 
+## Item 26: a hint stays up at least HINT_MIN_S before a different one replaces it; one more can queue.
 func show_hint(t: String) -> void:
-	hint.text = InputSetup.resolve(t)     # {interact} {move} ... -> keyboard or pad glyphs (Stage 2C)
+	var txt := InputSetup.resolve(t)      # {interact} {move} ... -> keyboard or pad glyphs (Stage 2C)
+	if _hint_t > 0.0 and hint.text != "" and hint.text != txt and 14.0 - _hint_t < HINT_MIN_S:
+		_hint_next = txt
+		return
+	hint.text = txt
 	_hint_t = 14.0
 
 
-## The chapter card (3B). It is shown after the chapter has switched under black: the black lifts while
-## the card fades in, and the story is released (transition_done) when the card starts to fade out, so the
-## first line never types under the card or the fade.
+## The chapter card (3B; order fixed for brief item 21). The chapter has already switched under black.
+## Order: black -> the card (title, date and time) fades in ON the black and holds, readable -> the scene
+## fades in under it -> the story is released as the card fades out, so the first line never types under it.
+## At a new game or a load the presenter's black is set at once (the HUD's own start-up fade is black too).
 func show_chapter(n: int, title: String, sub: String) -> void:
 	card_title.text = "%s · %s" % [["", "I", "II", "III", "IV", "V", "VI"][clampi(n, 0, 6)], title]
 	card_sub.text = sub
+	fade.color.a = 1.0
 	var tw := create_tween()
-	tw.tween_property(fade, "color:a", 0.0, 0.8)
-	tw.parallel().tween_property(card, "modulate:a", 1.0, 1.2)
-	tw.tween_interval(2.8)
+	tw.tween_property(card, "modulate:a", 1.0, 1.0)
+	tw.tween_interval(CARD_ON_BLACK_S)
+	tw.tween_property(fade, "color:a", 0.0, 1.0)
+	tw.tween_interval(0.8)
 	tw.tween_callback(_release)
 	tw.tween_property(card, "modulate:a", 0.0, 1.4)
 
@@ -229,18 +243,19 @@ func _on_transition(kind: String, args: Array) -> void:
 			pass                             # show_ending (story event) drives it and releases at the end
 
 
-## A time skip: black with the clock, the world changes under black (midpoint), then the fade lifts and
-## the story is released.
+## A time skip (order fixed for brief item 21): the scene fades to black, the new clock time appears on
+## the black and holds (the world changes under it at the midpoint), the time fades, then the scene returns
+## and the story is released.
 func timeskip(clock_text: String) -> void:
 	card_title.text = clock_text
 	card_sub.text = ""
 	var tw := create_tween()
-	tw.tween_property(fade, "color:a", 1.0, 1.0)
-	tw.parallel().tween_property(card, "modulate:a", 1.0, 1.0)
+	tw.tween_property(fade, "color:a", 1.0, 0.9)
+	tw.tween_property(card, "modulate:a", 1.0, 0.5)
 	tw.tween_callback(_midpoint)
-	tw.tween_interval(1.6)
-	tw.tween_property(fade, "color:a", 0.0, 1.4)
-	tw.parallel().tween_property(card, "modulate:a", 0.0, 1.4)
+	tw.tween_interval(CARD_ON_BLACK_S)
+	tw.tween_property(card, "modulate:a", 0.0, 0.5)
+	tw.tween_property(fade, "color:a", 0.0, 1.1)
 	tw.tween_callback(_release)
 
 
@@ -502,6 +517,10 @@ func _process(delta: float) -> void:
 	if _hint_t > 0.0:
 		_hint_t -= delta
 		hint.modulate.a = clampf(_hint_t, 0.0, 1.0)
+	if _hint_next != "" and 14.0 - _hint_t >= HINT_MIN_S:
+		hint.text = _hint_next
+		_hint_next = ""
+		_hint_t = 14.0
 	if doc_root.visible and _zoom > 1.0:            # keys / sticks move around a zoomed document
 		var mv := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 		var st := InputSetup.stick("look_left", "look_right", "look_up", "look_down")

@@ -31,7 +31,63 @@ The staged-polish session won't edit `build.py` (needed for bevels, smooth shadi
 
 Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (current stage and iteration, decisions, feedback log, next task), and with `docs/PROJECT_STATE.md`.
 
-## Latest status (2026-11-06, Stage 3B approved by Daniel and committed locally)
+## Latest status (2026-11-06, Daniel's 38-point brief: Phase A docs done)
+- **Daniel sent a large brief.** It has 34 improvements, proposals 35–37, roadmap and log instructions, and a findings-log brief that arrived **truncated at its §4**. The plan was approved: `~/.claude/plans/the-last-light-cosmic-waffle.md`.
+- **Daniel's decisions:**
+  - documentation first, then work groups G1–G6, each checkpointed;
+  - item 32: reuse the chapter-start fuel top-up once when the day tank runs dry, plus radio scenes that wait for power and power-aware hints;
+  - item 12: the floor rose stays, and the chart compass is the pickup;
+  - audio: SFX synthesised, music from a CC0 shortlist (no download before his pick).
+- **Phase A written (docs only, no game changes):**
+  - `projects/games/last_light/FINDINGS_LOG.md` (items 1–37);
+  - `PROPOSAL_35_RADIO_CAST.md`, `PROPOSAL_36_TUTORIAL.md`, `PROPOSAL_37_JOURNAL.md` (all awaiting approval);
+  - the ROADMAP section "Daniel's brief of 2026-11-06" plus the stage table;
+  - PROJECT_STATE §5 item 13.
+- **G1 implemented** (items 32, 7, 25, 23, 26, 21, 28, 3, 5). All suites green: story 0 failures, regress 188, interaction 159, qa 1,921, sim_v2, run_tests 95, pytest 18. Record: FINDINGS_LOG "G1 implementation record". Build v038 / GLB v036.
+- **Uncommitted. Waiting on Daniel for:**
+  - the G1 capture run (needs a Godot window);
+  - whether to restore the churned doc and atlas PNGs (`pipeline.sh` regenerated `godot/assets/docs/*.png`, `T_LL_Photo`, `T_LL_Props` with new paper grain; the restore was blocked as an overwrite);
+  - the commit.
+- **Daniel added `projects/games/last_light/character-refs/`:** dossier images for Callum, Morag, Rory, Elspeth, Ross and Iain (Hector's folder is empty). These are the 3C / item 22 references; unread so far.
+- **Open decisions:**
+  - D8: the dark opening against the "41 %" lines in `ch1_lit` and `log_1971`;
+  - the item 1 links;
+  - the character profiles (22 and 3C still paused);
+  - proposals 35–37;
+  - item 31.
+
+## Latest status (2026-11-06, Stage 3C started: portrait feasibility probe, paused for Daniel's reference profiles)
+- **Character reference consolidation is in progress** (plan `~/.claude/plans/pasted-content-id-3fd1-the-temporal-seahorse.md`). Everything is in `projects/games/last_light/character-refs/`: start with its `README.md` (precedence, tags), then `CANON_INDEX.md`, `REVIEW_FLAGS.md`, `<id>/PROFILE.md` and `sources/batch-NN.md`, which holds Daniel's text verbatim.
+  - Daniel sends material in batches. Final consolidation waits for **"ALL CHARACTER INFORMATION PROVIDED"**.
+  - Batch 01 (Callum complete, Morag cut at §10 ch4) is drafted.
+  - **Later the same day, at Daniel's instruction**, every conflict was resolved and profiles for all six principals plus Hector were written, using the dossiers as reference. The dossiers decide looks, voice and backstory; shipped game text decides plot facts. The REVIEW_FLAGS §D follow-ups D1–D11 (portraits.py, visitor_figure.gd, note_046, ch6:116, document renders, master and NARRATIVE fixes) are **not applied**.
+  - **No game text is edited** and nothing is committed. Don't generate images: CLAUDE.md forbids it, even though the paste asked for it.
+  - The visual flags F06, F09, F11, F12 and F13 need Daniel's rulings before 3C resumes. The brief's rule is applied: Ross is shown in silhouette only, never as a full portrait.
+- **3C is paused.** Daniel will send reference profiles for the characters. Wait for them before shaping any face, and don't commit any 3C work yet.
+- **Files so far (uncommitted, new):**
+  - `projects/games/last_light/blender/portraits.py`: headless Blender. It loads the CC0 realistic body, cuts it to a bust, applies per-character face fields and expressions, adds hair, brows, beard, clothing, hats and glasses, and renders in a studio rig. Raw output goes to `blender/tex/src/portraits_raw/<id>_<expr>.png`.
+  - `projects/games/last_light/blender/portraits_grade.py`: host-side 1971 print grade into `godot/assets/portraits/`. Not run yet.
+  - Run with: `tools/bl -P projects/games/last_light/blender/portraits.py -- --only callum,morag --expr neutral --samples 48 [--debug]`.
+- **Fixes already made in the probe:**
+  - load the body in body-local coordinates;
+  - place the eyes with `matrix_parent_inverse @ matrix_basis`, because appended objects have no evaluated `matrix_world`;
+  - use the Khronos PBR Neutral view transform (AgX washed out the colours);
+  - fit collars to the measured neck cross-section;
+  - brass buttons on the tunic and jackets.
+- **Probe state** (Callum and Morag only, scratchpad `probe4.png`):
+  - eyes, brows, lip tint, collars and buttons all work;
+  - still mannequin-like;
+  - hair is a lumpy cap (Morag's reads as a cap);
+  - the cloth neckline edge is jagged;
+  - the skin is plasticky.
+- **3C scope still to do** (stage plan r2, §4 3C):
+  - 6 characters × 3 expressions;
+  - a print card in the radio panel, 170×190 with a portrait of about 152×190;
+  - `expr` carried through `dialogue_ui._resolved`, with the portrait key taken from the resolved speaker id only (Ross after `knows_name`);
+  - the documents re-rendered with Courier Prime and Cedarville Cursive;
+  - captures, including the 3B leftovers: the Calls box and the caption.
+
+## Earlier status (2026-11-06, Stage 3B approved by Daniel and committed locally)
 - **3A** (`dc87818`) and **3B** are approved and committed locally. Never push.
   - The untracked textures, base meshes, `cabin-photos/` and `.blend` v028–v030 and v032–v034 stay as they are.
   - v036 and v037 are this session's new versions (v036 is an intermediate build; v037 matches the GLB in Godot).

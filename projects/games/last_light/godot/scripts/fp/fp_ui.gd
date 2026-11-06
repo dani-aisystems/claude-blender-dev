@@ -52,6 +52,9 @@ var calls_box: VBoxContainer                # "Call a station": shown only while
 var calls_list: VBoxContainer
 var _call_btns := {}                        # call id -> Button (keyed, like the vessel list)
 var _notice_t := 0.0
+var _notice_shown := 0.0                    # how long the current notice has been up (item 26)
+var _notice_queue: Array = []               # [[text, seconds]] waiting behind it
+const NOTICE_MIN_S := 2.5
 var _sub_items: Array = []
 
 
@@ -224,9 +227,19 @@ func set_focus(id: String) -> void:
 		_refresh_vessels()
 
 
+## Item 26: a notice is up at least NOTICE_MIN_S before the next one replaces it; later ones queue
+## (in order, no duplicates) instead of overwriting it unread.
 func show_notice(text: String, seconds := 4.0) -> void:
+	if _notice_t > 0.0 and notice.text != text and _notice_shown < NOTICE_MIN_S:
+		for q in _notice_queue:
+			if q[0] == text:
+				return
+		if _notice_queue.size() < 4:
+			_notice_queue.append([text, seconds])
+		return
 	notice.text = text
 	_notice_t = seconds
+	_notice_shown = 0.0
 
 
 ## A notice the player triggers by pressing (refusals, consequences): the same text is not repeated
@@ -324,6 +337,13 @@ func add_subtitle(from: String, text: String, outgoing: bool) -> void:
 	while _sub_items.size() > 3:
 		_sub_items[0]["node"].queue_free()
 		_sub_items.remove_at(0)
+
+
+## Item 26: a story line is starting: fade the sim radio subtitles out quickly so two voices are never
+## drawn over each other (each line is already in the transcript).
+func fade_subtitles() -> void:
+	for it in _sub_items:
+		it["age"] = maxf(it["age"], it["life"] - 0.4)
 
 
 ## Next (+1) or previous (-1) vessel on the channel: Tab, and the pad's RB / LB in the radio view.
@@ -461,13 +481,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 	if radio_panel.visible and event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_TAB:
+		if event.physical_keycode == KEY_TAB:
 			cycle_vessel(1)
 			get_viewport().set_input_as_handled()
-		elif event.keycode >= KEY_1 and event.keycode <= KEY_6:
+		elif event.physical_keycode >= KEY_1 and event.physical_keycode <= KEY_6:
 			if number_keys_taken_fn.is_valid() and number_keys_taken_fn.call():
 				return                       # leave it to the dialogue replies
-			_send(COMMANDS[event.keycode - KEY_1][0])
+			_send(COMMANDS[event.physical_keycode - KEY_1][0])
 			get_viewport().set_input_as_handled()
 
 
@@ -486,6 +506,12 @@ func _process_body(delta: float) -> void:
 	if prompt_info.get("in_view", false):
 		_place_tip()
 	_notice_t -= delta
+	_notice_shown += delta
+	if not _notice_queue.is_empty() and (_notice_t <= 0.0 or _notice_shown >= NOTICE_MIN_S):
+		var q: Array = _notice_queue.pop_front()
+		notice.text = q[0]
+		_notice_t = q[1]
+		_notice_shown = 0.0
 	notice.modulate.a = clampf(_notice_t, 0.0, 1.0)
 	for it in _sub_items:
 		it["age"] += delta

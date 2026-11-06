@@ -393,7 +393,7 @@ func pick(space: PhysicsDirectSpaceState3D, origin: Vector3, dir: Vector3, lengt
 		var d: Dictionary = station.DEVICES.get(id, {})
 		if d.is_empty():
 			continue
-		if focused != "" and (id == focused or d.get("focus_id", "") == focused):
+		if focused != "" and (id == focused or d.get("focus_id", "") == focused or d.get("part_of", "") == focused):
 			continue
 		hits.append({"id": id, "kind": d["kind"], "dist": origin.distance_to(h["position"])})
 	if hits.is_empty():

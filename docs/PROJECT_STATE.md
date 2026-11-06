@@ -135,3 +135,21 @@ All suites below re-run on the cabin-pass build (v035): pytest 18/18, regress 10
 10. Session-1 work is committed locally as `51cc8b9` (not pushed). The textures and base meshes are still untracked by design. Stage 0 changes are uncommitted until Daniel approves the stage.
 11. ~~Windowed regress R6/R7 failures~~: a test timing race (fixed frame waits inside the 0.45 s device-view ease), fixed with `_settle_focus()`; 105/105 windowed.
 12. **Cabin leftovers:** the coat collar reads a little like a domed cap; the generator START tag is partly hidden by the knob rim; an older conduit-clip shadow streak near the −48° wall lamp.
+13. **Daniel's brief of 2026-11-06 (items 1–37): confirmed issues from the read-only audit.** Full detail, with file:line, root causes and acceptance criteria, is in `projects/games/last_light/FINDINGS_LOG.md`. The headline bugs:
+
+    | Item | Bug | Severity |
+    |---|---|---|
+    | 32 | **Kittiwake softlock.** Story radio scenes ignore power. Every exit from the ch1 `kittiwake` and `vector` beats needs power, and the fuel is topped up only at chapter start, so an empty day tank is a permanent dead end | P0 |
+    | 32 (secondary) | At LAMP HIGH, every transmission trips MAIN: 0.94 against the 0.92 limit, with `tx_time` 2.5 s longer than the 2.0 s trip delay | — |
+    | 7 | E advances dialogue and is swallowed while any line is showing | P0 |
+    | 23 | Radio replies unlock by proximity (1.7 m). The radar opens the radio view | P0 |
+    | 26 | No arbiter between sim radio chatter and story lines. In ch1 the `wait 4` collides with Kittiwake's position reply | P0 |
+    | 16 | Generator, battery and power-panel `inspect` events are unhandled, so E gives no feedback | P0 |
+    | 21 | The clock card is drawn under the black fade | — |
+    | 8 | `at_door_once` latches at spawn | — |
+    | 3 | The beam's fade is inverted, giving the circular end cap | — |
+    | 28 | The rain shader's v-axis sign makes the drops climb | — |
+    | 5 | The shaft-wall tops are coplanar with the floor around the stair door | — |
+    | 10 | Shelf intersections: the burner cuts into the toolbox, the bulb box into the log box | — |
+    | 11 | The console note is a blank floating box | — |
+    | 30 | Audio code defects: `set_menu` ignores its argument, `_dev()` ignores its name, and `carrier_click` was never synthesised | — |

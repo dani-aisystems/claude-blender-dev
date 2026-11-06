@@ -66,7 +66,7 @@ vec4 droplets(vec2 uv, float density, float t) {
 void fragment() {
 	vec3 n = normalize(w_nrm);
 	vec3 tang = normalize(cross(vec3(0.0, 1.0, 0.0), n));
-	vec2 uv = vec2(dot(w_pos, tang), -w_pos.y) * 0.9;
+	vec2 uv = vec2(dot(w_pos, tang), w_pos.y) * 0.9;   // +y: drop heads move down the glass, trails above them (was -y: drops climbed)
 	vec4 d = droplets(uv, 0.25 + 0.55 * rain, TIME);
 	float drop = clamp(d.z, 0.0, 1.0);
 	// condensation: thickest at the sill, mottled, thinned where drops have run through

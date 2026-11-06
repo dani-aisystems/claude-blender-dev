@@ -20,6 +20,7 @@ const BINDINGS := {          # keyboard (physical keycodes)
 	"transcript": [KEY_T],
 	"torch": [KEY_F],          # cabin pass: switch the carried torch on / off
 	"history": [KEY_H],        # Stage 3A: the dialogue history (backlog)
+	"dialogue_next": [KEY_SPACE],   # brief item 7: finish / advance a dialogue line (E is interaction only)
 	"back": [],               # keyboard "back" is Esc / right click (handled with pause / mouse)
 	"turn_prev": [],          # keyboard: right click / wheel
 	"turn_next": [],
@@ -38,6 +39,7 @@ const PAD_FP := {
 	"torch": ["axis", JOY_AXIS_TRIGGER_LEFT, 1.0],     # LT (the d-pad belongs to replies and the handwheel)
 	"pause": ["button", JOY_BUTTON_START],
 	"history": ["button", JOY_BUTTON_BACK],            # Stage 3A: View / Share opens the dialogue history
+	"dialogue_next": ["axis", JOY_AXIS_TRIGGER_RIGHT, 1.0],   # item 7: RT advances lines (A stays interaction)
 	"move_left": ["axis", JOY_AXIS_LEFT_X, -1.0],
 	"move_right": ["axis", JOY_AXIS_LEFT_X, 1.0],
 	"move_forward": ["axis", JOY_AXIS_LEFT_Y, -1.0],

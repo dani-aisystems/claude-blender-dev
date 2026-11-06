@@ -18,6 +18,9 @@ extends SceneTree
 ##      freed only by hand: OFF + handwheel back), Ross's beam assist, transitions that hold the story and
 ##      block dialogue input under black, the ending card, optional calls that defer the next beat's talk,
 ##      no early "Alasdair Ross", the stair-door bolt and the 1953 photograph props
+##  R11 brief 2026-11-06, group G1: E is never taken by dialogue, Space finishes then advances only after
+##      the dwell, replies ignore their first 0.4 s, the clock card draws above the black, the radar is its
+##      own target (never the radio view), sim radio chatter waits behind a story line and is logged
 ##   godot --path godot -s res://tests/regress_test.gd            (windowed: all checks)
 ##   godot --headless --path godot -s res://tests/regress_test.gd (R1 mouse checks SKIPPED: the headless
 ##                                                                  display server ignores mouse modes)
@@ -65,6 +68,11 @@ func _run() -> void:
 	g.start(7, "", false, true)          # story mode, human (no bot)
 	await _frames(3)
 	g.director.process_mode = Node.PROCESS_MODE_DISABLED   # keep the campaign from talking over the tests
+	# the ch1 card now starts on black and holds dialogue input until it lifts (item 21): let it finish
+	var lift := 0
+	while g.presenter.is_screen_held() and lift < 900:
+		await process_frame
+		lift += 1
 	# windowed runs capture the real pointer: Daniel's own mouse must not turn the camera or flip the device
 	# mode mid-test (cabin pass). In memory only: persist is off, so settings.cfg is never written.
 	var st_node: Node = root.get_node("Settings")
@@ -83,6 +91,7 @@ func _run() -> void:
 	await _r8_cabin_reliability()
 	await _r9_dialogue_foundation()
 	await _r10_narrative_mechanics()
+	await _r11_brief_g1()
 	print("REGRESS_RESULT ", JSON.stringify({"passed": passes, "failed": fails.size(), "failures": fails, "skipped": skips}))
 	quit(1 if fails.size() > 0 else 0)
 
@@ -543,7 +552,8 @@ func _r8_cabin_reliability() -> void:
 				writers.append(f)
 				break
 	_check(writers.is_empty(), "only player.capture_mouse sets the mouse mode in-game (other writers: %s)" % [writers])
-	# b) free-walk replies keep mouse look: highlight with the wheel, answer with E
+	# b) free-walk replies keep mouse look; only the number keys answer (brief item 25: the wheel, E and
+	#    the arrows never pick a reply)
 	g.player.leave_focus()
 	await _frames(30)
 	await _settle_focus()
@@ -557,27 +567,39 @@ func _r8_cabin_reliability() -> void:
 	_mouse_btn(MOUSE_BUTTON_WHEEL_DOWN, false)
 	await _frames(2)
 	await _act("interact")
-	_check(picked[0] == 1, "wheel down then E answers the second reply (picked %d)" % picked[0])
+	_key(KEY_DOWN)
+	_key(KEY_SPACE)
+	await _frames(3)
+	_check(picked[0] == -1 and dlg.has_open_choices(), "the wheel, E, Down and Space do not answer (picked %d)" % picked[0])
+	_key(KEY_2)
+	await _frames(3)
+	_check(picked[0] == 1, "key 2 answers the second reply (picked %d)" % picked[0])
 	dlg.choice_made.disconnect(on_pick)
 	if dlg.is_active():
 		dlg.close()
-	# c) radio replies only at the handset, hidden again when the keeper walks away
+	# c) radio replies only in the radio view (item 23): standing at the handset is not enough
 	var at: Vector3 = g.station.focus["radio"]["at"]
 	g.player.global_position = Vector3(at.x, g.player.global_position.y, at.z)
 	g.player._apply_look()
 	_choices("radio")
 	await _frames(3)
-	var shown_at_radio: bool = dlg.has_open_choices()
-	g.player.global_position = Vector3(0, g.player.global_position.y, 0)    # the middle of the room
-	g.player._apply_look()
+	var hidden_near: bool = not dlg.has_open_choices()
+	g.player.enter_focus("radio")
+	await _settle_focus()
 	await _frames(3)
-	var hidden_away: bool = not dlg.has_open_choices()
-	g.player.global_position = Vector3(at.x, g.player.global_position.y, at.z)
-	g.player._apply_look()
+	var shown_in_view: bool = dlg.has_open_choices()
+	g.player.leave_focus()
+	await _settle_focus()
 	await _frames(3)
-	_check(shown_at_radio and hidden_away and dlg.has_open_choices(), "radio replies: shown at the radio, hidden away from it, back at it (%s/%s)" % [shown_at_radio, hidden_away])
+	var hidden_after: bool = not dlg.has_open_choices()
+	_check(hidden_near and shown_in_view and hidden_after, "radio replies: hidden beside the radio, shown in the radio view, hidden after leaving it (%s/%s/%s)" % [hidden_near, shown_in_view, hidden_after])
+	g.player.enter_focus("radio")
+	await _settle_focus()
+	await _frames(3)
+	_check(dlg.has_open_choices(), "back in the radio view the replies return")
 	dlg.close()
-	await _frames(2)
+	g.player.leave_focus()
+	await _settle_focus()
 	# d) the chart opens full screen; a left click or the wheel never closes it; right click / E / Esc do
 	g._on_doc("chart")
 	await _frames(4)
@@ -685,6 +707,7 @@ func _choices(mode: String) -> void:
 		"text": "North Point, Stornoway Coastguard. Are you receiving, Callum? Over." if mode == "radio" else "Evening, keeper."})
 	dlg.show_choices({"choices": [{"index": 0, "text": "Receiving you, Morag. All quiet here. Over."},
 		{"index": 1, "text": "Go ahead, Stornoway. Over."}]})
+	dlg._choice_age = 9.0          # past the 0.4 s anti-accident guard (item 25; checked on its own in R10)
 
 
 func _r1_mouse() -> void:
@@ -985,9 +1008,9 @@ Ross said: not a speaker line
 	_choices("person")
 	await _frames(3)
 	InputSetup.pad_active = true
-	dlg.focus_first_choice()
+	dlg._pad_focus()
 	await _frames(2)
-	dlg._move_choice_focus(1)
+	(dlg.choice_box.get_child(1) as Control).grab_focus()
 	var focus_before: Control = g.get_viewport().gui_get_focus_owner()
 	var mouse_before: bool = g.mouse_should_capture()
 	await _act("history")
@@ -1199,3 +1222,83 @@ func _r10_narrative_mechanics() -> void:
 	gs.beat = 0
 	g._update_story_props()
 
+
+
+func _r11_brief_g1() -> void:
+	print("R11 brief G1: input split, guards, card order, radar, comms")
+	g.player.leave_focus()
+	await _settle_focus()
+	# a) E while a line is up: the line neither finishes nor advances, and the press is not swallowed
+	var adv := [0]
+	var ca := func(): adv[0] += 1
+	dlg.advance_requested.connect(ca)
+	dlg.show_line({"mode": "person", "speaker": "VISITOR", "text": "A line long enough to still be typing when the keeper presses E."})
+	await _frames(2)
+	await _act("interact")
+	_check(adv[0] == 0 and dlg._shown < dlg._full.length(), "E does not finish or advance a dialogue line (item 7)")
+	var dsrc := FileAccess.get_file_as_string("res://scripts/ui/dialogue_ui.gd")
+	_check(not dsrc.contains('is_action_pressed("interact")'), "the dialogue layer never reads the interact action, so E always reaches the player")
+	# b) Space: the first press finishes the line; a second press inside the dwell does nothing; after it, advances
+	_key(KEY_SPACE)
+	await _frames(1)
+	_check(dlg._shown >= dlg._full.length() and adv[0] == 0, "Space finishes the typewriter first")
+	_key(KEY_SPACE)
+	await _frames(1)
+	_check(adv[0] == 0, "a second Space inside %.1f s does not skip the line" % dlg.ADVANCE_DWELL_S)
+	dlg._done_t = dlg.ADVANCE_DWELL_S + 0.1
+	_key(KEY_SPACE)
+	await _frames(1)
+	_check(adv[0] == 1, "Space advances once the full line has been up long enough")
+	dlg.advance_requested.disconnect(ca)
+	dlg.close()
+	# c) replies ignore input in their first moments
+	var picked := [-1]
+	var cp := func(i): picked[0] = i
+	dlg.choice_made.connect(cp)
+	dlg.show_line({"mode": "person", "speaker": "VISITOR", "text": "Evening, keeper."})
+	dlg.show_choices({"choices": [{"index": 0, "text": "Who's there?"}, {"index": 1, "text": "Say nothing."}]})
+	_key(KEY_1)
+	await _frames(1)
+	_check(picked[0] == -1, "a number key in the replies' first 0.4 s is ignored (item 25)")
+	dlg._choice_age = 1.0
+	_key(KEY_1)
+	await _frames(1)
+	_check(picked[0] == 0, "after the guard, key 1 answers")
+	dlg.choice_made.disconnect(cp)
+	dlg.close()
+	# d) the clock card draws above the black, and is fully up on black for at least CARD_ON_BLACK_S
+	var pr: CanvasLayer = g.presenter
+	_check(pr.card.get_index() > pr.fade.get_index(), "the clock / chapter card draws above the fade (item 21)")
+	pr.timeskip("19:40")
+	var on_black_ms := 0
+	var last := Time.get_ticks_msec()
+	var t := 0
+	while t < 2000 and (pr.fade.color.a > 0.02 or t < 5):
+		await process_frame
+		var now := Time.get_ticks_msec()
+		if pr.fade.color.a > 0.98 and pr.card.modulate.a > 0.98:
+			on_black_ms += now - last
+		last = now
+		t += 1
+	_check(pr.card_title.text == "19:40" and on_black_ms >= 1500, "the time skip clock is fully up on black for %d ms (>= 1500)" % on_black_ms)
+	g.director._hold = 0
+	# e) the radar is its own target and never opens the radio view
+	_check(g.station.DEVICES["radar"]["kind"] == "info", "the radar is an info target, not a radio focus (item 23)")
+	g.player.focused = ""
+	_check(not g._at_radio(), "standing near the radio without the radio view does not answer it")
+	# f) sim radio chatter waits while a story line is up, then shows; it is in the transcript either way
+	g.director.process_mode = Node.PROCESS_MODE_INHERIT
+	var hist0: int = g.director.state.history.size()
+	var subs0: int = g.ui._sub_items.size()
+	dlg.show_line({"mode": "radio", "speaker": "MORAG", "text": "North Point, Stornoway. Radio check, over."})
+	g.sim.battery = maxf(g.sim.battery, 50.0)
+	g.sim.main_breaker = true
+	g._comms_radio("Kittiwake", "Position bearing 014, North Point.", false, "position", -1)
+	await _frames(3)
+	_check(g._comms_queue.size() == 1 and g.ui._sub_items.size() == subs0, "a sim radio line waits behind a story line (item 26)")
+	_check(g.director.state.history.size() == hist0 + 1, "the sim radio line is in the transcript")
+	dlg.close()
+	g._comms_gap = 0.0
+	await _frames(3)
+	_check(g._comms_queue.is_empty() and g.ui._sub_items.size() >= 1, "it shows once the story line has closed")
+	g.director.process_mode = Node.PROCESS_MODE_DISABLED

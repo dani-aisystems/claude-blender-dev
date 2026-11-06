@@ -48,20 +48,61 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 ## Current position
 | | |
 |---|---|
-| **Stage** | 3, dialogue, characters and story pacing |
-| **Iteration** | **3B approved by Daniel 2026-11-06** (local commit). Next: plan 3C (portraits) at its gate. 3A approved and committed (`dc87818`). Master script **approved by Daniel 2026-11-06** with fixes F1–F7 |
-| **Next actionable task** | Plan **3C** (character portraits and presentation) and get Daniel's approval before building. Fold into the 3C capture run: the Calls box and the sound caption (the 3B leftovers) |
+| **Stage** | 3, dialogue, characters and story pacing; plus **Daniel's brief of 2026-11-06 (items 1–37)**, mapped onto the existing stages below |
+| **Iteration** | 3B approved (local commit). 3C (portraits) **paused for Daniel's character profiles**. Brief: **Phase A (docs) done 2026-11-06**; **G1 (bugs and input) next** |
+| **Next actionable task** | **G1 checkpoint**: the capture run (beam, rain, door, time card), then Daniel's approval and a local commit. Then G2. Details: `FINDINGS_LOG.md`, "G1 implementation record". Plan: `~/.claude/plans/the-last-light-cosmic-waffle.md` |
 
 ## Stages
 | # | Stage | Status |
 |---|---|---|
 | 0 | Critical fixes and regression baseline | ✅ **approved by Daniel 2026-11-04** (iteration 0.2) |
-| 1 | Cabin lighting, materials and architecture | ✅ **approved by Daniel 2026-11-05** (iterations 1.0, 1a, 1b, 2, 3, 3b, 4, 1p) |
-| 2 | First-person interactions and gameplay | ✅ **approved by Daniel 2026-11-05** (iterations 2A–2D) |
-| 3 | Dialogue, characters and story pacing | 🟡 3A and 3B approved (local commits); 3C next |
-| 4 | Outside world and major story events | ⬜ |
-| 5 | Sound and cinematic presentation | ⬜ |
-| 6 | Menus, effects and final polish | ⬜ |
+| 1 | Cabin lighting, materials and architecture | ✅ **approved by Daniel 2026-11-05** (iterations 1.0, 1a, 1b, 2, 3, 3b, 4, 1p). Follow-up: **Cabin pass 2** (brief items 5, 6, 10, 11, 15, 17) |
+| 2 | First-person interactions and gameplay | ✅ **approved by Daniel 2026-11-05** (iterations 2A–2D). Reopened for **iteration 2E** (brief items 7, 8, 9, 12, 13, 14, 16, 18, 19, 20, 23, 24, 25, 26, 32; proposal 36) |
+| 3 | Dialogue, characters and story pacing | 🟡 3A and 3B approved (local commits); 3C paused for Daniel's profiles (brief item 22 merged into it); **3D**: items 21 and 27, plus proposals 35 and 37 |
+| 4 | Outside world and major story events | ⬜ Brief items 3, 28, 29 added |
+| 5 | Sound and cinematic presentation | ⬜ Brief items 30, 33, 34 added |
+| 6 | Menus, effects and final polish | ⬜ Brief items 1, 2, 4 added (they extend the existing Pause and main-menu bullets) |
+
+## Daniel's brief of 2026-11-06 (items 1–37): stage integration
+**The master reference is `projects/games/last_light/FINDINGS_LOG.md`.** It has one entry per item, with the current implementation, root cause, solution, acceptance criteria, files, dependencies and status.
+
+**Proposals awaiting approval:**
+- `PROPOSAL_35_RADIO_CAST.md`
+- `PROPOSAL_36_TUTORIAL.md`
+- `PROPOSAL_37_JOURNAL.md`
+
+Item 31 (power failure) is a **recommendation only** (findings log §31).
+
+The work groups cut across stages. Each group ends with a checkpoint in the four-part format and Daniel's approval:
+
+| Group | Items | Stage(s) | Status |
+|---|---|---|---|
+| A (docs) | Findings log, proposals 35–37, this section, PROJECT_STATE, handoff | — | ✅ done 2026-11-06 (awaiting Daniel's read) |
+| G1 progression, input and correctness bugs | 32, 7, 25, 23, 26, 21, 28, 3, 5 | 2E, 3D, 4, Cabin pass 2 | 🟡 implemented 2026-11-06, all suites green; captures pending Daniel's OK; checkpoint awaiting approval |
+| G2 opening, missions, feedback, saves | 8, 9, 20, 16, 4, 27, 24 (decision) | 2E, 3D, 6 | ⬜ (needs decision D8) |
+| G3 body and equipment | 13, 14, 12, 18, 19 | 2E | ⬜ |
+| G4 cabin assets | 6, 10, 11, 15, 17 | Cabin pass 2 | ⬜ |
+| G5 weather and audio | 29, 30, 33 | 4, 5 | ⬜ (needs Daniel's music pick from the CC0 shortlist) |
+| G6 menu, profiles, ending | 1, 22, 34 | 6, 3C, 5 | ⬜ (needs links and character profiles) |
+
+**Daniel's decisions (2026-11-06):**
+- Docs first, then G1 to G6.
+- Item 32: reuse the chapter-start fuel top-up once when the day tank runs dry, plus radio scenes that wait for power and power-aware hints.
+- Item 12: the floor rose stays; the chart compass is the pickup.
+- Audio: SFX synthesised; music from a CC0 shortlist.
+
+**Decisions still open:**
+- D8 (how the dark opening fits the 41 % lines);
+- the links for item 1;
+- the character profiles (22, 3C);
+- proposals 35–37;
+- item 31.
+
+**Overlaps with bullets already planned:**
+- Stage 5 "music arc" and "audio in the credits" are covered by 33 and 34.
+- Stage 5 "player footsteps" are not in this brief. They stay in Stage 5, though G3's walk animation is the natural trigger.
+- Stage 6 "Pause: Options, Load and Quit; confirm before leaving" is covered by 4. "Load" becomes Continue from the autosave, since manual saves are removed.
+- Stage 6 "the double highlight in the main menu" is covered by 1.
 
 ## Approved decisions (Daniel, 2026-11-04)
 | Topic | Decision |

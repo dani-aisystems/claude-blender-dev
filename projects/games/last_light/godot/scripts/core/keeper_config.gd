@@ -15,7 +15,7 @@ extends Resource
 @export var motor_draw := 0.08
 @export var motor_jam_draw := 0.30
 @export var radio_draw := 0.03
-@export var radio_tx_draw := 0.10
+@export var radio_tx_draw := 0.06       # item 32: was 0.10; at LAMP HIGH every call (0.94) tripped MAIN on its own
 @export var radar_draw := 0.06
 @export var lights_draw := 0.05
 @export var base_draw := 0.02

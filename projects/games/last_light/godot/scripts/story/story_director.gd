@@ -39,6 +39,8 @@ const ENDINGS := {
 	"light_exhibited": "Light Exhibited Throughout",
 }
 const HOLD_SAFETY_S := 8.0             # a lost tween can never strand the story
+const POWER_HINT_S := [8.0, 45.0]      # item 32: first and repeat delay of the "no power" hint
+const DAYTANK_CONV := "sys_daytank"    # item 32: Callum's line when the day tank is pumped up once
 const ENDING_HOLD_S := 240.0           # the ending card is read at the player's pace
 
 var sim: KeeperSim
@@ -73,6 +75,11 @@ var _hold_limit := HOLD_SAFETY_S
 var _pending_chapter := 0
 var _optional_running := ""            # id of the optional radio call in progress ("" = none)
 var ending_lines: Array = []           # the epilogue as shown on the ending card (also kept for tests)
+# Brief item 32 (Kittiwake softlock, 2026-11-06): a radio conversation never plays on a dead set. It waits
+# here, the story holds, and a hint says what to fix; it starts the moment the radio has power again.
+var _radio_wait := ""                  # id of the radio conversation waiting for power ("" = none)
+var _nopower_t := 0.0                  # seconds the story has waited on something that needs power
+var _power_hints := 0                  # power hints shown in the current wait
 var ending_id := ""
 
 
@@ -169,6 +176,54 @@ func _apply_chapter_start(c: Dictionary) -> void:
 		sim.fuel = maxf(sim.fuel, float(st["fuel"]))     # day tank topped up from the main tank
 
 
+## Item 32 (Daniel 2026-11-06): the chapter-start rule above ("day tank topped up from the main tank")
+## also runs ONCE per chapter when the day tank runs dry and the engine has stopped, so an empty tank
+## mid-chapter can never strand the story. Same rule, same amount; it is not a new event.
+func _check_daytank() -> void:
+	if sim == null or sim.fuel > 0.01 or sim.gen != KeeperSim.Gen.OFF:
+		return
+	var key := "daytank_ch%d" % state.chapter
+	if state.has_flag(key):
+		return
+	var st: Dictionary = chapter_data(state.chapter).get("start", {})
+	if not st.has("fuel"):
+		return
+	state.flags[key] = 1
+	sim.fuel = maxf(sim.fuel, float(st["fuel"]))
+	if not play_aside(DAYTANK_CONV, false):
+		story_event.emit("hint", ["The day-tank was dry. Callum pumped it up from the main tank below."])
+
+
+## Item 32: what the keeper should fix when the story waits on power (radio or light).
+func _power_hint_text() -> String:
+	if not sim.main_breaker:
+		return "No power: the MAIN breaker has tripped. Reset it at the distribution board."
+	if sim.battery <= 0.0:
+		return "No power: the batteries are flat. Start the generator and switch CHARGE on."
+	return "No power. Check the MAIN breaker, the battery and the generator."
+
+
+## Does the story need power to move on right now? (a radio call waiting, or a beat marked needs_power)
+func _waiting_on_power() -> bool:
+	if _radio_wait != "":
+		return true
+	var beats := _beats()
+	return state.beat < beats.size() and bool(beats[state.beat].get("needs_power", false)) and not sim.powered()
+
+
+func _tick_power_hint(delta: float) -> void:
+	if not _waiting_on_power() or sim.powered():
+		_nopower_t = 0.0
+		_power_hints = 0
+		return
+	_nopower_t += delta
+	var due: float = POWER_HINT_S[0] if _power_hints == 0 else POWER_HINT_S[1]
+	if _nopower_t >= due:
+		story_event.emit("hint", [_power_hint_text()])
+		_power_hints += 1
+		_nopower_t = 0.0
+
+
 func _beats() -> Array:
 	return chapter_data(state.chapter).get("beats", [])
 
@@ -200,9 +255,17 @@ func _process(delta: float) -> void:
 			transition_done()
 		elif _hold == 1:
 			return
+	_check_daytank()
+	_tick_power_hint(delta)
 	# conversations
 	if _talking:
 		_dialogue_tick(delta)
+		return
+	if _radio_wait != "":
+		if sim.radio_on():
+			var id := _radio_wait
+			_radio_wait = ""
+			start_conversation(id)
 		return
 	if _wait > 0.0:
 		_wait -= delta
@@ -250,12 +313,12 @@ var _beat_done_pending := false
 
 
 func _run_actions() -> void:
-	while not _actions.is_empty() and not _talking and _wait <= 0.0 and _hold != 1 and _until == "":
+	while not _actions.is_empty() and not _talking and _wait <= 0.0 and _hold != 1 and _until == "" and _radio_wait == "":
 		if _hold == 2 and not String(_actions[0][0]) in INSTANT_ACTIONS:
 			return                         # under black / during the card: only world changes run
 		var a: Array = _actions.pop_front()
 		_do(a)
-	if _actions.is_empty() and not _talking and _wait <= 0.0 and _beat_done_pending and _hold == 0 and _until == "":
+	if _actions.is_empty() and not _talking and _wait <= 0.0 and _beat_done_pending and _hold == 0 and _until == "" and _radio_wait == "":
 		_beat_done_pending = false
 		_next_beat()
 
@@ -270,7 +333,12 @@ func _do(a: Array) -> void:
 	var args := a.slice(1)
 	match name_:
 		"talk":
-			start_conversation(args[0])
+			if _is_radio_conv(String(args[0])) and not sim.radio_on():
+				_radio_wait = String(args[0])     # item 32: held until the set has power, never skipped
+				_nopower_t = 0.0
+				_power_hints = 0
+			else:
+				start_conversation(args[0])
 		"wait":
 			_wait = float(args[0]) * (bot_wait_mul if bot else 1.0)
 		"objective":
@@ -384,6 +452,9 @@ func _route_sim(events: Array) -> void:
 func on_sim_events(events: Array) -> void:
 	for e in events:
 		match e["type"]:
+			"radio":
+				if e.get("kind", "") == "position":      # item 26: the beat waits for the reply, not a fixed time
+					state.flags["position_" + String(e.get("from", "")).replace(" ", "_")] = 1
 			"ship_saved":
 				state.rescues[e["name"]] = "saved"
 			"ship_lost":
@@ -420,6 +491,10 @@ func on_player_event(name_: String) -> void:
 
 
 # ------------------------------------------------------------------ dialogue
+
+func _is_radio_conv(id: String) -> bool:
+	return db.convs.has(id) and String(db.convs[id].get("mode", "")) == "radio"
+
 
 func start_conversation(id: String) -> void:
 	if not runner.start(id):
@@ -500,6 +575,19 @@ func choose(index: int) -> void:
 	_step_dialogue(runner.choose(index))
 
 
+## Item 26: a sim radio line the keeper heard, kept in the transcript like a story line.
+func log_radio(from: String, text: String, outgoing: bool) -> void:
+	state.history.append({"speaker": "CALLUM" if outgoing else from.to_upper(), "name": "Callum" if outgoing else from,
+		"text": text, "mode": "radio", "look": "radio", "chapter": state.chapter, "conv": "",
+		"clock": sim.clock_text() if sim else ""})
+
+
+## Item 26: ships whose arrival a story conversation already speaks (the sim's own "we have the channel
+## lights" would say it twice). Listed per chapter as "story_voice" in chapters.json.
+func story_voices(ship_name: String) -> bool:
+	return ship_name in chapter_data(state.chapter).get("story_voice", [])
+
+
 func is_talking() -> bool:
 	return _talking
 
@@ -519,7 +607,7 @@ func play_aside(conv_id: String, once := true) -> bool:
 ## `autosave` action inside a beat (the save then carries the beat's remaining actions).
 func can_manual_save() -> bool:
 	return not _talking and _actions.is_empty() and _wait <= 0.0 and _hold == 0 and _pending_chapter == 0 \
-		and _until == ""
+		and _until == "" and _radio_wait == ""
 
 
 func can_autosave() -> bool:
@@ -568,8 +656,8 @@ func _switch_chapter() -> void:
 ## has run, until the beat `close_at` has run, once, and never while the story is speaking.
 func available_calls() -> Array:
 	var out: Array = []
-	if _talking or _hold != 0 or finished:
-		return out
+	if _talking or _hold != 0 or finished or _radio_wait != "" or (sim != null and not sim.radio_on()):
+		return out                         # item 32: no calls on a dead set
 	var beats := _beats()
 	for oc in chapter_data(state.chapter).get("optional_calls", []):
 		if state.done(String(oc["conv"])):

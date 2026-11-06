@@ -1606,13 +1606,17 @@ def build_stair(B):
     dz, dx = -rise * n, run * n
     for sy in (-1, 1):
         dd = dmid + sy * (back - front - 0.08) / 2
-        seg_cyl(iron, dp(b, x0, 0.0, dd), dp(b, x0 + dx, dz, dd), 0.02, 8)
+        seg_cyl(iron, dp(b, x0, -0.025, dd), dp(b, x0 + dx, dz - 0.025, dd), 0.02, 8)   # item 5: was 2 cm proud of the floor
     seg_cyl(B.bm("M_LL_Wood", "SM_Stair"), dp(b, x0 + 0.05, 0.9, front + 0.06), dp(b, x0 + dx, dz + 0.9, front + 0.06), 0.022, 10)
-    # the shaft below the hatch (concrete), so nothing shows through from the room
+    # the shaft below the hatch (concrete), so nothing shows through from the room. Brief item 5: the wall
+    # tops sat exactly at floor level and reached past the bulkhead into the room, so the cream concrete
+    # z-fought the dark floor round the door (white speckles). They now stop 5 mm under the floor.
     conc = B.bm("M_LL_Concrete", "SM_Stair")
-    box(conc, dp(b, 0.35, -1.55, front - 0.03), (2.3, 0.06, 3.1), bs, bevel=0.0)
-    box(conc, dp(b, 0.35, -1.55, back + 0.05), (2.3, 0.06, 3.1), bs, bevel=0.0)
-    box(conc, dp(b, -0.68, -1.55, dmid), (0.06, back - front + 0.1, 3.1), bs, bevel=0.0)
+    SHAFT_TOP = -0.005
+    sh_h = 3.1 + SHAFT_TOP
+    box(conc, dp(b, 0.35, SHAFT_TOP - sh_h / 2, front - 0.03), (2.3, 0.06, sh_h), bs, bevel=0.0)
+    box(conc, dp(b, 0.35, SHAFT_TOP - sh_h / 2, back + 0.05), (2.3, 0.06, sh_h), bs, bevel=0.0)
+    box(conc, dp(b, -0.68, SHAFT_TOP - sh_h / 2, dmid), (0.06, back - front + 0.1, sh_h), bs, bevel=0.0)
     box(conc, dp(b, 0.35, -3.1, dmid), (2.3, back - front + 0.1, 0.1), bs, bevel=0.0)
     bm = bmesh.new()
     bm.loops.layers.uv.new("UVMap")

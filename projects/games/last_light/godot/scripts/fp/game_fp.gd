@@ -36,6 +36,11 @@ var _looked := 0.0
 var _last_yaw := 0.0
 var _last_pos := Vector3.ZERO
 var _story_flags_t := 0.0
+# Brief item 26 (2026-11-06): one voice at a time. Sim radio chatter (acks, position reports, maydays) waits
+# while a story line or reply is up, then plays in order; every heard line also goes to the transcript.
+var _comms_queue: Array = []               # [{from, text, outgoing, kind, ship}] deferred sim radio lines
+var _comms_gap := 0.0                      # seconds before the next deferred line may show
+const COMMS_GAP_S := 1.6
 
 
 func start(seed_value: int, mode := "", attract_mode := false, story := false, save: Dictionary = {}) -> void:
@@ -140,6 +145,7 @@ func _setup_story(save: Dictionary) -> void:
 	director.request_autosave.connect(func(): autosave())
 	director.campaign_finished.connect(_on_campaign_finished)
 	director.line_shown.connect(func(item): audio.on_line(item))
+	director.line_shown.connect(func(_item): ui.fade_subtitles())      # item 26: one voice on screen
 	if not save.is_empty():
 		_apply_save(save)
 		director.begin(false)
@@ -147,13 +153,12 @@ func _setup_story(save: Dictionary) -> void:
 		director.begin(true)
 
 
+## Radio replies (and answering a call) need the radio view: the keeper looked at the set and pressed E.
+## Standing next to the desk is not enough (brief item 23; it used to unlock within 1.7 m).
 func _at_radio() -> bool:
 	if player == null:
 		return true
-	if player.focused == "radio":
-		return true
-	var f: Dictionary = station.focus.get("radio", {})
-	return f.has("at") and player.global_position.distance_to(Vector3(f["at"].x, player.global_position.y, f["at"].z)) < 1.7
+	return player.focused == "radio"
 
 
 func _on_story_event(name_: String, args: Array) -> void:
@@ -514,6 +519,8 @@ func _physics_process(delta: float) -> void:
 	_route(sim.step(delta))
 	if story_mode and player:
 		_track_player(delta)
+	if story_mode and ui:
+		_tick_comms(delta)
 
 
 func _track_player(delta: float) -> void:
@@ -615,12 +622,10 @@ func _ui_events(events: Array) -> void:
 	for e in events:
 		match e["type"]:
 			"radio":
-				if not Settings.v["subtitles"]:
-					continue
 				if not story_mode or e.get("kind", "") in ["ack", "position", "lost_light", "has_light", "mayday", "piloting", "saved", "lost", "call", "recall"]:
-					ui.add_subtitle(e["from"], e["text"], false)
+					_comms_radio(String(e["from"]), String(e["text"]), false, String(e.get("kind", "")), e.get("ship", -1))
 			"tx":
-				ui.add_subtitle("North Point", e["text"], true)
+				_comms_radio("North Point", String(e["text"]), true, "tx", -1)
 			"refused", "note":                  # Stage 2: a press that can't work says why, once
 				var t: String = e.get("reason", e.get("text", ""))
 				if t != "":
@@ -656,6 +661,40 @@ func _ui_events(events: Array) -> void:
 					ui.show_notice("%s is safe. +%d" % [e["name"], e["points"]], 4.0)
 			"ship_lost":
 				ui.show_notice("%s has struck the rocks." % e["name"], 6.0)
+
+
+## Item 26: sim radio lines go through here. In the story a dead set hears nothing; a heard line is kept
+## in the transcript, and it waits while the story is speaking instead of drawing over the story panel.
+## A ship whose news a story conversation is about to tell (story_voice ships) is not doubled.
+func _comms_radio(from: String, text: String, outgoing: bool, kind: String, ship_id) -> void:
+	if story_mode:
+		if not outgoing and not sim.radio_on():
+			return
+		if kind == "piloting" and director and director.story_voices(from):
+			return                               # e.g. Rory tells it himself in ch1_rory_in
+		director.log_radio(from, text, outgoing)
+		if _story_speaking() or not _comms_queue.is_empty():
+			_comms_queue.append({"from": from, "text": text, "outgoing": outgoing})
+			return
+	_show_comms(from, text, outgoing)
+
+
+func _show_comms(from: String, text: String, outgoing: bool) -> void:
+	if Settings.v["subtitles"] or outgoing:
+		ui.add_subtitle(from, text, outgoing)
+	_comms_gap = COMMS_GAP_S
+
+
+func _story_speaking() -> bool:
+	return director != null and (director.is_talking() or (presenter and presenter.dialogue.is_active()))
+
+
+func _tick_comms(delta: float) -> void:
+	_comms_gap -= delta
+	if _comms_queue.is_empty() or _comms_gap > 0.0 or _story_speaking():
+		return
+	var c: Dictionary = _comms_queue.pop_front()
+	_show_comms(c["from"], c["text"], c["outgoing"])
 
 
 func _finish() -> void:
