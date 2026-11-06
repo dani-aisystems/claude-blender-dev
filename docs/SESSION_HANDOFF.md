@@ -31,7 +31,28 @@ The staged-polish session won't edit `build.py` (needed for bevels, smooth shadi
 
 Read this with `docs/ROADMAP.md`, which is now the **living stage tracker** (current stage and iteration, decisions, feedback log, next task), and with `docs/PROJECT_STATE.md`.
 
-## Latest status (2026-11-05, cabin pass: Daniel's 8-photo brief, run before Stage 3)
+## Latest status (2026-11-05, Stage 3 started: iteration 3A plus the master script)
+- **Plan:** revision 2, approved by Daniel: `~/.claude/plans/the-last-light-stage3-plan-r2.md`. His decisions:
+  - "targeted fill" lore scope;
+  - the script written alongside 3A and reviewed at the 3A checkpoint;
+  - about 90 min, measured later in Stage 6;
+  - portraits on the radio, plus Ross in person after the reveal.
+- **Master script (DRAFT, awaiting Daniel):** `projects/games/last_light/STAGE3_NARRATIVE_MASTER.md`. **Gate:** no `.dlg`, `chapters.json` or `docs.json` story rewrites until he approves. The only data edit so far is the ch1 objective, now using tokens.
+- **3A code done:**
+  - **Fonts.** The bundled OFL fonts are in `godot/assets/fonts/*`, pinned to google/fonts `fbe8181`, with each `OFL.txt` alongside and entries in `assets/ASSET_LICENSES.md`.
+  - **Style.** `UIStyle` uses FontVariation plus a global text scale (group `ui_text`, driven from `Settings.apply`).
+  - **Speakers.** `scripts/story/speakers.gd` is the identity resolver and line-look rules. It works with `DialogueRunner.present()`, and history entries are stored as shown.
+  - **Parser.** `dialogue_db` accepts `>` sound captions, `SPEAKER@room|@radio:` and `SPEAKER(expr):`.
+  - **Dialogue UI.** `dialogue_ui`:
+    - lays the text out once and reveals it with `visible_characters`;
+    - moves the identity line onto the name row;
+    - holds the typewriter while a document or fade is up.
+  - **Presenter.** The objective and hint share one VBox, and objectives resolve tokens.
+  - **Backlog.** `scripts/ui/backlog_ui.gd` opens from the pause menu, H or pad View. It pauses the game, and `game_fp.open_backlog` / `close_backlog` keep `refresh_mouse` as the only mouse writer.
+  - **Tests.** regress **R9** and qa_sweep at 0.8, 1.0 and 1.5.
+- **New `class_name` gotcha:** after adding a `class_name` script, run `tools/godot --headless --path projects/games/last_light/godot --import` once. Otherwise every `-s` test hangs on "Identifier not declared".
+
+## Earlier status (2026-11-05, cabin pass: Daniel's 8-photo brief, run before Stage 3)
 - **Where it stands:** checkpoints 1–3 approved and committed (`91faeb1`, `9e0eeef`, `11b92d2`); **checkpoint 4 (final QA) approved by Daniel and committed.** Full log, the per-photo table (issue → root cause → fix → files) and a 7-step manual playtest: ROADMAP "Cabin pass".
 - **Build:** v035 `.blend`, GLB v033, about 114k tris, 0 validation FAIL.
 - **Tests (v035, headless):** regress 101/101, interaction 134/134 (7 warnings: documents have no sound), qa_sweep 948/948, story 0, sim_v2 no gate failures, run_tests 95/95, pytest 18/18.

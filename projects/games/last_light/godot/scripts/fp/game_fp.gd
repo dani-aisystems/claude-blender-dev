@@ -28,6 +28,9 @@ var cine_cam: Camera3D
 var _cine_t := 0.0
 var _ended := false
 var _paused := false
+var backlog: Control                       # Stage 3A dialogue history (story mode)
+var _backlog_from_pause := false
+var _backlog_focus: Control = null
 var _moved := 0.0
 var _looked := 0.0
 var _last_yaw := 0.0
@@ -95,6 +98,7 @@ func start(seed_value: int, mode := "", attract_mode := false, story := false, s
 	ui.restart_requested.connect(func(): finished.emit({"restart": true}))
 	ui.menu_requested.connect(func(): quit_to_menu.emit())
 	ui.save_requested.connect(_manual_save)
+	ui.backlog_requested.connect(func(): open_backlog(true))
 	if story_mode:
 		_setup_story(save)
 	if bot_mode == "":
@@ -123,6 +127,10 @@ func _setup_story(save: Dictionary) -> void:
 	Settings.changed.connect(_on_settings_changed)     # method (not lambda): auto-disconnects when freed
 	presenter.dialogue.blip.connect(func(kind): audio.ui_blip(kind))
 	presenter.document_closed.connect(_on_doc_closed)
+	backlog = preload("res://scripts/ui/backlog_ui.gd").new()
+	backlog.chapter_title_fn = func(n): return String(director.chapter_data(n).get("title", ""))
+	backlog.close_requested.connect(close_backlog)
+	ui.add_child(backlog)                  # fp_ui processes during pause; drawn above the pause menu
 	director.story_event.connect(_on_story_event)
 	director.request_autosave.connect(func(): autosave())
 	director.campaign_finished.connect(_on_campaign_finished)
@@ -350,6 +358,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		refresh_mouse()
 		get_viewport().set_input_as_handled()
 		return
+	if event.is_action_pressed("history") and story_mode and presenter and not presenter.is_document_open() and not ui.logbook.visible:
+		open_backlog(false)                   # H / View: the dialogue history (Stage 3A)
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("pause"):
 		if presenter and presenter.is_document_open():
 			return
@@ -367,6 +379,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func set_paused(p: bool) -> void:
 	if p and player:
 		player.release_holds()             # the key-up would be lost under the pause menu
+	if not p and backlog and backlog.visible:
+		backlog.close()                    # resuming from anywhere also closes the history
 	_paused = p
 	get_tree().paused = p
 	ui.show_pause(p, story_mode)
@@ -380,6 +394,8 @@ func mouse_should_capture() -> bool:
 		return false
 	if _paused or player.focused != "" or ui.logbook.visible:
 		return false
+	if backlog and backlog.visible:
+		return false                          # reading the dialogue history (it only exists while paused)
 	if not player.enabled:
 		return false                          # reading a document, the logbook or the end screen
 	if presenter and presenter.is_document_open():
@@ -387,6 +403,41 @@ func mouse_should_capture() -> bool:
 	# open replies no longer free the pointer in free walk (cabin pass, Daniel): mouse look stays on and
 	# the replies are answered with the keys; in device views the pointer is already free
 	return true
+
+
+## The dialogue history (Stage 3A). It pauses the game, so the typewriter, the director and the station
+## all stand still; closing restores exactly what was there: the pause menu (if it was opened from it)
+## or play, the mouse through refresh_mouse(), and the reply highlight for the pad.
+func open_backlog(from_pause: bool) -> void:
+	if backlog == null or backlog.visible or _ended:
+		return
+	var fo := get_viewport().gui_get_focus_owner()
+	_backlog_focus = fo if fo and presenter.dialogue.choice_box.is_ancestor_of(fo) else null
+	_backlog_from_pause = from_pause and _paused
+	if not _paused:
+		set_paused(true)
+	if ui.pause_panel:
+		ui.pause_panel.visible = false
+	backlog.open(director.state.history)
+	refresh_mouse()
+
+
+func close_backlog() -> void:
+	if backlog == null or not backlog.visible:
+		return
+	backlog.close()
+	if _backlog_from_pause and ui.pause_panel:
+		ui.pause_panel.visible = true
+		ui.focus_pause()
+		refresh_mouse()
+	else:
+		set_paused(false)
+	if not _paused and presenter.dialogue.has_open_choices():
+		if is_instance_valid(_backlog_focus) and presenter.dialogue.choice_box.is_ancestor_of(_backlog_focus):
+			_backlog_focus.grab_focus()
+		else:
+			presenter.dialogue.focus_first_choice()
+	_backlog_focus = null
 
 
 func _on_settings_changed() -> void:

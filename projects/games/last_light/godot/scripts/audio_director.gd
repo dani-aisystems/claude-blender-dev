@@ -138,7 +138,7 @@ func on_events(events: Array) -> void:
 
 
 func on_line(item: Dictionary) -> void:
-	if item.get("mode", "") == "radio":
+	if item.get("look", item.get("mode", "")) == "radio":    # an in-room speaker in a radio scene is no transmission
 		_static_t = maxf(_static_t, 3.5)
 
 

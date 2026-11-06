@@ -8,6 +8,11 @@ extends Node
 ##     dark (room-lights breaker off), flash (lightning at a fixed bearing, captured at its peak),
 ##     gen_off (generator stopped), dawn (dawn sky), valve_shut (fuel valve closed),
 ##     fleet2 (adds a test vessel until two are on the channel; not restored, so put it last)
+##   Stage 3 dialogue states (the director is held for the shot; written against APIs that exist in both
+##   the 302f7ca build and 3A, so the same file stages matched before/after shots in a worktree):
+##     say_radio, say_thought, say_inroom (ROSS in a radio scene), say_door (the man at the door, person),
+##     say_choices (a radio line plus two replies), say_sound (3A caption), text15 (text size 1.5),
+##     doc_<id> (a document open in the viewer), pause, backlog (3A: the dialogue history)
 ##   VIEW pp_<ia id> (Stage 2): the PLAYER stands 1.3 m from that control and looks at it, so the shot
 ##     shows the real crosshair and prompt (e.g. 60@pp_start!gen_off!valve_shut)
 ##   --nohud hides the HUD / dialogue layers for room views (kept for "player" and "focus_*" shots).
@@ -227,8 +232,30 @@ func _force(g, st: String) -> void:
 			g.sim.fuel_valve = false
 		"flash":
 			pass                        # triggered right before the save (see _flash_peak)
+		"say_radio", "say_thought", "say_inroom", "say_door", "say_choices", "say_sound":
+			_say(g, st)
+		"text15":
+			_restore_state["subtitle_size"] = Settings.v["subtitle_size"]
+			Settings.v["subtitle_size"] = 1.5          # in memory only (capture runs never save settings)
+			Settings.apply()
+		"pause":
+			g.set_paused(true)
+			_restore_state["paused"] = true
+		"backlog":
+			if g.has_method("open_backlog"):
+				_hold_director(g)
+				for e in SAMPLE_HISTORY:
+					g.director.state.history.append(e)
+				g.open_backlog(false)
+				_restore_state["backlog"] = true
 		_:
-			push_warning("capture: unknown state '%s'" % st)
+			if st.begins_with("doc_"):
+				_hold_director(g)
+				g.player.enabled = false
+				g.presenter.open_document(st.substr(4))
+				_restore_state["doc"] = true
+			else:
+				push_warning("capture: unknown state '%s'" % st)
 
 
 func _unforce(g) -> void:
@@ -241,7 +268,58 @@ func _unforce(g) -> void:
 	if _restore_state.has("dawn"):
 		g.outside.dawn = _restore_state["dawn"]
 		g.outside.set_sky("night")
+	if _restore_state.has("doc"):
+		g.presenter.close_document()
+	if _restore_state.has("backlog") and g.has_method("close_backlog"):
+		g.close_backlog()
+	if _restore_state.has("paused"):
+		g.set_paused(false)
+	if _restore_state.has("say"):
+		g.presenter.dialogue.close()
+	if _restore_state.has("subtitle_size"):
+		Settings.v["subtitle_size"] = _restore_state["subtitle_size"]
+		Settings.apply()
+	if _restore_state.has("director"):
+		g.director.process_mode = _restore_state["director"]
 	_restore_state.clear()
+
+
+# ------------------------------------------------------------------ staged dialogue (Stage 3 checkpoints)
+
+const SAMPLE_LINES := {
+	"say_radio": {"mode": "radio", "speaker": "MORAG", "text": "North Point, North Point, this is Stornoway Coastguard, Stornoway Coastguard. Evening radio check, over."},
+	"say_thought": {"mode": "thought", "speaker": "", "text": "Twenty-one winters on the lights, and the wind still sounds like someone trying the door."},
+	"say_inroom": {"mode": "radio", "speaker": "ROSS", "text": "That's Elspeth. That's my girl."},
+	"say_door": {"mode": "person", "speaker": "VISITOR", "text": "Open the door, Callum. I'm sixty-four, I'm soaked to the bone, and I've no wish to harm you."},
+	"say_choices": {"mode": "radio", "speaker": "MORAG", "text": "And Callum. It's the fourteenth."},
+	"say_sound": {"type": "line", "mode": "person", "speaker": "", "name": "", "look": "sound", "text": "Three slow knocks."},
+}
+const SAMPLE_HISTORY := [
+	{"speaker": "", "name": "", "text": "Sixteen-twenty. The sun's gone behind Pabbay and taken the colour with it.", "look": "thought", "chapter": 1, "clock": "16:20"},
+	{"speaker": "MORAG", "name": "Morag Fraser", "text": "North Point, North Point, this is Stornoway Coastguard. Evening radio check, over.", "look": "radio", "chapter": 1, "clock": "18:30"},
+	{"speaker": "CALLUM", "name": "Callum", "text": "Evening, Morag. You're early tonight.", "look": "person", "choice": true, "chapter": 1, "clock": "18:30"},
+	{"speaker": "MARY ELLEN", "name": "Mary Ellen", "text": "...we cannot see your light... repeat... we cannot see your light...", "look": "radio", "chapter": 1, "clock": "23:58"},
+	{"speaker": "VISITOR", "name": "The man at the door", "text": "Evening, keeper.", "look": "person", "chapter": 4, "clock": "02:51"},
+	{"speaker": "VISITOR", "name": "The man at the door", "text": "I could not see your light.", "look": "person", "chapter": 4, "clock": "02:51"},
+]
+
+
+func _hold_director(g) -> void:
+	if not _restore_state.has("director"):
+		_restore_state["director"] = g.director.process_mode
+		g.director.process_mode = Node.PROCESS_MODE_DISABLED
+
+
+func _say(g, st: String) -> void:
+	_hold_director(g)
+	var dlg: Control = g.presenter.dialogue
+	dlg.show_line(SAMPLE_LINES[st])
+	dlg._shown = dlg._full.length()
+	dlg._render()
+	if st == "say_choices":
+		dlg.show_choices({"choices": [{"index": 0, "text": "I know what night it is, Morag."}, {"index": 1, "text": "Is it? I'd lost track."},
+			{"index": 2, "text": "It's a Sunday. That's all it is."}]})
+	_restore_state["say"] = true
 
 
 ## Re-strike every frame until the flicker term (outside.gd: 0.55 + 0.45 sin(47 t)) is near its peak,

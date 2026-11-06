@@ -2,7 +2,7 @@ extends SceneTree
 ## Stage 0.2 QA sweep (automated):
 ##  F  dialogue FIT: every line of every conversation, in its own mode, at text size 1.0 and 1.5 (the
 ##     Options maximum): the radio panel / subtitle block stays inside its slot and on screen; every
-##     reply fits; every radio identity-card string fits the card (no clipping).
+##     reply fits; every radio identity line sits inside the panel at its scaled size (Stage 3A: x0.8 too).
 ##  O  OPTIONS apply live: each Options setting changes what it claims to, without a restart.
 ##   godot --path godot -s res://tests/qa_sweep_test.gd -- --windowed   (all checks)
 ##   godot --headless --path godot -s res://tests/qa_sweep_test.gd       (display-only checks SKIPPED)
@@ -60,18 +60,21 @@ func _fit() -> void:
 	var vp := dlg.get_viewport_rect()
 	var n_lines := 0
 	var n_choices := 0
-	var card_f: Font = UIStyle.sans()
 	g.player.enter_focus("radio")          # radio replies only unlock at the radio; also shows the command panel
 	await _frames(30)
-	# identity cards: drawn at 10 px (title) / 9 px (subtitle) into card width - 16
-	for sp in dlg.CARDS:
-		var c: Array = dlg.CARDS[sp]
-		var w: float = dlg.card.custom_minimum_size.x - 16.0
-		var t0 := card_f.get_string_size(String(c[0]), HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x
-		var t1 := card_f.get_string_size(String(c[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x
-		_check(t0 <= w, "card %s title '%s' fits (%.0f / %.0f px)" % [sp, c[0], t0, w])
-		_check(t1 <= w, "card %s subtitle '%s' fits (%.0f / %.0f px)" % [sp, c[1], t1, w])
-	for scale in [1.0, 1.5]:
+	# identity lines (Stage 3A): on the radio name row at a readable, scaled size; they wrap inside the panel
+	for scale in [0.8, 1.0, 1.5]:
+		dlg.apply_settings(42.0, scale)
+		for sp in Speakers.TABLE:
+			var e: Dictionary = Speakers.TABLE[sp]
+			if String(e["where"]) != "radio":
+				continue
+			await _show_full({"mode": "radio", "speaker": sp, "text": "North Point. Over."})
+			var pr: Rect2 = dlg.radio_panel.get_global_rect()
+			var ir: Rect2 = dlg.r_ident.get_global_rect()
+			_check(pr.encloses(ir) and dlg.r_ident.get_theme_font_size("font_size") >= int(15 * scale) - 1,
+				"x%.1f identity line for %s inside the panel at %d px (%s)" % [scale, sp, dlg.r_ident.get_theme_font_size("font_size"), dlg.r_ident.text])
+	for scale in [0.8, 1.0, 1.5]:
 		dlg.apply_settings(42.0, scale)
 		var worst_radio := 0.0
 		var worst_sub := 0.0
@@ -85,7 +88,7 @@ func _fit() -> void:
 					last = {"mode": mode, "speaker": s["speaker"], "text": s["text"]}
 					await _show_full(last)
 					var tag := "x%.1f %s '%s…'" % [scale, id, String(s["text"]).left(40)]
-					if mode == "radio":
+					if dlg.line_look == "radio":
 						var r: Rect2 = dlg.radio_panel.get_global_rect()
 						worst_radio = maxf(worst_radio, r.size.y)
 						_check(vp.encloses(r), "%s radio panel fully on screen (%s)" % [tag, r])
@@ -114,9 +117,13 @@ func _fit() -> void:
 					_check(not box.intersects(speech), "%s replies clear of the speech block (%s vs %s)" % [tag, box, speech])
 					if g.ui.radio_panel.visible:
 						_check(not box.intersects(g.ui.radio_panel.get_global_rect()), "%s replies clear of the radio command panel" % tag)
+		if g.ui.radio_panel.visible:
+			var cp: Rect2 = g.ui.radio_panel.get_global_rect()
+			_check(vp.encloses(cp), "x%.1f radio command panel fully on screen (%s)" % [scale, cp])
+			_check(not cp.intersects(dlg.radio_panel.get_global_rect()), "x%.1f command panel clear of the dialogue radio panel" % scale)
 		dlg.close()
 		print("  x%.1f: tallest radio panel %.0f px, tallest subtitle block %.0f px" % [scale, worst_radio, worst_sub])
-	print("  checked %d line renders and %d reply renders across 2 text sizes" % [n_lines, n_choices])
+	print("  checked %d line renders and %d reply renders across 3 text sizes" % [n_lines, n_choices])
 	dlg.apply_settings(Settings.v["text_speed"], Settings.v["subtitle_size"])
 
 
@@ -188,5 +195,5 @@ func _options() -> void:
 	_opt("text_speed", 90.0)
 	await process_frame
 	var fs: int = dlg.r_text.get_theme_font_size("normal_font_size")
-	_check(fs == int(25 * 1.4), "dialogue text size applies live (radio font %d px, want %d)" % [fs, int(25 * 1.4)])
+	_check(fs == UIStyle.px(25), "dialogue text size applies live (radio font %d px, want %d)" % [fs, UIStyle.px(25)])
 	_check(is_equal_approx(dlg.speed_cps, 90.0), "text speed applies live (%.0f cps)" % dlg.speed_cps)

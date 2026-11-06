@@ -10,6 +10,10 @@ extends SceneTree
 ##  R6  Stage 2B radio panel: stable vessel buttons, a click across a refresh, Space after an order, tips
 ##  R7  Stage 2C gamepad and camera: no shared pad inputs, right-stick look and deadzone, A / B / LB / RB,
 ##      the device-view pad cursor (room controls and screen buttons), reply focus, glyphs, head bob
+##  R9  Stage 3A dialogue foundation: bundled fonts with a real italic, the identity resolver (no early
+##      "Ross" in names, history or backlog), line looks (in-room speakers, sound captions), a typewriter
+##      that lays out once and waits behind fades and documents, objective tokens, one text scale for all
+##      roles, and the dialogue history (pauses, never advances, mouse and pad focus restored)
 ##   godot --path godot -s res://tests/regress_test.gd            (windowed: all checks)
 ##   godot --headless --path godot -s res://tests/regress_test.gd (R1 mouse checks SKIPPED: the headless
 ##                                                                  display server ignores mouse modes)
@@ -73,6 +77,7 @@ func _run() -> void:
 	await _r6_radio_panel()
 	await _r7_gamepad_and_camera()
 	await _r8_cabin_reliability()
+	await _r9_dialogue_foundation()
 	print("REGRESS_RESULT ", JSON.stringify({"passed": passes, "failed": fails.size(), "failures": fails, "skipped": skips}))
 	quit(1 if fails.size() > 0 else 0)
 
@@ -845,3 +850,157 @@ func _r4_thought_in_radio() -> void:
 			elif st["kind"] == "goto":
 				last_narr = false
 	_check(bad.is_empty(), "no radio replies directly after narration (the handset hint would be hidden): %s" % [bad])
+
+
+## Stage 3A: dialogue and typography foundation.
+func _r9_dialogue_foundation() -> void:
+	print("R9 dialogue foundation")
+	var st_node: Node = root.get_node("Settings")
+	if dlg.is_active():
+		dlg.close()
+	# --- fonts: bundled files, a genuine italic face
+	var serif_base: Font = (UIStyle.serif() as FontVariation).base_font
+	var ital_base: Font = (UIStyle.serif_italic() as FontVariation).base_font
+	_check(serif_base is FontFile and ital_base is FontFile and serif_base != ital_base,
+		"serif and its italic are bundled font files (%s / %s)" % [serif_base, ital_base])
+	_check(dlg.s_text.get_theme_font("italics_font") == UIStyle.serif_italic(), "subtitle italics use the italic face")
+	for f in [UIStyle.sans(), UIStyle.typewriter(), UIStyle.hand()]:
+		_check((f as FontVariation).base_font is FontFile, "bundled font loads: %s" % (f as FontVariation).base_font.resource_path.get_file())
+	# --- parser: presence tags, expressions, sound captions
+	var db := DialogueDB.new()
+	db.parse_text("""== r9a mode=radio
+ROSS: That's my girl.
+MORAG(worried): Mayday received.
+~ A thought.
+> Three slow knocks.
+ROSS@radio: On the handset.
+== r9b mode=thought
+VISITOR: Callum! Open the door.
+== r9c mode=person
+Ross said: not a speaker line
+""", "r9")
+	_check(db.errors.size() == 1 and String(db.errors[0]).contains("cannot parse"), "only the lower-case 'Ross said:' line is rejected (%s)" % [db.errors])
+	_check(String(db.convs["r9a"]["steps"][1]["expr"]) == "worried" and db.convs["r9a"]["steps"][1]["speaker"] == "MORAG", "MORAG(worried): parses with its expression")
+	# --- runner: resolved speaker, looks, history
+	var stt := StoryState.new()
+	var run := DialogueRunner.new(db, stt)
+	run.start("r9a")
+	var looks: Array = []
+	var names: Array = []
+	for i in 5:
+		var it: Dictionary = run.advance()
+		looks.append(it["look"])
+		names.append(it["name"])
+	_check(looks == ["person", "radio", "thought", "sound", "radio"], "looks: in-room / radio / thought / sound / @radio (%s)" % [looks])
+	_check(names[0] == "The man at the door" and not "Alasdair Ross" in names, "Ross is the man at the door before his name (%s)" % [names])
+	var hist_txt := JSON.stringify(stt.history)
+	_check(not hist_txt.contains("ROSS") and not hist_txt.contains("Alasdair"), "history keeps the name as shown (no ROSS before the reveal)")
+	_check(int(stt.history[0].get("chapter", 0)) == stt.chapter and String(stt.history[0].get("conv", "")) == "r9a", "history entries carry chapter and conversation")
+	stt.flags["knows_name"] = 1
+	run.start("r9a")
+	_check(String(run.advance()["name"]) == "Alasdair Ross", "after knows_name the same line is Alasdair Ross")
+	run.start("r9b")
+	_check(String(run.advance()["look"]) == "person", "a named speaker inside a thought scene is a person subtitle, not Callum's thought")
+	var legacy := Speakers.sanitize_history([{"speaker": "ROSS", "text": "x", "mode": "person"}], stt)
+	_check(String(legacy[0]["name"]) == "The man at the door" and String(legacy[0]["speaker"]) == "VISITOR", "pre-3A saves: raw ROSS entries are rewritten as shown")
+	# --- dialogue UI: names and the identity line
+	dlg.show_line({"mode": "radio", "speaker": "MORAG", "text": "North Point, Stornoway. Over."})
+	await _frames(2)
+	_check(dlg.r_name.text == "Morag Fraser" and dlg.r_ident.text.contains("STORNOWAY COASTGUARD"), "radio name row carries the identity line (%s | %s)" % [dlg.r_name.text, dlg.r_ident.text])
+	_check(dlg.r_ident.get_theme_font_size("font_size") >= 15, "identity line is at least 15 px (was a 9-10 px drawing)")
+	dlg.show_line({"mode": "radio", "speaker": "ROSS", "text": "That's my girl."})
+	await _frames(2)
+	_check(dlg.sub_box.visible and dlg.s_name.text == "The man at the door", "an unresolved ROSS item still shows only the man at the door (%s)" % dlg.s_name.text)
+	dlg.show_line({"mode": "person", "speaker": "", "text": "He waits."})
+	_check(dlg.s_text.text.contains("[i]"), "person-scene narration is an italic thought")
+	dlg.show_line({"type": "line", "mode": "person", "speaker": "", "name": "", "look": "sound", "text": "Three slow knocks."})
+	_check(dlg.s_text.text.contains("THREE SLOW KNOCKS") and dlg.s_name.text == "", "sound caption in capitals, no name")
+	dlg.show_line({"type": "line", "mode": "person", "speaker": "", "name": "", "look": "sound", "text": "[A carrier on Channel 16. Two clicks.]"})
+	_check(dlg.s_text.text.count("[lb]") == 1, "a caption already in brackets in the script is not double-bracketed (%s)" % dlg.s_text.text)
+	# --- typewriter: laid out once, waits behind a fade and a document
+	var long := "The bolt is stiff with salt. The door comes in with the storm behind it, and an old man in an oilskin stands on the top step with one hand on the rail and rain running off the brim of his sou'wester."
+	dlg.show_line({"mode": "person", "speaker": "VISITOR", "text": long})
+	await _frames(3)
+	var h0: float = dlg.s_text.size.y
+	dlg._shown = dlg._full.length()
+	dlg._render()
+	await _frames(2)
+	_check(absf(dlg.s_text.size.y - h0) < 1.0, "the subtitle block keeps its height while typing (%.0f -> %.0f px)" % [h0, dlg.s_text.size.y])
+	dlg.show_line({"mode": "person", "speaker": "VISITOR", "text": long})
+	g.presenter.fade.color.a = 1.0
+	await _frames(20)
+	_check(dlg._shown < 1.0, "nothing types while the screen is black (%.1f chars)" % dlg._shown)
+	g.presenter.fade.color.a = 0.0
+	await _frames(30)
+	_check(dlg._shown > 1.0, "typing resumes when the fade lifts (%.1f chars)" % dlg._shown)
+	g.presenter.open_document("forecast")
+	await _frames(2)
+	var s0: float = dlg._shown
+	await _frames(20)
+	_check(is_equal_approx(dlg._shown, s0), "the typewriter waits while a document is open")
+	g.presenter.close_document()
+	g.player.enabled = true
+	g.refresh_mouse()
+	dlg.close()
+	# --- objective tokens and one text scale
+	g.presenter.set_objective("Get your bearings. Walk with {move}; look around with {look}.")
+	_check(not g.presenter.objective.text.contains("{"), "objective tokens resolve (%s)" % g.presenter.objective.text)
+	g.presenter.show_hint("The console stands under the east window. Look at the MODE knob and press {interact}, then turn it to AUTO and wait.")
+	g.presenter.objective.text = "▸ " + "Lighting-up time. Turn the MODE selector to AUTO at the light console under the east window, then the LAMP selector up to NORMAL, and write it in the log."
+	for sc in [0.8, 1.0, 1.5]:
+		st_node.v["subtitle_size"] = sc
+		st_node.apply()
+		await _frames(3)
+		var o: Rect2 = g.presenter.objective.get_global_rect()
+		var hr: Rect2 = g.presenter.hint.get_global_rect()
+		_check(not o.intersects(hr) and hr.position.y >= o.end.y - 0.5, "x%.1f objective and hint never overlap (%s / %s)" % [sc, o, hr])
+		_check(g.presenter.objective.get_theme_font_size("font_size") == UIStyle.px(19) and g.presenter.card_title.get_theme_font_size("font_size") == UIStyle.px(64)
+			and g.ui.notice.get_theme_font_size("font_size") == UIStyle.px(24), "x%.1f objective, chapter card and notices follow the text size" % sc)
+		var vp := g.get_viewport().get_visible_rect()
+		_check(vp.encloses(o) and vp.encloses(hr), "x%.1f objective and hint on screen" % sc)
+	st_node.v["subtitle_size"] = 1.0
+	st_node.apply()
+	g.presenter.set_objective("")
+	# --- dialogue history: pauses, never advances, keeps the mouse owner and the pad focus
+	var adv := [0]
+	var ca := func(): adv[0] += 1
+	dlg.advance_requested.connect(ca)
+	g.director.state.history.append({"speaker": "VISITOR", "name": "The man at the door", "text": "Evening, keeper.", "look": "person", "chapter": 4, "clock": "02:51"})
+	_choices("person")
+	await _frames(3)
+	InputSetup.pad_active = true
+	dlg.focus_first_choice()
+	await _frames(2)
+	dlg._move_choice_focus(1)
+	var focus_before: Control = g.get_viewport().gui_get_focus_owner()
+	var mouse_before: bool = g.mouse_should_capture()
+	await _act("history")
+	await _frames(3)
+	_check(g.backlog.visible and g.get_tree().paused and not g.mouse_should_capture(), "H / View opens the history, pauses and frees the pointer")
+	_check(g.backlog.text.text.contains("The man at the door") and not g.backlog.text.text.contains("Alasdair"), "the history shows names as they were shown")
+	for i in 3:
+		_key(KEY_E)
+		await _frames(3)
+	_key(KEY_1)
+	await _frames(3)
+	_check(adv[0] == 0 and dlg.has_open_choices(), "E and 1 under the history neither advance nor answer")
+	await _act("history")
+	await _frames(3)
+	_check(not g.backlog.visible and not g.get_tree().paused and g.mouse_should_capture() == mouse_before, "H closes it: play resumes, mouse policy as before")
+	_check(g.get_viewport().gui_get_focus_owner() == focus_before, "the highlighted reply is still highlighted for the pad")
+	InputSetup.pad_active = false
+	g.set_paused(true)
+	await _frames(2)
+	g.ui.backlog_requested.emit()
+	await _frames(2)
+	_check(g.backlog.visible and g.ui.pause_panel != null and not g.ui.pause_panel.visible, "pause menu > Dialogue history opens over the pause menu")
+	g.close_backlog()
+	await _frames(2)
+	_check(not g.backlog.visible and g.get_tree().paused and g.ui.pause_panel.visible, "closing it returns to the pause menu, still paused")
+	g.set_paused(false)
+	await _frames(2)
+	dlg.advance_requested.disconnect(ca)
+	dlg.close()
+	# the history must never write the mouse mode (R8's single-owner rule)
+	var src := FileAccess.get_file_as_string("res://scripts/ui/backlog_ui.gd")
+	_check(not src.contains("mouse_mode"), "backlog_ui never touches Input.mouse_mode")

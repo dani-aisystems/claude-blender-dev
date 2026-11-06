@@ -11,11 +11,13 @@ made for this game in this workspace (no AI-generated images or voices).
 [font_size=26]Third-party assets[/font_size]
 Scanned PBR textures from Poly Haven (polyhaven.com), CC0 1.0 Public Domain:
 cliff_side · coast_land_rocks_01 · sparse_grass · painted_concrete · rusty_painted_metal · distressed_painted_planks
-(logged in assets/ASSET_LICENSES.md)
 
-Typefaces: Apple macOS system fonts (Baskerville, Georgia, Avenir Next, DIN Condensed, Bradley Hand,
-Snell Roundhand, Noteworthy, American Typewriter), used as installed on the player's system and for
-rendering the in-game documents.
+These and the 2k interior sets are logged with their sources in assets/ASSET_LICENSES.md.
+
+Typefaces (SIL Open Font License 1.1, bundled with the game):
+Libre Baskerville by Pablo Impallari and Rodrigo Fuenzalida  ·  Source Sans 3 by Paul D. Hunt for Adobe
+Courier Prime by Alan Dague-Greene for Quote-Unquote Apps  ·  Cedarville Cursive by Kimberly Geswein
+(the in-game documents are still rendered with Apple macOS fonts until they are re-rendered in Stage 3C)
 
 [font_size=26]Cast (in order of appearance)[/font_size]
 Callum Mackay, principal keeper  ·  Morag Fraser, Stornoway Coastguard

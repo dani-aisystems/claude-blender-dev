@@ -47,21 +47,24 @@ func _ready() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	# objective and hint share one column (Stage 3A): at any text size the hint sits under the objective
+	# instead of at a fixed y where a wrapped or enlarged objective ran into it
+	var top := VBoxContainer.new()
+	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	top.offset_left = 40
+	top.offset_top = 32
+	top.offset_right = 900
+	top.custom_minimum_size = Vector2(860, 0)
+	top.add_theme_constant_override("separation", 6)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(top)
 	objective = UIStyle.label("", 19, UIStyle.INK, UIStyle.serif())
-	objective.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	objective.offset_left = 40
-	objective.offset_top = 32
-	objective.offset_right = 900
 	objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	objective.modulate.a = 0.85
-	root.add_child(objective)
+	top.add_child(objective)
 	hint = UIStyle.label("", 18, UIStyle.DIM, UIStyle.sans())
-	hint.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	hint.offset_left = 40
-	hint.offset_top = 70
-	hint.offset_right = 900
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	root.add_child(hint)
+	top.add_child(hint)
 	dialogue = preload("res://scripts/ui/dialogue_ui.gd").new()
 	root.add_child(dialogue)
 	# chapter card
@@ -119,7 +122,8 @@ func _ready() -> void:
 	doc_text.offset_top = 140
 	doc_text.offset_bottom = -140
 	doc_text.add_theme_font_override("normal_font", UIStyle.serif())
-	doc_text.add_theme_font_size_override("normal_font_size", 28)
+	doc_text.add_theme_font_override("italics_font", UIStyle.serif_italic())
+	UIStyle.track(doc_text, 28)
 	doc_text.visible = false
 	doc_root.add_child(doc_text)
 	doc_title = UIStyle.label("", 22, UIStyle.AMBER, UIStyle.serif())
@@ -142,10 +146,20 @@ func bind(d: StoryDirector) -> void:
 	d.dialogue_closed.connect(dialogue.close)
 	dialogue.advance_requested.connect(d.advance_line)
 	dialogue.choice_made.connect(d.choose)
-	d.objective_changed.connect(func(t):
-		objective.text = ("▸ " + t) if t != "" else ""
-		hint.text = "")
+	d.objective_changed.connect(set_objective)
+	dialogue.hold_fn = is_screen_held
 	d.chapter_started.connect(show_chapter)
+
+
+## Objectives carry the same {interact} {move} ... tokens as hints (Stage 3A: ch1 hard-coded "WASD").
+func set_objective(t: String) -> void:
+	objective.text = ("▸ " + InputSetup.resolve(t)) if t != "" else ""
+	hint.text = ""
+
+
+## True while the screen is (partly) black: dialogue must not type out unseen behind a fade.
+func is_screen_held() -> bool:
+	return fade.color.a > 0.02
 
 
 func show_hint(t: String) -> void:

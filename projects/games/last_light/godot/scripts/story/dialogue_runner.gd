@@ -52,8 +52,9 @@ func advance() -> Dictionary:
 			continue
 		match s["kind"]:
 			"line":
-				var item := {"type": "line", "speaker": s["speaker"], "text": s["text"], "mode": mode()}
-				state.history.append({"speaker": s["speaker"], "text": s["text"], "mode": mode(),
+				var item := present(s)
+				state.history.append({"speaker": item["speaker"], "name": item["name"], "text": s["text"], "mode": mode(),
+					"look": item["look"], "chapter": state.chapter, "conv": conv.get("id", ""),
 					"clock": state.sim.clock_text() if state.sim else ""})
 				return item
 			"goto":
@@ -81,13 +82,25 @@ func choose(index: int) -> Dictionary:
 	if index < 0 or index >= _choices.size():
 		return advance()
 	var ch: Dictionary = _choices[index]
-	state.history.append({"speaker": "CALLUM", "text": ch["text"], "mode": mode(), "choice": true,
+	state.history.append({"speaker": "CALLUM", "name": "Callum", "text": ch["text"], "mode": mode(), "choice": true,
+		"look": "person", "chapter": state.chapter, "conv": conv.get("id", ""),
 		"clock": state.sim.clock_text() if state.sim else ""})
 	state.flags["last_choice_" + conv["id"]] = ch["text"]
 	_choices = []
 	if ch["goto"] != "" and not _jump(ch["goto"]):
 		return _end()
 	return advance()
+
+
+## A line step as the player sees it (Stage 3A): the speaker resolved through Speakers (a hidden identity
+## stays hidden in the name, card, history and backlog) and the look (radio / person / thought / sound).
+## `speaker` in the result is the id the player is shown; the raw script id never reaches the UI.
+func present(s: Dictionary) -> Dictionary:
+	var r := Speakers.resolve(String(s["speaker"]), state)
+	var kind: String = s.get("line_kind", "thought" if s["speaker"] == "" else "speech")
+	var lk := Speakers.look(kind, r["where"], String(s.get("tag", "")), mode())
+	return {"type": "line", "speaker": r["id"], "name": r["name"], "call": r["call"], "sub": r["sub"], "art": r["art"],
+		"expr": String(s.get("expr", "")), "look": lk, "text": s["text"], "mode": mode()}
 
 
 func _jump(target: String) -> bool:

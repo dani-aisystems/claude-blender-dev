@@ -113,6 +113,7 @@ func apply() -> void:
 			AudioServer.set_bus_volume_db(i, linear_to_db(maxf(v["vol_" + b.to_lower()], 0.0001)))
 	apply_render_scale()
 	apply_quality_globals()
+	UIStyle.set_text_scale(float(v["subtitle_size"]), get_tree())   # Stage 3A: one text size for all UI
 	changed.emit()
 
 

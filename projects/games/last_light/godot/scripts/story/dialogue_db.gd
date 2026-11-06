@@ -5,7 +5,10 @@ extends RefCounted
 ##
 ##   == conv_id  mode=radio|person|thought  [channel=16]
 ##   SPEAKER: line of dialogue                 (speaker ids: CALLUM, MORAG, RORY, ELSPETH, VISITOR, ROSS, ...)
-##   ~ narration / thought (italic)
+##   SPEAKER@room: / SPEAKER@radio:            (Stage 3A: where the speaker is, when it isn't their usual)
+##   SPEAKER(expr):                            (portrait expression, Stage 3C; parsed and stored now)
+##   ~ Callum's thought (italic)
+##   > sound caption ("> Three slow knocks.") for a sound the player should know about
 ##   [if <expr>] SPEAKER: conditional line     (any statement may be prefixed by [if ...])
 ##   * Choice text -> label                    (choices gather until the next non-choice line)
 ##   * [if <expr>] Choice text -> label
@@ -90,17 +93,55 @@ func parse_text(text: String, source := "") -> void:
 		elif line.begins_with("~"):
 			step["kind"] = "line"
 			step["speaker"] = ""
+			step["line_kind"] = "thought"
+			step["text"] = line.substr(1).strip_edges()
+		elif line.begins_with(">"):
+			step["kind"] = "line"           # Stage 3A: a sound caption ("> Three slow knocks.")
+			step["speaker"] = ""
+			step["line_kind"] = "sound"
 			step["text"] = line.substr(1).strip_edges()
 		else:
 			var colon := line.find(":")
-			if colon <= 0 or line.substr(0, colon) != line.substr(0, colon).to_upper():
+			var head := line.substr(0, colon).strip_edges() if colon > 0 else ""
+			var sp := _parse_speaker(head)
+			if sp.is_empty():
 				errors.append("%s:%d cannot parse: %s" % [source, lineno, line])
 				continue
 			step["kind"] = "line"
-			step["speaker"] = line.substr(0, colon).strip_edges()
+			step["line_kind"] = "speech"
+			step["speaker"] = sp["id"]
+			step["tag"] = sp["tag"]
+			step["expr"] = sp["expr"]
 			step["text"] = line.substr(colon + 1).strip_edges()
 		cur["steps"].append(step)
 	_flush_choices(cur, pending_choices)
+
+
+## "ROSS", "ROSS@room", "MORAG(worried)", "ROSS(grave)@room" -> {id, tag, expr}; {} if not a speaker.
+## The id must be upper case (so ordinary sentences with a colon are rejected); tag is room | radio.
+const TAGS := ["room", "radio"]
+
+
+func _parse_speaker(head: String) -> Dictionary:
+	if head == "":
+		return {}
+	var tag := ""
+	var at := head.find("@")
+	if at >= 0:
+		tag = head.substr(at + 1).strip_edges()
+		head = head.substr(0, at).strip_edges()
+		if not tag in TAGS:
+			return {}
+	var expr := ""
+	var po := head.find("(")
+	if po >= 0:
+		if not head.ends_with(")"):
+			return {}
+		expr = head.substr(po + 1, head.length() - po - 2).strip_edges().to_lower()
+		head = head.substr(0, po).strip_edges()
+	if head == "" or head != head.to_upper() or head.to_lower() == head:
+		return {}
+	return {"id": head, "tag": tag, "expr": expr}
 
 
 func _flush_choices(cur: Dictionary, pending: Array) -> void:

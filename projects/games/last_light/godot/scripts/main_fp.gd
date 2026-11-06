@@ -325,7 +325,7 @@ func _open_load() -> void:
 		var b := UIStyle.button(("Autosave" if slot == "auto" else "Slot " + slot) + "    " + SaveSystem.summary(slot))
 		b.custom_minimum_size = Vector2(820, 56)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.add_theme_font_size_override("font_size", 20)
+		UIStyle.track(b, 20)
 		b.disabled = not SaveSystem.exists(slot)
 		b.pressed.connect(func():
 			_close_panel()
@@ -355,7 +355,8 @@ func _open_credits(ending := false) -> void:
 	txt.bbcode_enabled = true
 	txt.custom_minimum_size = Vector2(900, 640)
 	txt.add_theme_font_override("normal_font", UIStyle.serif())
-	txt.add_theme_font_size_override("normal_font_size", 21)
+	txt.add_theme_font_override("italics_font", UIStyle.serif_italic())
+	UIStyle.track(txt, 21)
 	txt.text = FileAccess.get_file_as_string("res://data/credits.txt")
 	v.add_child(txt)
 	if ending:
@@ -369,7 +370,7 @@ func _open_options() -> void:
 	var tabs := TabContainer.new()
 	tabs.custom_minimum_size = Vector2(1040, 720)
 	tabs.add_theme_font_override("font", UIStyle.serif())
-	tabs.add_theme_font_size_override("font_size", 20)
+	UIStyle.track(tabs, 20)
 	v.add_child(tabs)
 	var gfx := _tab(tabs, "Graphics")
 	_opt_choice(gfx, "Window mode", "window_mode", [["Windowed", 0], ["Fullscreen", 3], ["Exclusive fullscreen", 4]])
@@ -407,7 +408,7 @@ func _open_options() -> void:
 		ct.add_child(row)
 	var ac := _tab(tabs, "Accessibility")
 	_opt_toggle(ac, "Show ship radio chatter subtitles (story dialogue always shows)", "subtitles")
-	_opt_slider(ac, "Subtitle & dialogue size", "subtitle_size", 0.8, 1.5, 0.05)
+	_opt_slider(ac, "Text size (dialogue and interface)", "subtitle_size", 0.8, 1.5, 0.05)
 	_opt_slider(ac, "Text speed (characters / s)", "text_speed", 15.0, 120.0, 1.0)
 	_opt_toggle(ac, "Reduce flashing (lightning)", "reduce_flashing")
 

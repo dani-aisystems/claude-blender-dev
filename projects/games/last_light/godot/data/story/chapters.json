@@ -5,7 +5,7 @@
    "start": {"clock": 980, "clock_rate": 0.0, "storm": 0.12, "battery": 41, "fuel": 46},
    "beats": [
     {"id": "dusk", "do": [["sky", "dusk"], ["mode", 0], ["intensity", 0], ["wait", 3], ["talk", "ch1_dusk"]]},
-    {"id": "look", "objective": "Get your bearings. (WASD to walk · mouse to look)", "when": "has_flag(\"moved\") and has_flag(\"looked\")",
+    {"id": "look", "objective": "Get your bearings. Walk with {move}; look around with {look}.", "when": "has_flag(\"moved\") and has_flag(\"looked\")",
      "hint": [25, "Move with {move}. Look around with {look}."], "do": [["wait", 1]]},
     {"id": "light_on", "objective": "Lighting-up time. Turn the MODE selector to AUTO at the light console (east wall).", "when": "sim.mode == 1",
      "hint": [45, "The light console stands under the east window. Look at the MODE knob and press {interact}."], "do": [["talk", "ch1_lit"]]},

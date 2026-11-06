@@ -10,7 +10,7 @@ var clues := {}
 var rel := {"morag": 0, "elspeth": 0, "ross": 0}
 var rescues := {}             # ship name -> "saved" | "lost"
 var convs_done := {}
-var history: Array = []       # {speaker, text, mode, clock}
+var history: Array = []       # {speaker (as shown), name, text, mode, look, chapter, conv, clock[, choice]}
 var objective := ""
 var sim: KeeperSim             # for conditions that read the station
 var play_seconds := 0.0
@@ -134,6 +134,6 @@ func from_dict(d: Dictionary) -> void:
 	convs_done = {}
 	for c in d.get("convs_done", []):
 		convs_done[c] = true
-	history = d.get("history", [])
+	history = Speakers.sanitize_history(d.get("history", []), self)   # pre-3A saves stored raw ids ("ROSS")
 	objective = d.get("objective", "")
 	play_seconds = float(d.get("play_seconds", 0.0))

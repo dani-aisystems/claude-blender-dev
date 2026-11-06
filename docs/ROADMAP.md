@@ -48,9 +48,9 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 ## Current position
 | | |
 |---|---|
-| **Stage** | 2, first-person interactions and gameplay |
-| **Iteration** | **Stage 2 approved by Daniel 2026-11-05** (2A `52bcb6f`, 2B `1359e44`, 2C `7a715c2`, 2D the Stage 2 milestone commit). Stage 3 not started |
-| **Next actionable task** | **Cabin pass (Daniel's 8-photo brief) complete:** CP1 `91faeb1`, CP2 `9e0eeef`, CP3 `11b92d2`, CP4 the cabin-pass final commit. Then: **Stage 3 plan approved in principle by Daniel (2026-11-05), but "don't begin": he has additions.** The draft and his decisions are in `~/.claude/plans/the-last-light-stage3-draft.md`. Wait for his additions, fold them in, then start 3A (OFL font download first) |
+| **Stage** | 3, dialogue, characters and story pacing |
+| **Iteration** | **3A approved by Daniel 2026-11-06** (local commit). 3B is waiting on his read of the master script |
+| **Next actionable task** | Wait for Daniel's notes on, or approval of, `projects/games/last_light/STAGE3_NARRATIVE_MASTER.md`. Then 3B: transcribe the script into `.dlg` / `chapters.json` / `docs.json`; ch1 at 11 beats; the ch2/ch6 jam (sim S1–S5); transitions; ending cards; optional content; the tests in §18.4. **Approved plan (revision 2, with Daniel's 2026-11-05 decisions):** `~/.claude/plans/the-last-light-stage3-plan-r2.md`. No `.dlg` / `chapters.json` rewrite until Daniel approves the master script |
 
 ## Stages
 | # | Stage | Status |
@@ -58,7 +58,7 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
 | 0 | Critical fixes and regression baseline | ✅ **approved by Daniel 2026-11-04** (iteration 0.2) |
 | 1 | Cabin lighting, materials and architecture | ✅ **approved by Daniel 2026-11-05** (iterations 1.0, 1a, 1b, 2, 3, 3b, 4, 1p) |
 | 2 | First-person interactions and gameplay | ✅ **approved by Daniel 2026-11-05** (iterations 2A–2D) |
-| 3 | Dialogue, characters and story pacing | ⬜ |
+| 3 | Dialogue, characters and story pacing | 🟡 plan revision 2 approved 2026-11-05; 3A in progress |
 | 4 | Outside world and major story events | ⬜ |
 | 5 | Sound and cinematic presentation | ⬜ |
 | 6 | Menus, effects and final polish | ⬜ |
@@ -546,6 +546,43 @@ A stage is complete only when Daniel says so. A build that compiles, or Claude's
     5. read the note in the coat pocket; check the coat and hat from the door side;
     6. pause and resume (Esc) inside the radio view, the console and the chart, 4 times each: the pointer must always come back captured in free walk;
     7. save in a blackout with the torch on, load: the torch is carried and on, and the shelf copy is gone.
+
+## Stage 3 log
+
+### Plan (2026-11-05)
+- **Approved plan:** revision 2 at `~/.claude/plans/the-last-light-stage3-plan-r2.md`.
+- **Daniel's decisions:**
+  - targeted-fill lore scope;
+  - script written alongside 3A;
+  - about 90 min, measured in Stage 6;
+  - portraits on the radio plus Ross in person after the reveal.
+
+### Iteration 3A: dialogue and typography foundation (2026-11-05/06, awaiting the checkpoint)
+| Issue | Root cause | Change | Files |
+|---|---|---|---|
+| Thoughts never italic | The italics font was mapped to the upright serif. The game used system fonts | Bundled OFL Libre Baskerville, Source Sans 3, Courier Prime and Cedarville (licences logged), with a real italic face | `ui/style.gd`, `assets/fonts/*`, `assets/ASSET_LICENSES.md` |
+| Text size reached only the dialogue | Fixed `font_size` overrides everywhere | Every UIStyle label, button and rich text is registered and scaled (titles at half rate). The identity line moved from a 9–10 px drawing to a 15 px label | `ui/style.gd`, `settings.gd`, `dialogue_ui.gd`, `fp_ui.gd`, `main_fp.gd`, `story_presenter.gd` |
+| The objective and hint could overlap | The hint sat at a fixed y | Both share one VBox. Objectives resolve `{tokens}` (no more hard-coded WASD) | `story_presenter.gd`, `chapters.json` (ch1 objective text only) |
+| Ross named early; in-room lines shown as transmissions; named lines in thought scenes looked like Callum's | Fixed per-speaker cards; the look came only from the conversation mode | `Speakers` resolver (hidden until `knows_name`) and look rules (`where`, `@room` / `@radio`). History stores the label as shown, with chapter and conversation; old saves are sanitised | `story/speakers.gd`, `dialogue_runner.gd`, `dialogue_db.gd`, `story_state.gd`, `audio_director.gd` |
+| No sound captions | — | `>` lines become a caption in capitals (script brackets stripped) | `dialogue_db.gd`, `dialogue_ui.gd` |
+| The typewriter re-wrapped every character and typed under fades and documents | `.text` was rebuilt per character | The line is laid out once and revealed with `visible_characters` (after shaping). It holds while a document is open or the fade is above 0 | `dialogue_ui.gd`, `story_presenter.gd` |
+| No backlog | `history` was never read | Dialogue history: pause menu, H, pad View. It pauses; closing restores the pause menu or play, the mouse (through `refresh_mouse`) and the reply focus | `ui/backlog_ui.gd`, `game_fp.gd`, `fp_ui.gd`, `input_setup.gd` |
+| The radio command panel ran off screen at 1.5 (found in the s3a captures) | Fixed offsets, default grow direction | It grows to the left, and the legend and status wrap. New qa check | `fp_ui.gd`, `qa_sweep_test.gd` |
+| Credits | The fonts were Apple system fonts | Credits list the OFL fonts | `data/credits.txt` |
+
+- **Tests:**
+  - regress R9 (42 checks);
+  - qa_sweep at 0.8, 1.0 and 1.5, with identity lines and the command panel;
+  - capture states `say_*`, `text15`, `doc_*`, `pause`, `backlog`.
+- **Evidence:**
+  - `renders/last_light/s3a_sheet_{1..4}.png` and `s3a_pair_*.png`;
+  - the "before" shots came from a scratch worktree of `302f7ca`.
+  - The 3D materials differ between the two builds, and the UI is the comparison. Verified cause: the 2k interior textures in `godot/assets/textures` are gitignored copies made by `sync_assets.py`, so the worktree had only 36 of the 72 files.
+- **Master script:** `projects/games/last_light/STAGE3_NARRATIVE_MASTER.md` (draft, gate for 3B).
+- **Daniel (2026-11-06): checkpoint 3A approved, committed locally.**
+  - He is reading the master script and will reply. **No `.dlg` / `chapters.json` / `docs.json` rewrite until he approves.**
+  - The script's four open questions: all recommendations accepted.
+  - The command-panel and identity-row fixes are re-captured at the 3B checkpoint.
 
 ## Stage 2 log
 - **Plan (2026-11-05), approved.** The full audit is at `~/.claude/plans/the-last-light-soft-hearth.md`.

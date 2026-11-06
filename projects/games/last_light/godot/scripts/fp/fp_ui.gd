@@ -7,6 +7,7 @@ signal command_requested(ship_id: int, cmd: String)
 signal resume_requested
 signal restart_requested
 signal menu_requested
+signal backlog_requested                   # Stage 3A: "Dialogue history" in the pause menu, or H / View while paused
 
 const COMMANDS := [["confirm", "Confirm position"], ["port", "Turn port 30°"], ["starboard", "Turn starboard 30°"],
 	["slow", "Reduce / resume speed"], ["hold", "Hold position"], ["maintain", "Maintain course"]]
@@ -116,6 +117,9 @@ func _build_radio(root: Control) -> void:
 	radio_panel.offset_right = -40
 	radio_panel.offset_top = -300
 	radio_panel.offset_bottom = 300
+	# Stage 3A: larger text makes the panel wider; it grows to the LEFT (it ran off the right edge at 1.5)
+	radio_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	radio_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	radio_panel.visible = false
 	root.add_child(radio_panel)
 	var v := VBoxContainer.new()
@@ -123,6 +127,7 @@ func _build_radio(root: Control) -> void:
 	radio_panel.add_child(v)
 	v.add_child(UIStyle.label("VHF  ·  Channel 16", 26, UIStyle.AMBER, UIStyle.serif()))
 	radio_status = UIStyle.label("", 16, UIStyle.DIM)
+	radio_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(radio_status)
 	var vh := HBoxContainer.new()
 	vh.add_child(UIStyle.label("Vessel", 15, UIStyle.DIM))
@@ -142,6 +147,7 @@ func _build_radio(root: Control) -> void:
 		b.pressed.connect(func(): _send(c[0]))
 		v.add_child(b)
 	radio_legend = UIStyle.label("", 13, UIStyle.DIM)    # text follows keyboard or pad (_refresh_vessels)
+	radio_legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART    # wraps instead of widening the panel
 	v.add_child(radio_legend)
 
 
@@ -162,8 +168,8 @@ func _build_logbook(root: Control) -> void:
 	log_text.scroll_following = false
 	log_text.add_theme_font_override("normal_font", UIStyle.serif())
 	log_text.add_theme_font_override("bold_font", UIStyle.serif())
-	log_text.add_theme_font_size_override("normal_font_size", 20)
-	log_text.add_theme_font_size_override("bold_font_size", 24)
+	log_text.set_meta("ui_bold", 24)
+	UIStyle.track(log_text, 20)
 	log_text.add_theme_color_override("default_color", Color(0.15, 0.12, 0.1))
 	logbook.add_child(log_text)
 
@@ -351,7 +357,7 @@ func _send(cmd: String) -> void:
 func _panel_button(text: String, h: int, font_size: int) -> Button:
 	var b := UIStyle.button(text)
 	b.custom_minimum_size = Vector2(380, h)
-	b.add_theme_font_size_override("font_size", font_size)
+	UIStyle.track(b, font_size)
 	b.focus_mode = Control.FOCUS_NONE
 	return b
 
@@ -403,7 +409,11 @@ func _refresh_vessels() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if get_tree().paused:                    # this layer processes during pause for its menu: no orders
-		if pause_panel and event.is_action_pressed("back"):
+		if pause_panel and pause_panel.visible and _story_pause and event.is_action_pressed("history"):
+			backlog_requested.emit()
+			get_viewport().set_input_as_handled()
+			return
+		if pause_panel and pause_panel.visible and event.is_action_pressed("back"):
 			resume_requested.emit()          # pad B resumes, like Start (Stage 2C)
 			get_viewport().set_input_as_handled()
 		return
@@ -454,10 +464,15 @@ func _process_body(delta: float) -> void:
 signal save_requested(slot: String)
 
 
+var _story_pause := false
+
+
 func show_pause(on: bool, story := false) -> void:
+	_story_pause = story
 	if on and pause_panel == null:
 		var buttons: Array = [["Resume", func(): resume_requested.emit()]]
 		if story:
+			buttons.append(["Dialogue history   ·   %s" % InputSetup.glyph("history"), func(): backlog_requested.emit()])
 			for slot in ["1", "2", "3"]:
 				buttons.append(["Save to slot %s   ·   %s" % [slot, SaveSystem.summary(slot)], func(): save_requested.emit(slot)])
 		else:
@@ -468,6 +483,15 @@ func show_pause(on: bool, story := false) -> void:
 	elif not on and pause_panel:
 		pause_panel.queue_free()
 		pause_panel = null
+
+
+## Give the pause menu's first button the focus again (after the dialogue history closes over it).
+func focus_pause() -> void:
+	if pause_panel == null:
+		return
+	for b in pause_panel.find_children("*", "Button", true, false):
+		(b as Button).grab_focus()
+		return
 
 
 func show_end(stats: Dictionary, best: bool) -> void:

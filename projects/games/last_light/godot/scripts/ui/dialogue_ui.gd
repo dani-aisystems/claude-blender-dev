@@ -4,7 +4,12 @@ extends Control
 ##            typewriter text with punctuation pauses, squelch on each line. Choices only unlock
 ##            at the radio (the keeper has to pick up the handset).
 ##  person  : low centred subtitles, speaker name, nothing covering the scene (the door scene).
-##  thought : italic low subtitles, no name.
+##  thought : italic low subtitles, no name (Callum's mind; a genuine italic face since Stage 3A).
+##  sound   : a caption for a sound the player must know about ("[ Three slow knocks ]"), small caps.
+## Stage 3A: who is speaking comes resolved from Speakers (via DialogueRunner.present): the name, the
+## identity line and the look. A hidden identity (Ross before his name is spoken) never reaches this layer.
+## The line is laid out ONCE and revealed with visible_characters (after shaping), so words never jump
+## to the next line while typing and the panel doesn't grow as it types.
 ## Input: E / Space / left click = finish the line, then (after a short guard) advance. 1-4 = choose.
 ## Replies (cabin pass, Daniel 2026-11-05): this layer never touches the mouse mode (game_fp owns it).
 ## In free walk mouse look stays on: the first reply is highlighted, the wheel moves the highlight and
@@ -15,21 +20,6 @@ signal advance_requested
 signal choice_made(index: int)
 signal blip(kind: String)                  # audio hooks: "char", "squelch", "open", "close"
 
-const CARDS := {
-	"MORAG": ["STORNOWAY COASTGUARD", "MRSC · Radio officer M. Fraser", "station"],
-	"RORY": ["KITTIWAKE  SY 37", "Fishing · skipper R. Bain", "fishing"],
-	"HECTOR": ["GANNET  SY 112", "Schooner · master H. Macleod", "schooner"],
-	"CORRIE": ["CORRIE MAY  BRD 9", "Fishing", "fishing"],
-	"LOWESTOFT": ["LOWESTOFT STAR  LT 401", "Schooner", "schooner"],
-	"ELSPETH": ["IONA STAR  ·  GMXQ", "Coaster · 1st mate E. Ross", "steamer"],
-	"MARY ELLEN": ["MARY ELLEN  SY 214", "Registry: LOST 15.11.1953", "fishing"],
-	"VISITOR": ["", "", ""],
-	"ROSS": ["MARY ELLEN  SY 214", "A. Ross, master", "fishing"],
-	"CALLUM": ["NORTH POINT LIGHT", "C. Mackay, principal keeper", "station"],
-}
-const NAMES := {"MORAG": "Morag Fraser", "RORY": "Rory Bain", "HECTOR": "Hector Macleod", "CORRIE": "Corrie May",
-	"LOWESTOFT": "Lowestoft Star", "ELSPETH": "Elspeth Ross", "MARY ELLEN": "Mary Ellen", "VISITOR": "The man at the door",
-	"ROSS": "Alasdair Ross", "CALLUM": "Callum"}
 
 var mode := "radio"                         # the conversation's mode (radio replies are gated on it)
 var line_look := "radio"                        # how the current line is drawn (radio / person / thought)
@@ -39,10 +29,12 @@ var at_radio_fn: Callable                   # returns true when the player is at
 var mouse_restore_fn: Callable              # game_fp.refresh_mouse: re-applies the single mouse policy
 var in_view_fn: Callable                    # true while the player is in a device view (the pointer is free)
 var doc_open_fn: Callable                   # true while a document / the chart is being read: no dialogue input
+var hold_fn: Callable                       # true while the screen is faded / a transition runs: the typewriter waits
 var choice_hint: Label                      # "1-4 or the wheel, then E" (one-time tip, Settings "replies")
 var radio_panel: PanelContainer
 var card: Control
 var r_name: Label
+var r_ident: Label                          # identity line ("STORNOWAY COASTGUARD · HM Coastguard ...") at readable size
 var r_text: RichTextLabel
 var r_hint: Label
 var sub_box: VBoxContainer
@@ -52,6 +44,8 @@ var choice_box: VBoxContainer
 var _full := ""
 var _shown := 0.0
 var _speaker := ""
+var _item := {}                             # the resolved line (name, call, sub, art, look)
+var _bb := ""                               # the whole line as BBCode, set once per line
 var _pause := 0.0
 var _done_t := 0.0
 var _choices: Array = []
@@ -86,11 +80,16 @@ func _ready() -> void:
 	var v := VBoxContainer.new()
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(v)
-	r_name = UIStyle.label("", 20, Color(0.55, 0.95, 0.65), UIStyle.sans())
+	# name, then the identity line on its own row (beside the name it wrapped badly at large text sizes)
+	r_name = UIStyle.label("", 20, Color(0.55, 0.95, 0.65), UIStyle.sans_semibold())
 	v.add_child(r_name)
+	r_ident = UIStyle.label("", 15, Color(0.62, 0.72, 0.64), UIStyle.sans())
+	r_ident.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(r_ident)
 	r_text = _rich(25)
 	v.add_child(r_text)
 	r_hint = UIStyle.label("", 15, UIStyle.DIM)
+	r_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(r_hint)
 	# --- subtitles (person / thought) ---
 	sub_box = VBoxContainer.new()
@@ -103,7 +102,7 @@ func _ready() -> void:
 	sub_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	sub_box.visible = false
 	add_child(sub_box)
-	s_name = UIStyle.label("", 18, UIStyle.AMBER, UIStyle.sans())
+	s_name = UIStyle.label("", 18, UIStyle.AMBER, UIStyle.sans_semibold())
 	s_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub_box.add_child(s_name)
 	s_text = _rich(28)
@@ -123,7 +122,7 @@ func _ready() -> void:
 	choice_box.alignment = BoxContainer.ALIGNMENT_END
 	choice_box.add_theme_constant_override("separation", 8)
 	add_child(choice_box)
-	choice_hint = UIStyle.label("", 16, Color(0.86, 0.82, 0.72, 0.78), UIStyle.serif())
+	choice_hint = UIStyle.label("", 16, Color(0.86, 0.82, 0.72, 0.78), UIStyle.serif_italic())
 	choice_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	choice_hint.offset_left = 52
 	choice_hint.offset_right = 52 + 700
@@ -132,29 +131,17 @@ func _ready() -> void:
 
 
 func _rich(size: int) -> RichTextLabel:
-	var r := RichTextLabel.new()
-	r.bbcode_enabled = true
-	r.fit_content = true
-	r.scroll_active = false
-	r.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	r.add_theme_font_override("normal_font", UIStyle.serif())
-	r.add_theme_font_override("italics_font", UIStyle.serif())
-	r.add_theme_font_size_override("normal_font_size", size)
-	r.add_theme_font_size_override("italics_font_size", size)
-	r.add_theme_color_override("default_color", UIStyle.INK)
-	r.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
-	r.add_theme_constant_override("shadow_offset_y", 2)
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var r := UIStyle.rich(size)             # Libre Baskerville with its real italic (thoughts were upright before 3A)
+	r.visible_characters_behavior = TextServer.VC_CHARS_AFTER_SHAPING   # layout once; typing never re-wraps
 	return r
 
 
+## Typewriter speed, and the text size (UIStyle scales every registered label, button and rich text).
 func apply_settings(cps: float, scale: float) -> void:
 	speed_cps = cps
 	text_scale = scale
-	r_text.add_theme_font_size_override("normal_font_size", int(25 * scale))
-	r_text.add_theme_font_size_override("italics_font_size", int(25 * scale))
-	s_text.add_theme_font_size_override("normal_font_size", int(28 * scale))
-	s_text.add_theme_font_size_override("italics_font_size", int(28 * scale))
+	if not is_equal_approx(UIStyle.text_scale, scale):
+		UIStyle.set_text_scale(scale, get_tree())
 
 
 # ------------------------------------------------------------------ API
@@ -163,11 +150,10 @@ func show_line(item: Dictionary) -> void:
 	_active = true
 	_clear_choices()
 	mode = item["mode"]
-	_speaker = item["speaker"]
-	# narration ("~") inside a radio conversation is the keeper thinking, not a transmission: drawn as a
-	# thought subtitle, never as a radio call with a blank identity card (Stage 1 s1f)
-	line_look = "thought" if mode == "radio" and _speaker == "" else mode
-	_full = item["text"]
+	_item = _resolved(item)
+	_speaker = _item["speaker"]
+	line_look = _item["look"]
+	_full = String(item["text"])
 	_shown = 0.0
 	_pause = 0.15
 	_done_t = 0.0
@@ -175,13 +161,49 @@ func show_line(item: Dictionary) -> void:
 	radio_panel.visible = radio
 	sub_box.visible = not radio
 	if radio:
-		r_name.text = NAMES.get(_speaker, _speaker.capitalize()) if _speaker != "" else ""
+		r_name.text = _item["name"]
+		var ident: Array = []
+		for k in ["call", "sub"]:
+			if String(_item[k]) != "":
+				ident.append(String(_item[k]))
+		r_ident.text = "  ·  ".join(ident)
 		r_hint.text = ""
 		card.queue_redraw()
 		blip.emit("squelch")
 	else:
-		s_name.text = "" if _speaker == "" or line_look == "thought" else NAMES.get(_speaker, _speaker.capitalize())
+		s_name.text = _item["name"] if line_look == "person" else ""
+		s_name.visible = s_name.text != ""
+	_bb = _compose()
+	var target := r_text if radio else s_text
+	target.text = _bb
+	target.visible_characters = 0
 	_render()
+
+
+## Items from the runner arrive resolved; bare items (tests, previews) are resolved here with hidden
+## identities kept hidden.
+func _resolved(item: Dictionary) -> Dictionary:
+	if item.has("look") and item.has("name"):
+		return {"speaker": String(item.get("speaker", "")), "name": String(item["name"]), "call": String(item.get("call", "")),
+			"sub": String(item.get("sub", "")), "art": String(item.get("art", "")), "look": String(item["look"])}
+	var r := Speakers.resolve(String(item.get("speaker", "")), null)
+	var kind := "thought" if r["id"] == "" else "speech"
+	return {"speaker": r["id"], "name": r["name"], "call": r["call"], "sub": r["sub"], "art": r["art"],
+		"look": Speakers.look(kind, r["where"], "", String(item.get("mode", "radio")))}
+
+
+## The whole line as BBCode. Brackets in the script are escaped so a caption like [ Knocks ] is text.
+func _compose() -> String:
+	var t := _full.replace("[", "[lb]")
+	match line_look:
+		"thought":
+			return "[center][i]" + t + "[/i][/center]"
+		"sound":
+			var cap := Speakers.caption_text(_full).to_upper().replace("[", "[lb]")
+			return "[center][color=#c8b88c][font_size=%d][lb] %s ][/font_size][/color][/center]" % [UIStyle.px(20), cap]
+		"radio":
+			return t
+	return "[center]" + t + "[/center]"
 
 
 func show_choices(item: Dictionary) -> void:
@@ -223,7 +245,7 @@ func _refresh_choices() -> void:
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART    # long replies wrap inside the 700 px column
 		b.custom_minimum_size = Vector2(700, 46)
-		b.add_theme_font_size_override("font_size", int(21 * text_scale))
+		UIStyle.track(b, 21)                   # replies follow the text size like every other label
 		var idx: int = c["index"]
 		b.pressed.connect(func(): _pick(idx))
 		choice_box.add_child(b)
@@ -320,16 +342,11 @@ func _pick(i: int) -> void:
 	choice_made.emit(i)
 
 
+## Reveal up to _shown characters of the already laid-out line (no re-parse, no re-wrap).
 func _render() -> void:
+	var target := r_text if line_look == "radio" else s_text
 	var n := int(_shown)
-	var vis := _full.substr(0, n)
-	var txt := vis
-	if line_look == "thought":
-		txt = "[i]" + vis + "[/i]"
-	if line_look == "radio":
-		r_text.text = txt
-	else:
-		s_text.text = "[center]" + txt + "[/center]"
+	target.visible_characters = -1 if n >= _full.length() else n
 
 
 func _process(delta: float) -> void:
@@ -346,6 +363,8 @@ func _process(delta: float) -> void:
 	if choice_box.get_child_count() > 0:
 		_layout_choices()       # the speech block can grow while the line types out
 	if _shown < _full.length():
+		if (doc_open_fn.is_valid() and doc_open_fn.call()) or (hold_fn.is_valid() and hold_fn.call()):
+			return                  # reading a document / the screen is faded: nothing types unseen
 		if _pause > 0.0:
 			_pause -= delta
 			return
@@ -406,16 +425,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _draw_card() -> void:
-	var c: Array = CARDS.get(_speaker, ["", "", ""])
+	# Stage 3A: the identity text moved to the name row (it was drawn here at 9-10 px and never scaled);
+	# the card keeps the line drawing and the live signal meter (portraits replace the drawing in 3C)
 	var w := card.size.x
 	var h := card.size.y
 	card.draw_rect(Rect2(0, 0, w, h), Color(0.86, 0.82, 0.7, 0.92))
 	card.draw_rect(Rect2(4, 4, w - 8, h - 8), Color(0.25, 0.2, 0.15, 0.6), false, 2.0)
-	var f := UIStyle.sans()
-	card.draw_string(f, Vector2(8, 22), String(c[0]), HORIZONTAL_ALIGNMENT_LEFT, w - 16, 10, Color(0.15, 0.12, 0.1))
-	card.draw_string(f, Vector2(8, h - 14), String(c[1]), HORIZONTAL_ALIGNMENT_LEFT, w - 16, 9, Color(0.3, 0.25, 0.2))
-	# a line drawing of the vessel / station, plus a live signal meter
-	var kind: String = c[2]
+	var kind: String = String(_item.get("art", ""))
 	var ink := Color(0.18, 0.14, 0.11)
 	var cx := w * 0.5
 	var cy := h * 0.52
